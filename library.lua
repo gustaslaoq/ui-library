@@ -106,11 +106,15 @@ function Lib.new(userCfg)
 	if userCfg then
 		for k,v in pairs(userCfg) do self.cfg[k]=v end
 	end
-	self._pages   = {}
-	self._navBtns = {}
-	self._conns   = {}
-	self._ord     = {}
-	self._pageIdx = 1
+	self._pages      = {}
+	self._navBtns    = {}
+	self._conns      = {}
+	self._ord        = {}
+	self._pageIdx    = 1
+	self._minimised  = false
+	self._mobilePill = nil
+	self._preMinSize = nil
+	self._minBtn     = nil
 
 	local guiParent = self.cfg.GuiParent == "PlayerGui"
 		and LocalPlayer:WaitForChild("PlayerGui") or CoreGui
@@ -254,8 +258,8 @@ function Lib:_buildTitleBar(win)
 		btn.Activated:Connect(cb)
 		return btn
 	end
-	mkBtn("-", C.White, function() self:ToggleVisibility() end, 1)
-	mkBtn("x", C.Red,   function() self:Destroy() end, 2)
+	self._minBtn = mkBtn("-", C.White, function() self:Minimise() end, 1)
+	mkBtn("x", C.Red, function() self:Destroy() end, 2)
 
 	do
 		local drag, ds, ws = false
@@ -533,98 +537,99 @@ end
 
 function Lib:_runSplash()
 	local cfg = self.cfg
-	local win  = self.Window
+	local sg   = self._sg
 
-	local overlay = new("Frame",{
-		Size=UDim2.fromScale(1,1),
-		BackgroundColor3=C.Bg,
-		BackgroundTransparency=0,
-		BorderSizePixel=0,
-		ZIndex=500,
-	}, win)
-
+	-- Card lives directly on the ScreenGui, centered, no big background blocker
 	local card = new("Frame",{
-		AnchorPoint=Vector2.new(.5,.5),
-		Position=UDim2.fromScale(.5,.5),
-		Size=UDim2.fromOffset(320,200),
-		BackgroundColor3=C.Card,
-		BackgroundTransparency=0,
-		BorderSizePixel=0,
-		ZIndex=501,
-	}, overlay)
-	corner(card, 14)
+		AnchorPoint       = Vector2.new(.5,.5),
+		Position          = UDim2.fromScale(.5,.5),
+		Size              = UDim2.fromOffset(300,180),
+		BackgroundColor3  = C.Card,
+		BackgroundTransparency = 0,
+		BorderSizePixel   = 0,
+		ZIndex            = 600,
+		ClipsDescendants  = true,
+	}, sg)
+	corner(card, 16)
 	stroke(card, C.Border2, 1)
-	pad(card, 24, 24, 24, 24)
 
 	local logoBox = new("Frame",{
-		AnchorPoint=Vector2.new(.5,0),
-		Position=UDim2.new(.5,0,0,0),
-		Size=UDim2.fromOffset(44,44),
-		BackgroundColor3=C.Card3,
-		BorderSizePixel=0,
-		ZIndex=502,
+		AnchorPoint      = Vector2.new(.5,0),
+		Position         = UDim2.new(.5,0,0,28),
+		Size             = UDim2.fromOffset(44,44),
+		BackgroundColor3 = C.Card3,
+		BorderSizePixel  = 0,
+		ZIndex           = 601,
 	}, card)
 	corner(logoBox, 12)
 	stroke(logoBox, C.Border3, 1)
 	if cfg.LogoImage ~= "" then
-		new("ImageLabel",{Size=UDim2.fromScale(1,1),BackgroundTransparency=1,Image=cfg.LogoImage,ZIndex=503},logoBox)
+		new("ImageLabel",{Size=UDim2.fromScale(1,1),BackgroundTransparency=1,Image=cfg.LogoImage,ZIndex=602},logoBox)
 	else
 		new("TextLabel",{
 			Size=UDim2.fromScale(1,1),BackgroundTransparency=1,
 			Text=string.upper(string.sub(cfg.AppName,1,1)),
-			Font=Enum.Font.GothamBold,TextSize=20,TextColor3=C.White,ZIndex=503,
+			Font=Enum.Font.GothamBold,TextSize=20,TextColor3=C.White,ZIndex=602,
 		},logoBox)
 	end
 
 	local nameLbl = new("TextLabel",{
-		AnchorPoint=Vector2.new(.5,0), Position=UDim2.new(.5,0,0,56),
-		Size=UDim2.new(1,0,0,20), BackgroundTransparency=1,
-		Text=cfg.AppName, Font=Enum.Font.GothamBold, TextSize=15,
-		TextColor3=C.White, ZIndex=502,
-	}, card)
-
-	local subLbl = new("TextLabel",{
-		AnchorPoint=Vector2.new(.5,0), Position=UDim2.new(.5,0,0,78),
-		Size=UDim2.new(1,0,0,14), BackgroundTransparency=1,
-		Text=cfg.AppSubtitle, Font=Enum.Font.Gotham, TextSize=10,
-		TextColor3=C.TextDim, ZIndex=502,
+		AnchorPoint=Vector2.new(.5,0), Position=UDim2.new(.5,0,0,84),
+		Size=UDim2.new(1,-32,0,18), BackgroundTransparency=1,
+		Text=cfg.AppName, Font=Enum.Font.GothamBold, TextSize=14,
+		TextColor3=C.White, ZIndex=601,
 	}, card)
 
 	local taskLbl = new("TextLabel",{
-		AnchorPoint=Vector2.new(.5,0), Position=UDim2.new(.5,0,0,112),
-		Size=UDim2.new(1,0,0,14), BackgroundTransparency=1,
+		AnchorPoint=Vector2.new(.5,0), Position=UDim2.new(.5,0,0,110),
+		Size=UDim2.new(1,-32,0,13), BackgroundTransparency=1,
 		Text=cfg.SplashTasks[1] or "Loading...",
 		Font=Enum.Font.Gotham, TextSize=10,
-		TextColor3=C.TextOff, ZIndex=502,
+		TextColor3=C.TextOff, ZIndex=601,
 	}, card)
 
 	local barBg = new("Frame",{
-		AnchorPoint=Vector2.new(.5,0), Position=UDim2.new(.5,0,0,134),
-		Size=UDim2.new(1,0,0,3), BackgroundColor3=C.Card3,
-		BorderSizePixel=0, ZIndex=502,
+		AnchorPoint=Vector2.new(.5,0), Position=UDim2.new(.5,0,0,138),
+		Size=UDim2.new(1,-32,0,3), BackgroundColor3=C.Card3,
+		BorderSizePixel=0, ZIndex=601,
 	}, card)
 	corner(barBg, 2)
 
 	local barFill = new("Frame",{
-		Size=UDim2.fromOffset(0,3), BackgroundColor3=C.White,
-		BorderSizePixel=0, ZIndex=503,
+		Size=UDim2.new(0,0,1,0), BackgroundColor3=C.White,
+		BorderSizePixel=0, ZIndex=602,
 	}, barBg)
 	corner(barFill, 2)
 
 	local tasks = cfg.SplashTasks
 	local n     = #tasks
 
+	-- Hide main window during splash
+	self.Window.Visible = false
+
 	task.spawn(function()
-		task.wait(.1)
+		task.wait(.15)
 		for i,taskText in ipairs(tasks) do
 			taskLbl.Text = taskText
-			tw(barFill, .45, {Size=UDim2.fromScale(i/n, 1)}, Enum.EasingStyle.Quint)
+			tw(barFill, .4, {Size=UDim2.fromScale(i/n, 1)}, Enum.EasingStyle.Quint)
 			task.wait(.5)
 		end
-		task.wait(.15)
-		tw(overlay, .4, {BackgroundTransparency=1}, Enum.EasingStyle.Quint)
-		task.wait(.42)
-		overlay:Destroy()
+		task.wait(.2)
+		-- Fade card out
+		tw(card, .35, {BackgroundTransparency=1}, Enum.EasingStyle.Quint)
+		-- Fade each child text out
+		for _,c in ipairs(card:GetChildren()) do
+			pcall(function()
+				if c:IsA("TextLabel") then tw(c,.25,{TextTransparency=1}) end
+				if c:IsA("Frame") then tw(c,.25,{BackgroundTransparency=1}) end
+			end)
+		end
+		task.wait(.38)
+		card:Destroy()
+		-- Show main window with a soft fade-in
+		self.Window.Visible = true
+		self.Window.BackgroundTransparency = 1
+		tw(self.Window, .3, {BackgroundTransparency=0}, Enum.EasingStyle.Quint)
 	end)
 end
 
@@ -1322,23 +1327,158 @@ function Lib:ShowNotification(msg, style, duration, title)
 	end)
 end
 
-function Lib:ToggleVisibility()
-	local win = self.Window
-	if not win then return end
-	if win.Visible then
-		tw(win,.2,{BackgroundTransparency=1},Enum.EasingStyle.Quint,Enum.EasingDirection.In)
-		task.delay(.22,function() if win and win.Parent then win.Visible=false end end)
+function Lib:_isMobile()
+	local vp = workspace.CurrentCamera and workspace.CurrentCamera.ViewportSize or Vector2.new(1920,1080)
+	return vp.X < self.cfg.MobileBreakpoint or UserInputService.TouchEnabled
+end
+
+function Lib:_buildMobilePill()
+	if self._mobilePill then return end
+	local pill = new("TextButton",{
+		AnchorPoint      = Vector2.new(.5,0),
+		Position         = UDim2.new(.5,0,0,18),
+		Size             = UDim2.fromOffset(160,38),
+		BackgroundColor3 = C.Card,
+		BorderSizePixel  = 0,
+		Text             = "Show Interface",
+		Font             = Enum.Font.GothamBold,
+		TextSize         = 12,
+		TextColor3       = C.White,
+		AutoButtonColor  = false,
+		ZIndex           = 800,
+		Visible          = false,
+	}, self._sg)
+	corner(pill, 999)
+	stroke(pill, C.Border2, 1)
+
+	pill.MouseEnter:Connect(function() tw(pill,.15,{BackgroundColor3=C.Card2}) end)
+	pill.MouseLeave:Connect(function() tw(pill,.18,{BackgroundColor3=C.Card})  end)
+	pill.Activated:Connect(function() self:Maximise() end)
+
+	-- slide-in animation helper stored for later
+	self._mobilePill = pill
+end
+
+function Lib:Minimise()
+	if self._minimised then return end
+	self._minimised = true
+
+	if self:_isMobile() then
+		-- Mobile: hide window, show floating pill
+		self:_buildMobilePill()
+		local win  = self.Window
+		local pill = self._mobilePill
+
+		tw(win, .22, {BackgroundTransparency=1}, Enum.EasingStyle.Quint, Enum.EasingDirection.In)
+		task.delay(.24, function()
+			if win and win.Parent then win.Visible = false end
+		end)
+
+		pill.Visible = true
+		pill.Position = UDim2.new(.5,0,0,-50)
+		pill.BackgroundTransparency = 1
+		tw(pill, .35, {Position=UDim2.new(.5,0,0,18), BackgroundTransparency=0},
+			Enum.EasingStyle.Back, Enum.EasingDirection.Out)
 	else
+		-- Desktop: collapse body, shrink titlebar width (Rayfield-style)
+		local win   = self.Window
+		local tb    = self.TitleBar
+		local body  = self._body
+		local cfg   = self.cfg
+		local curW  = win.AbsoluteSize.X
+		local curH  = win.AbsoluteSize.Y
+
+		-- Store original size for restore
+		self._preMinSize = {W = curW, H = curH}
+
+		-- Fade out body contents
+		tw(body, .25, {BackgroundTransparency=1}, Enum.EasingStyle.Quint, Enum.EasingDirection.In)
+		for _,d in ipairs(body:GetDescendants()) do
+			if d:IsA("TextLabel") or d:IsA("TextButton") or d:IsA("ImageLabel") then
+				pcall(function()
+					tw(d,.18,{TextTransparency=1, ImageTransparency=1, BackgroundTransparency=1})
+				end)
+			end
+		end
+
+		task.wait(.2)
+		body.Visible = false
+
+		-- Shrink window to just the titlebar, slightly narrower
+		local miniW = math.max(360, curW * .72)
+		tw(win, .45, {Size=UDim2.fromOffset(miniW, 40)}, Enum.EasingStyle.Quint, Enum.EasingDirection.Out)
+
+		-- Update min button symbol
+		if self._minBtn then self._minBtn.Text = "+" end
+	end
+end
+
+function Lib:Maximise()
+	if not self._minimised then return end
+	self._minimised = false
+
+	if self:_isMobile() then
+		local win  = self.Window
+		local pill = self._mobilePill
+
+		-- Slide pill out
+		if pill then
+			tw(pill,.22,{Position=UDim2.new(.5,0,0,-50), BackgroundTransparency=1},
+				Enum.EasingStyle.Quint, Enum.EasingDirection.In)
+			task.delay(.24, function() if pill then pill.Visible=false end end)
+		end
+
+		-- Show window
 		win.Visible = true
 		win.BackgroundTransparency = 1
-		tw(win,.25,{BackgroundTransparency=0},Enum.EasingStyle.Quint)
+		tw(win, .3, {BackgroundTransparency=0}, Enum.EasingStyle.Back, Enum.EasingDirection.Out)
+	else
+		local win  = self.Window
+		local body = self._body
+		local prev = self._preMinSize
+		local cfg  = self.cfg
+
+		local targetW = prev and prev.W or cfg.WindowWidth
+		local targetH = prev and prev.H or cfg.WindowHeight
+
+		-- Expand window back
+		tw(win, .45, {Size=UDim2.fromOffset(targetW, targetH)}, Enum.EasingStyle.Back, Enum.EasingDirection.Out)
+
+		task.wait(.2)
+		body.Visible = true
+		body.BackgroundTransparency = 1
+
+		-- Restore body children visibility
+		for _,d in ipairs(body:GetDescendants()) do
+			if d:IsA("TextLabel") or d:IsA("TextButton") or d:IsA("ImageLabel") then
+				pcall(function()
+					tw(d,.3,{TextTransparency=0, ImageTransparency=0})
+				end)
+			end
+		end
+		tw(body, .3, {BackgroundTransparency=0}, Enum.EasingStyle.Quint)
+
+		if self._minBtn then self._minBtn.Text = "-" end
+	end
+end
+
+function Lib:ToggleVisibility()
+	if self._minimised then
+		self:Maximise()
+	else
+		self:Minimise()
 	end
 end
 
 function Lib:SetVisible(v)
-	if self.Window then
-		self.Window.Visible = v
-		if v then self.Window.BackgroundTransparency = 0 end
+	if v then
+		if self._minimised then self:Maximise() return end
+		if self.Window then
+			self.Window.Visible = true
+			self.Window.BackgroundTransparency = 0
+		end
+	else
+		if not self._minimised then self:Minimise() end
 	end
 end
 

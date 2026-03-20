@@ -446,7 +446,7 @@ end
 
 function Lib:_initPages()
 	for i=1,#self.cfg.Pages do
-		local frame = new("Frame",{Size=UDim2.fromScale(1,1),BackgroundTransparency=1,Visible=false},self._content)
+		local frame = new("Frame",{Size=UDim2.fromScale(1,1),BackgroundColor3=C.Bg2,BackgroundTransparency=1,Visible=false},self._content)
 		local scroll = new("ScrollingFrame",{Size=UDim2.fromScale(1,1),BackgroundTransparency=1,ScrollBarThickness=3,ScrollBarImageColor3=C.Border3,ScrollBarImageTransparency=.5,CanvasSize=UDim2.new(0,0,0,0),AutomaticCanvasSize=Enum.AutomaticSize.Y,ElasticBehavior=Enum.ElasticBehavior.Never},frame)
 		new("UIListLayout",{SortOrder=Enum.SortOrder.LayoutOrder,Padding=UDim.new(0,0)},scroll)
 		pad(scroll,24,24,24,24)

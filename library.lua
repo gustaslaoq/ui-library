@@ -711,10 +711,10 @@ function SlaoqUILib:AddMetricRow(pi, cards)
 		Parent                 = scroll,
 	})
 	Create("UIGridLayout", {
-		CellSize              = UDim2.new(1/#cards, -6, 1, 0),
-		CellPaddingHorizontal = UDim.new(0, 6),
-		SortOrder             = Enum.SortOrder.LayoutOrder,
-		Parent                = row,
+		CellSize    = UDim2.new(1/#cards, -6, 1, 0),
+		CellPadding = UDim2.new(0, 6, 0, 6),
+		SortOrder   = Enum.SortOrder.LayoutOrder,
+		Parent      = row,
 	})
 	local objects = {}
 	for i, card in ipairs(cards) do

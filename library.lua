@@ -123,6 +123,7 @@ function Lib.new(userCfg)
 	self._ord        = {}
 	self._pageIdx    = 1
 	self._minimised  = false
+	self._miniWasUsed= false
 	self._mobilePill = nil
 	self._preMinSize = nil
 	self._minBtn     = nil
@@ -537,29 +538,26 @@ function Lib:Minimise()
 	if self._minimised then return end
 	self._minimised = true
 
-	local win = self.Window
+	local win  = self.Window
 	local mini = self:_useMiniMode()
+	self._miniWasUsed = mini
 
 	if mini then
 		self:_ensurePill()
 		local pill = self._mobilePill
-
 		tw(win,.2,{BackgroundTransparency=1},Enum.EasingStyle.Quint,Enum.EasingDirection.In)
-		task.delay(.22,function() if win and win.Parent then win.Visible=false end end)
-
+		task.delay(.22,function()
+			if win and win.Parent then win.Visible=false end
+		end)
 		pill.Visible=true
 		pill.Position=UDim2.new(.5,0,0,-60)
 		pill.BackgroundTransparency=1
 		tw(pill,.38,{Position=UDim2.new(.5,0,0,20),BackgroundTransparency=0},Enum.EasingStyle.Back,Enum.EasingDirection.Out)
 	else
-		local curW = win.AbsoluteSize.X
-		local curH = win.AbsoluteSize.Y
-		self._preMinSize = {W=curW,H=curH}
-
+		self._preMinSize = {W=win.AbsoluteSize.X, H=win.AbsoluteSize.Y}
 		self._body.Visible = false
-		local miniW = math.max(380, math.floor(curW*.68))
+		local miniW = math.max(380, math.floor(win.AbsoluteSize.X*.68))
 		tw(win,.4,{Size=UDim2.fromOffset(miniW,44)},Enum.EasingStyle.Quint)
-
 		if self._minBtn then self._minBtn.Text = "+" end
 	end
 end
@@ -569,27 +567,27 @@ function Lib:Maximise()
 	self._minimised = false
 
 	local win  = self.Window
-	local mini = self:_useMiniMode()
+	local mini = self._miniWasUsed
 
 	if mini then
 		local pill = self._mobilePill
 		if pill then
 			tw(pill,.2,{Position=UDim2.new(.5,0,0,-60),BackgroundTransparency=1},Enum.EasingStyle.Quint,Enum.EasingDirection.In)
-			task.delay(.22,function() if pill and pill.Parent then pill.Visible=false end end)
+			task.delay(.22,function()
+				if pill and pill.Parent then pill.Visible=false end
+			end)
 		end
 		win.Visible=true
 		win.BackgroundTransparency=1
 		tw(win,.32,{BackgroundTransparency=0},Enum.EasingStyle.Quint)
 	else
-		local prev = self._preMinSize
-		local cfg  = self.cfg
+		local prev    = self._preMinSize
+		local cfg     = self.cfg
 		local targetW = prev and prev.W or cfg.WindowWidth
 		local targetH = prev and prev.H or cfg.WindowHeight
-
-		local t = tw(win,.45,{Size=UDim2.fromOffset(targetW,targetH)},Enum.EasingStyle.Back,Enum.EasingDirection.Out)
-		task.spawn(function()
-			task.wait(.2)
-			self._body.Visible = true
+		tw(win,.45,{Size=UDim2.fromOffset(targetW,targetH)},Enum.EasingStyle.Back,Enum.EasingDirection.Out)
+		task.delay(.18,function()
+			if self._body then self._body.Visible = true end
 		end)
 		if self._minBtn then self._minBtn.Text = "-" end
 	end
@@ -1134,6 +1132,213 @@ function Lib:AddKeybind(pi,label,default,callback)
 	function obj:GetKey() return currentKey end
 	function obj:SetKey(k) currentKey=k; keyBtn.Text=k end
 	return obj
+end
+
+function Lib:AddBadge(pi, text, style)
+	local s=self:GetPage(pi); if not s then return end
+	local styleMap={
+		default ={bg=C.Card3,   tc=C.TextDim, dot=nil},
+		success ={bg=C.GreenBg, tc=C.Green,   dot=C.Green},
+		error   ={bg=C.RedBg,   tc=C.Red,     dot=C.Red},
+		warning ={bg=C.YellowBg,tc=C.Yellow,  dot=C.Yellow},
+		info    ={bg=C.BlueBg,  tc=C.Blue,    dot=C.Blue},
+		white   ={bg=C.Card2,   tc=C.White,   dot=nil},
+	}
+	local st=styleMap[style or "default"] or styleMap.default
+	local wrap=new("Frame",{Size=UDim2.new(0,0,0,26),AutomaticSize=Enum.AutomaticSize.X,BackgroundColor3=st.bg,BorderSizePixel=0,LayoutOrder=self:_o(pi)},s)
+	corner(wrap,6)
+	pad(wrap,0,0,st.dot and 8 or 10, 10)
+	hlist(wrap,6)
+	if st.dot then
+		local d=new("Frame",{Size=UDim2.fromOffset(6,6),BackgroundColor3=st.dot,BorderSizePixel=0,LayoutOrder=0},wrap)
+		corner(d,3)
+	end
+	local lbl=new("TextLabel",{Text=text or "",Font=Enum.Font.GothamBold,TextSize=11,TextColor3=st.tc,BackgroundTransparency=1,Size=UDim2.new(0,0,1,0),AutomaticSize=Enum.AutomaticSize.X,LayoutOrder=1},wrap)
+	self:_gap(s,pi,6)
+	local obj={Frame=wrap,Label=lbl}
+	function obj:Set(t) self.Label.Text=t end
+	return obj
+end
+
+function Lib:AddAlert(pi, title, message, style)
+	local s=self:GetPage(pi); if not s then return end
+	local styleMap={
+		info    ={accent=C.Blue,   bg=C.BlueBg,   tc=C.Blue},
+		success ={accent=C.Green,  bg=C.GreenBg,  tc=C.Green},
+		warning ={accent=C.Yellow, bg=C.YellowBg, tc=C.Yellow},
+		error   ={accent=C.Red,    bg=C.RedBg,    tc=C.Red},
+	}
+	local st=styleMap[style or "info"] or styleMap.info
+
+	local wrap=new("Frame",{Size=UDim2.new(1,0,0,0),AutomaticSize=Enum.AutomaticSize.Y,BackgroundColor3=st.bg,BorderSizePixel=0,LayoutOrder=self:_o(pi)},s)
+	corner(wrap,10)
+	pad(wrap,12,12,16,16)
+
+	local accent=new("Frame",{Size=UDim2.fromOffset(3,0),AutomaticSize=Enum.AutomaticSize.Y,BackgroundColor3=st.accent,BorderSizePixel=0,AnchorPoint=Vector2.new(0,.5),Position=UDim2.new(0,0,.5,0)},wrap)
+	corner(accent,2)
+
+	local inner=new("Frame",{Position=UDim2.fromOffset(12,0),Size=UDim2.new(1,-12,0,0),AutomaticSize=Enum.AutomaticSize.Y,BackgroundTransparency=1},wrap)
+	vlist(inner,4)
+
+	if title and title~="" then
+		new("TextLabel",{Text=title,Font=Enum.Font.GothamBold,TextSize=13,TextColor3=st.tc,BackgroundTransparency=1,Size=UDim2.new(1,0,0,0),AutomaticSize=Enum.AutomaticSize.Y,TextXAlignment=Enum.TextXAlignment.Left,TextWrapped=true,LayoutOrder=0},inner)
+	end
+	local msgLbl=new("TextLabel",{Text=message or "",Font=Enum.Font.Gotham,TextSize=12,TextColor3=C.TextDim,BackgroundTransparency=1,Size=UDim2.new(1,0,0,0),AutomaticSize=Enum.AutomaticSize.Y,TextXAlignment=Enum.TextXAlignment.Left,TextWrapped=true,LayoutOrder=1},inner)
+
+	self:_gap(s,pi,6)
+	local obj={Frame=wrap,MessageLabel=msgLbl}
+	function obj:Set(msg) self.MessageLabel.Text=msg or "" end
+	function obj:Show() self.Frame.Visible=true end
+	function obj:Hide() self.Frame.Visible=false end
+	return obj
+end
+
+function Lib:AddProgressBar(pi, label, value, maxVal)
+	local s=self:GetPage(pi); if not s then return end
+	value=value or 0; maxVal=maxVal or 100
+	local pct=math.clamp(value/maxVal,0,1)
+
+	local wrap=new("Frame",{Size=UDim2.new(1,0,0,54),BackgroundColor3=C.Card,BorderSizePixel=0,LayoutOrder=self:_o(pi)},s)
+	corner(wrap,10)
+	stroke(wrap,C.Border,1)
+	pad(wrap,12,12,16,16)
+
+	local topRow=new("Frame",{Size=UDim2.new(1,0,0,16),BackgroundTransparency=1},wrap)
+	new("TextLabel",{Text=label or "",Font=Enum.Font.Gotham,TextSize=12,TextColor3=C.Text,BackgroundTransparency=1,Size=UDim2.new(1,-40,1,0),TextXAlignment=Enum.TextXAlignment.Left},topRow)
+	local pctLbl=new("TextLabel",{Text=math.floor(pct*100).."%",Font=Enum.Font.GothamBold,TextSize=11,TextColor3=C.White,BackgroundTransparency=1,AnchorPoint=Vector2.new(1,0),Position=UDim2.new(1,0,0,0),Size=UDim2.fromOffset(40,16),TextXAlignment=Enum.TextXAlignment.Right},topRow)
+
+	local trackBg=new("Frame",{Position=UDim2.fromOffset(0,26),Size=UDim2.new(1,0,0,8),BackgroundColor3=C.Card3,BorderSizePixel=0},wrap)
+	corner(trackBg,4)
+	local fill=new("Frame",{Size=UDim2.fromScale(pct,1),BackgroundColor3=C.White,BorderSizePixel=0},trackBg)
+	corner(fill,4)
+
+	self:_gap(s,pi,6)
+	local obj={Frame=wrap,Fill=fill,PctLabel=pctLbl,_max=maxVal}
+	function obj:SetValue(v)
+		local p=math.clamp(v/self._max,0,1)
+		tw(self.Fill,.35,{Size=UDim2.fromScale(p,1)},Enum.EasingStyle.Quint)
+		self.PctLabel.Text=math.floor(p*100).."%"
+	end
+	function obj:Show() self.Frame.Visible=true end
+	function obj:Hide() self.Frame.Visible=false end
+	return obj
+end
+
+function Lib:AddRichLabel(pi, content)
+	local s=self:GetPage(pi); if not s then return end
+	local lbl=new("TextLabel",{
+		Text=content or "",
+		Font=Enum.Font.Gotham,
+		TextSize=13,
+		TextColor3=C.Text,
+		BackgroundTransparency=1,
+		Size=UDim2.new(1,0,0,0),
+		AutomaticSize=Enum.AutomaticSize.Y,
+		TextXAlignment=Enum.TextXAlignment.Left,
+		TextWrapped=true,
+		RichText=true,
+		LayoutOrder=self:_o(pi),
+	},s)
+	self:_gap(s,pi,6)
+	local obj={Label=lbl}
+	function obj:Set(text) self.Label.Text=text end
+	function obj:Show() self.Label.Visible=true end
+	function obj:Hide() self.Label.Visible=false end
+	return obj
+end
+
+function Lib:AddDivider(pi, text, spacing)
+	local s=self:GetPage(pi); if not s then return end
+	local sp=spacing or 8
+	self:_gap(s,pi,sp)
+
+	if text and text~="" then
+		local row=new("Frame",{Size=UDim2.new(1,0,0,16),BackgroundTransparency=1,LayoutOrder=self:_o(pi)},s)
+		new("Frame",{AnchorPoint=Vector2.new(0,.5),Position=UDim2.new(0,0,.5,0),Size=UDim2.new(.36,0,0,1),BackgroundColor3=C.Border,BorderSizePixel=0},row)
+		new("TextLabel",{Text=string.upper(text),Font=Enum.Font.GothamBold,TextSize=9,TextColor3=C.TextOff,BackgroundTransparency=1,AnchorPoint=Vector2.new(.5,.5),Position=UDim2.fromScale(.5,.5),Size=UDim2.new(.24,0,1,0),TextXAlignment=Enum.TextXAlignment.Center},row)
+		new("Frame",{AnchorPoint=Vector2.new(1,.5),Position=UDim2.new(1,0,.5,0),Size=UDim2.new(.36,0,0,1),BackgroundColor3=C.Border,BorderSizePixel=0},row)
+	else
+		new("Frame",{Size=UDim2.new(1,0,0,1),BackgroundColor3=C.Border,BorderSizePixel=0,LayoutOrder=self:_o(pi)},s)
+	end
+	self:_gap(s,pi,sp)
+end
+
+function Lib:AddTable(pi, headers, rows)
+	local s=self:GetPage(pi); if not s then return end
+	local cols=#headers
+	local rowH=36
+
+	local wrap=new("Frame",{
+		Size=UDim2.new(1,0,0,(#rows+1)*rowH),
+		BackgroundColor3=C.Card,
+		BorderSizePixel=0,
+		LayoutOrder=self:_o(pi),
+		ClipsDescendants=true,
+	},s)
+	corner(wrap,10)
+	stroke(wrap,C.Border,1)
+
+	local function makeRow(data, isHeader, rowIndex)
+		local bg=isHeader and C.Card2 or (rowIndex%2==0 and C.Card or C.Sidebar)
+		local f=new("Frame",{
+			Size=UDim2.new(1,0,0,rowH),
+			Position=UDim2.fromOffset(0,(rowIndex)*rowH),
+			BackgroundColor3=bg,
+			BorderSizePixel=0,
+		},wrap)
+		if isHeader then
+			new("Frame",{Position=UDim2.new(0,0,1,-1),Size=UDim2.new(1,0,0,1),BackgroundColor3=C.Border,BorderSizePixel=0},f)
+		end
+		for c,txt in ipairs(data) do
+			new("TextLabel",{
+				Text=tostring(txt),
+				Font=isHeader and Enum.Font.GothamBold or Enum.Font.Gotham,
+				TextSize=11,
+				TextColor3=isHeader and C.White or C.Text,
+				BackgroundTransparency=1,
+				Position=UDim2.new((c-1)/cols,8,0,0),
+				Size=UDim2.new(1/cols,-10,1,0),
+				TextXAlignment=Enum.TextXAlignment.Left,
+				TextTruncate=Enum.TextTruncate.AtEnd,
+			},f)
+		end
+		if not isHeader then
+			local hov=new("TextButton",{Text="",BackgroundTransparency=1,Size=UDim2.fromScale(1,1),ZIndex=3,AutoButtonColor=false},f)
+			hov.MouseEnter:Connect(function() tw(f,.1,{BackgroundColor3=C.Card3}) end)
+			hov.MouseLeave:Connect(function() tw(f,.12,{BackgroundColor3=bg}) end)
+		end
+	end
+
+	makeRow(headers,true,0)
+	for i,row in ipairs(rows) do
+		makeRow(row,false,i)
+	end
+
+	self:_gap(s,pi,10)
+	local obj={Frame=wrap,_headers=headers,_rows=rows}
+	function obj:Show() self.Frame.Visible=true end
+	function obj:Hide() self.Frame.Visible=false end
+	return obj
+end
+
+function Lib:ShowElement(obj)
+	if not obj then return end
+	local f=obj.Frame or obj.Label
+	if not f then return end
+	f.Visible=true
+	f.BackgroundTransparency=1
+	pcall(function() f.TextTransparency=1 end)
+	tw(f,.3,{BackgroundTransparency=0},Enum.EasingStyle.Quint)
+	pcall(function() tw(f,.3,{TextTransparency=0},Enum.EasingStyle.Quint) end)
+end
+
+function Lib:HideElement(obj)
+	if not obj then return end
+	local f=obj.Frame or obj.Label
+	if not f then return end
+	tw(f,.22,{BackgroundTransparency=1},Enum.EasingStyle.Quint,Enum.EasingDirection.In)
+	pcall(function() tw(f,.18,{TextTransparency=1},Enum.EasingStyle.Quint,Enum.EasingDirection.In) end)
+	task.delay(.24,function() if f and f.Parent then f.Visible=false end end)
 end
 
 function Lib:Destroy()

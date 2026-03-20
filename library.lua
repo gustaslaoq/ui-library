@@ -226,17 +226,20 @@ function Lib:_runSplash()
 	task.spawn(function()
 		task.wait(.2)
 		for i,t in ipairs(tasks) do
+			tw(taskLbl,.15,{TextTransparency=1})
+			task.wait(.12)
 			taskLbl.Text = t
-			tw(barFill, .45, {Size=UDim2.fromScale(i/n,1)}, Enum.EasingStyle.Quint)
+			tw(taskLbl,.2,{TextTransparency=0})
+			tw(barFill,.45,{Size=UDim2.fromScale(i/n,1)},Enum.EasingStyle.Quint)
 			task.wait(.55)
 		end
 		task.wait(.2)
-		tw(card, .35, {BackgroundTransparency=1}, Enum.EasingStyle.Quint)
+		tw(card,.35,{BackgroundTransparency=1,Size=UDim2.fromOffset(340,200)},Enum.EasingStyle.Quint,Enum.EasingDirection.In)
 		task.wait(.38)
 		pcall(function() card:Destroy() end)
 		self.Window.Visible = true
 		self.Window.BackgroundTransparency = 1
-		tw(self.Window, .3, {BackgroundTransparency=0}, Enum.EasingStyle.Quint)
+		tw(self.Window,.35,{BackgroundTransparency=0},Enum.EasingStyle.Back,Enum.EasingDirection.Out)
 	end)
 end
 
@@ -419,6 +422,8 @@ function Lib:_makeNavBtn(page,index,parent)
 	local lbl = new("TextLabel",{Text=page.Name,Font=Enum.Font.GothamBold,TextSize=12,TextColor3=C.TextDim,BackgroundTransparency=1,Position=UDim2.fromOffset(36,0),Size=UDim2.new(1,-44,1,0),TextXAlignment=Enum.TextXAlignment.Left,TextTruncate=Enum.TextTruncate.AtEnd,ZIndex=6},frame)
 
 	local click = new("TextButton",{Text="",BackgroundTransparency=1,Size=UDim2.fromScale(1,1),ZIndex=7,AutoButtonColor=false},frame)
+	click.AutoButtonColor = false
+	pcall(function() click.CursorIcon = "rbxasset://SystemCursors/PointingHand" end)
 
 	click.MouseEnter:Connect(function()
 		if self._pageIdx ~= index then
@@ -451,7 +456,11 @@ end
 
 function Lib:SetPage(index)
 	local cfg = self.cfg
-	if self._pages[self._pageIdx] then self._pages[self._pageIdx].Frame.Visible=false end
+	if self._pages[self._pageIdx] then
+		local oldFrame = self._pages[self._pageIdx].Frame
+		tw(oldFrame,.15,{BackgroundTransparency=1},Enum.EasingStyle.Quint,Enum.EasingDirection.In)
+		task.delay(.16,function() if oldFrame and oldFrame.Parent then oldFrame.Visible=false; oldFrame.BackgroundTransparency=1 end end)
+	end
 	local old = self._navBtns[self._pageIdx]
 	if old then
 		tw(old.Lbl,cfg.TweenSpeed,{TextColor3=C.TextDim})
@@ -459,7 +468,12 @@ function Lib:SetPage(index)
 		tw(old.Dot,cfg.TweenSpeed,{BackgroundColor3=C.TextOff,Size=UDim2.fromOffset(6,6)})
 	end
 	self._pageIdx = index
-	if self._pages[index] then self._pages[index].Frame.Visible=true end
+	local newPage = self._pages[index]
+	if newPage then
+		newPage.Frame.BackgroundTransparency = 1
+		newPage.Frame.Visible = true
+		tw(newPage.Frame,.2,{BackgroundTransparency=0},Enum.EasingStyle.Quint)
+	end
 	local nb = self._navBtns[index]
 	if nb then
 		tw(nb.Lbl,cfg.TweenSpeed,{TextColor3=C.White})
@@ -695,7 +709,17 @@ function Lib:AddButtonRow(pi,defs)
 		btn.MouseLeave:Connect(function() tw(btn,.16,{BackgroundColor3=st.bg}) end)
 		btn.MouseButton1Down:Connect(function() tw(btn,.07,{BackgroundColor3=st.dn,Size=UDim2.fromOffset(w-4,38)}) end)
 		btn.MouseButton1Up:Connect(function() tw(btn,.2,{BackgroundColor3=st.hov,Size=UDim2.fromOffset(w,40)},Enum.EasingStyle.Back,Enum.EasingDirection.Out) end)
-		if def.Callback then btn.Activated:Connect(def.Callback) end
+		pcall(function() btn.CursorIcon = "rbxasset://SystemCursors/PointingHand" end)
+		if def.Callback then
+			btn.Activated:Connect(function()
+				local ok,err = pcall(def.Callback)
+				if not ok then
+					local orig = st.bg
+					tw(btn,.15,{BackgroundColor3=C.Red})
+					task.delay(.5,function() tw(btn,.3,{BackgroundColor3=orig}) end)
+				end
+			end)
+		end
 		btns[i]=btn
 	end
 	self:_gap(s,pi,12)
@@ -735,6 +759,7 @@ function Lib:AddToggle(pi,label,default,callback)
 	end
 
 	local click=new("TextButton",{Text="",BackgroundTransparency=1,Size=UDim2.fromScale(1,1),ZIndex=5,AutoButtonColor=false},track)
+	pcall(function() click.CursorIcon = "rbxasset://SystemCursors/PointingHand" end)
 	click.MouseButton1Down:Connect(function() tw(knob,.07,{Size=UDim2.fromOffset(22,18)}) end)
 	click.MouseButton1Up:Connect(function() tw(knob,.15,{Size=UDim2.fromOffset(20,20)},Enum.EasingStyle.Back,Enum.EasingDirection.Out) end)
 	click.Activated:Connect(function() apply(not state) end)
@@ -904,6 +929,7 @@ function Lib:AddDropdown(pi,labelTxt,options,callback)
 
 	btn.MouseEnter:Connect(function() tw(btn,.14,{BackgroundColor3=C.Card2}) end)
 	btn.MouseLeave:Connect(function() tw(btn,.16,{BackgroundColor3=C.Card}) end)
+	pcall(function() btn.CursorIcon = "rbxasset://SystemCursors/PointingHand" end)
 	btn.Activated:Connect(function()
 		open=not open; optList.Visible=true
 		if open then
@@ -954,7 +980,7 @@ function Lib:ShowNotification(msg,style,duration,title)
 	local st=styleMap[style or "info"] or styleMap.info
 	local h=title and 60 or 44
 
-	local notif=new("Frame",{Size=UDim2.new(1,0,0,h),BackgroundColor3=C.Card2,BackgroundTransparency=1,BorderSizePixel=0,ZIndex=201},self._notifHolder)
+	local notif=new("Frame",{Size=UDim2.new(1,0,0,h),BackgroundColor3=C.Card2,BackgroundTransparency=1,BorderSizePixel=0,ZIndex=201,Position=UDim2.new(0,0,1,0)},self._notifHolder)
 	corner(notif,10)
 	stroke(notif,C.Border2,1)
 	pad(notif,10,10,14,14)
@@ -966,18 +992,148 @@ function Lib:ShowNotification(msg,style,duration,title)
 	end
 	new("TextLabel",{Text=msg or "",Font=Enum.Font.Gotham,TextSize=12,TextColor3=C.TextDim,BackgroundTransparency=1,Position=title and UDim2.fromOffset(12,22) or UDim2.fromOffset(12,0),Size=UDim2.new(1,-12,0,0),AutomaticSize=Enum.AutomaticSize.Y,TextXAlignment=Enum.TextXAlignment.Left,TextWrapped=true,ZIndex=202},notif)
 
-	tw(notif,.28,{BackgroundTransparency=0},Enum.EasingStyle.Quint)
+	tw(notif,.35,{BackgroundTransparency=0,Position=UDim2.new(0,0,0,0)},Enum.EasingStyle.Back,Enum.EasingDirection.Out)
 
 	task.delay(duration or 3.5,function()
 		if not notif or not notif.Parent then return end
-		tw(notif,.22,{BackgroundTransparency=1})
+		tw(notif,.22,{BackgroundTransparency=1,Position=UDim2.new(0,0,1,0)},Enum.EasingStyle.Quint,Enum.EasingDirection.In)
 		task.delay(.25,function()
-			if notif and notif.Parent then
-				tw(notif,.2,{Size=UDim2.new(1,0,0,0)},Enum.EasingStyle.Quint,Enum.EasingDirection.In)
-				task.delay(.22,function() if notif and notif.Parent then notif:Destroy() end end)
-			end
+			if notif and notif.Parent then notif:Destroy() end
 		end)
 	end)
+end
+
+function Lib:AddSlider(pi,label,min,max,default,callback)
+	local s=self:GetPage(pi); if not s then return end
+	min=min or 0; max=max or 100; default=math.clamp(default or min,min,max)
+
+	local wrap=new("Frame",{Size=UDim2.new(1,0,0,66),BackgroundColor3=C.Card,BorderSizePixel=0,LayoutOrder=self:_o(pi)},s)
+	corner(wrap,10)
+	stroke(wrap,C.Border,1)
+	pad(wrap,12,12,16,16)
+
+	local topRow=new("Frame",{Size=UDim2.new(1,0,0,18),BackgroundTransparency=1},wrap)
+	new("TextLabel",{Text=label or "",Font=Enum.Font.Gotham,TextSize=13,TextColor3=C.Text,BackgroundTransparency=1,Size=UDim2.new(1,-50,1,0),TextXAlignment=Enum.TextXAlignment.Left},topRow)
+	local valLbl=new("TextLabel",{Text=tostring(default),Font=Enum.Font.GothamBold,TextSize=12,TextColor3=C.White,BackgroundTransparency=1,AnchorPoint=Vector2.new(1,0),Position=UDim2.new(1,0,0,0),Size=UDim2.fromOffset(50,18),TextXAlignment=Enum.TextXAlignment.Right},topRow)
+
+	local trackBg=new("Frame",{Position=UDim2.fromOffset(0,30),Size=UDim2.new(1,0,0,6),BackgroundColor3=C.Card3,BorderSizePixel=0},wrap)
+	corner(trackBg,3)
+	local fill=new("Frame",{Size=UDim2.fromScale((default-min)/(max-min),1),BackgroundColor3=C.White,BorderSizePixel=0},trackBg)
+	corner(fill,3)
+	local knobSl=new("Frame",{AnchorPoint=Vector2.new(.5,.5),Position=UDim2.new((default-min)/(max-min),0,.5,0),Size=UDim2.fromOffset(14,14),BackgroundColor3=C.White,BorderSizePixel=0,ZIndex=3},trackBg)
+	corner(knobSl,7)
+
+	local dragging=false
+	local interact=new("TextButton",{Text="",BackgroundTransparency=1,Size=UDim2.new(1,0,1,14),Position=UDim2.fromOffset(0,-7),ZIndex=4,AutoButtonColor=false},trackBg)
+	pcall(function() interact.CursorIcon="rbxasset://SystemCursors/PointingHand" end)
+
+	local function updateVal(absX)
+		local rel=math.clamp((absX-trackBg.AbsolutePosition.X)/trackBg.AbsoluteSize.X,0,1)
+		local v=math.floor(min+rel*(max-min)+.5)
+		local pct=(v-min)/(max-min)
+		tw(fill,.06,{Size=UDim2.fromScale(pct,1)})
+		tw(knobSl,.06,{Position=UDim2.new(pct,0,.5,0)})
+		valLbl.Text=tostring(v)
+		if callback then callback(v) end
+	end
+
+	interact.MouseButton1Down:Connect(function(x) dragging=true; updateVal(x) end)
+	table.insert(self._conns,UserInputService.InputEnded:Connect(function(i)
+		if i.UserInputType==Enum.UserInputType.MouseButton1 then dragging=false end
+	end))
+	table.insert(self._conns,UserInputService.InputChanged:Connect(function(i)
+		if dragging and i.UserInputType==Enum.UserInputType.MouseMovement then
+			updateVal(i.Position.X)
+		end
+	end))
+
+	wrap.MouseEnter:Connect(function() tw(wrap,.15,{BackgroundColor3=C.Card2}) end)
+	wrap.MouseLeave:Connect(function() tw(wrap,.18,{BackgroundColor3=C.Card}) end)
+
+	self:_gap(s,pi,6)
+	local obj={Frame=wrap,Fill=fill,Knob=knobSl,ValueLabel=valLbl,_min=min,_max=max}
+	function obj:SetValue(v)
+		v=math.clamp(v,self._min,self._max)
+		local pct=(v-self._min)/(self._max-self._min)
+		tw(self.Fill,.15,{Size=UDim2.fromScale(pct,1)})
+		tw(self.Knob,.15,{Position=UDim2.new(pct,0,.5,0)})
+		self.ValueLabel.Text=tostring(v)
+	end
+	return obj
+end
+
+function Lib:AddParagraph(pi,title,content)
+	local s=self:GetPage(pi); if not s then return end
+
+	local wrap=new("Frame",{Size=UDim2.new(1,0,0,0),AutomaticSize=Enum.AutomaticSize.Y,BackgroundColor3=C.Card,BorderSizePixel=0,LayoutOrder=self:_o(pi)},s)
+	corner(wrap,10)
+	stroke(wrap,C.Border,1)
+	pad(wrap,14,14,16,16)
+	vlist(wrap,8)
+
+	local titleLbl=new("TextLabel",{Text=title or "",Font=Enum.Font.GothamBold,TextSize=13,TextColor3=C.White,BackgroundTransparency=1,Size=UDim2.new(1,0,0,0),AutomaticSize=Enum.AutomaticSize.Y,TextXAlignment=Enum.TextXAlignment.Left,TextWrapped=true,LayoutOrder=0},wrap)
+	new("Frame",{Size=UDim2.new(1,0,0,1),BackgroundColor3=C.Border,BorderSizePixel=0,LayoutOrder=1},wrap)
+	local contentLbl=new("TextLabel",{Text=content or "",Font=Enum.Font.Gotham,TextSize=12,TextColor3=C.TextDim,BackgroundTransparency=1,Size=UDim2.new(1,0,0,0),AutomaticSize=Enum.AutomaticSize.Y,TextXAlignment=Enum.TextXAlignment.Left,TextWrapped=true,LayoutOrder=2},wrap)
+
+	self:_gap(s,pi,6)
+	local obj={Frame=wrap,TitleLabel=titleLbl,ContentLabel=contentLbl}
+	function obj:Set(t,c)
+		if t then self.TitleLabel.Text=t end
+		if c then self.ContentLabel.Text=c end
+	end
+	return obj
+end
+
+function Lib:AddKeybind(pi,label,default,callback)
+	local s=self:GetPage(pi); if not s then return end
+	local currentKey=default or "None"
+	local listening=false
+
+	local row=new("Frame",{Size=UDim2.new(1,0,0,48),BackgroundColor3=C.Card,BorderSizePixel=0,LayoutOrder=self:_o(pi)},s)
+	corner(row,10)
+	stroke(row,C.Border,1)
+	pad(row,0,0,16,16)
+
+	new("TextLabel",{Text=label or "",Font=Enum.Font.Gotham,TextSize=13,TextColor3=C.Text,BackgroundTransparency=1,Size=UDim2.new(1,-120,1,0),TextXAlignment=Enum.TextXAlignment.Left},row)
+
+	local keyBtn=new("TextButton",{Text=currentKey,Font=Enum.Font.GothamBold,TextSize=11,TextColor3=C.White,BackgroundColor3=C.Card3,BorderSizePixel=0,AnchorPoint=Vector2.new(1,.5),Position=UDim2.new(1,0,.5,0),Size=UDim2.fromOffset(90,32),AutoButtonColor=false},row)
+	corner(keyBtn,8)
+	stroke(keyBtn,C.Border2,1)
+	pcall(function() keyBtn.CursorIcon="rbxasset://SystemCursors/PointingHand" end)
+
+	keyBtn.Activated:Connect(function()
+		if listening then return end
+		listening=true
+		keyBtn.Text="..."
+		tw(keyBtn,.15,{BackgroundColor3=C.Card2})
+	end)
+
+	table.insert(self._conns,UserInputService.InputBegan:Connect(function(input,gp)
+		if not listening then return end
+		if input.UserInputType~=Enum.UserInputType.Keyboard then return end
+		local kc=input.KeyCode
+		if kc==Enum.KeyCode.Escape then
+			listening=false
+			keyBtn.Text=currentKey
+			tw(keyBtn,.15,{BackgroundColor3=C.Card3})
+			return
+		end
+		local name=tostring(kc):gsub("Enum.KeyCode.","")
+		currentKey=name
+		keyBtn.Text=name
+		listening=false
+		tw(keyBtn,.15,{BackgroundColor3=C.Card3})
+		if callback then callback(name) end
+	end))
+
+	row.MouseEnter:Connect(function() tw(row,.15,{BackgroundColor3=C.Card2}) end)
+	row.MouseLeave:Connect(function() tw(row,.18,{BackgroundColor3=C.Card}) end)
+
+	self:_gap(s,pi,6)
+	local obj={Frame=row,Button=keyBtn}
+	function obj:GetKey() return currentKey end
+	function obj:SetKey(k) currentKey=k; keyBtn.Text=k end
+	return obj
 end
 
 function Lib:Destroy()

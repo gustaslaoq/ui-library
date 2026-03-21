@@ -152,6 +152,9 @@ function Lib.new(userCfg)
 	self._minBtn     = nil
 	self._tbFiller   = nil
 	self._tbBorder   = nil
+	self._toggleKey  = "RightShift"
+	self._toasts     = {}
+	self._toastCount = 0
 
 	local guiParent = self.cfg.GuiParent == "PlayerGui"
 		and LocalPlayer:WaitForChild("PlayerGui") or CoreGui
@@ -164,15 +167,16 @@ function Lib.new(userCfg)
 	}, guiParent)
 	pcall(function() self._sg.IgnoreGuiInset = true end)
 
+	self:_buildToastSystem()
 	self:_buildWindow()
 	if isDemo then self:_runDemo() end
 	self:_runSplash()
 
-	if self.cfg.ToggleKey then
+	if not UserInputService.TouchEnabled then
 		table.insert(self._conns, UserInputService.InputBegan:Connect(function(inp, gp)
 			if gp then return end
 			local kc = tostring(inp.KeyCode):gsub("Enum%.KeyCode%.","")
-			if kc == self.cfg.ToggleKey then self:ToggleVisibility() end
+			if kc == self._toggleKey then self:ToggleVisibility() end
 		end))
 	end
 
@@ -325,6 +329,57 @@ function Lib:_buildWindow()
 	self:_initPages()
 	self:SetPage(1)
 	task.defer(doScale)
+
+	-- bottom drag handle (pill below window, sibling in ScreenGui)
+	local dh = new("Frame",{
+		Size=UDim2.fromOffset(80,24),
+		BackgroundTransparency=1,
+		ZIndex=998,
+	}, self._sg)
+	local dhPill = new("Frame",{
+		AnchorPoint=Vector2.new(.5,.5),Position=UDim2.fromScale(.5,.5),
+		Size=UDim2.fromOffset(48,5),
+		BackgroundColor3=C.White,BackgroundTransparency=0.55,
+		BorderSizePixel=0,
+	}, dh)
+	corner(dhPill,3)
+	self._dragHandle = dh
+
+	local function updateHandlePos()
+		if not win or not win.Parent then return end
+		local ap = win.AbsolutePosition
+		local as = win.AbsoluteSize
+		dh.Position = UDim2.fromOffset(ap.X + as.X/2 - 40, ap.Y + as.Y + 6)
+	end
+	self._updateHandle = updateHandlePos
+
+	table.insert(self._conns, win:GetPropertyChangedSignal("AbsolutePosition"):Connect(updateHandlePos))
+	table.insert(self._conns, win:GetPropertyChangedSignal("AbsoluteSize"):Connect(updateHandlePos))
+	task.defer(updateHandlePos)
+
+	do
+		local dhDrag, dhDs, dhWs = false
+		dh.InputBegan:Connect(function(i)
+			if i.UserInputType==Enum.UserInputType.MouseButton1 or i.UserInputType==Enum.UserInputType.Touch then
+				dhDrag=true; dhDs=i.Position; dhWs=win.Position
+				tw(dhPill,.12,{BackgroundTransparency=0.35,Size=UDim2.fromOffset(56,6)})
+			end
+		end)
+		dh.InputEnded:Connect(function(i)
+			if i.UserInputType==Enum.UserInputType.MouseButton1 or i.UserInputType==Enum.UserInputType.Touch then
+				dhDrag=false
+				tw(dhPill,.18,{BackgroundTransparency=0.55,Size=UDim2.fromOffset(48,5)})
+			end
+		end)
+		dh.MouseEnter:Connect(function() tw(dhPill,.12,{BackgroundTransparency=0.4,Size=UDim2.fromOffset(54,6)}) end)
+		dh.MouseLeave:Connect(function() if not dhDrag then tw(dhPill,.18,{BackgroundTransparency=0.55,Size=UDim2.fromOffset(48,5)}) end end)
+		table.insert(self._conns, UserInputService.InputChanged:Connect(function(i)
+			if not dhDrag then return end
+			if i.UserInputType~=Enum.UserInputType.MouseMovement and i.UserInputType~=Enum.UserInputType.Touch then return end
+			local d = i.Position - dhDs
+			win.Position = UDim2.new(dhWs.X.Scale, dhWs.X.Offset+d.X, dhWs.Y.Scale, dhWs.Y.Offset+d.Y)
+		end))
+	end
 end
 
 function Lib:_buildTitleBar(win)
@@ -367,7 +422,7 @@ function Lib:_buildTitleBar(win)
 		BackgroundTransparency=1,Size=UDim2.fromOffset(0,22),AutomaticSize=Enum.AutomaticSize.X,ZIndex=12},ver)
 
 	local right = new("Frame",{AnchorPoint=Vector2.new(1,0),Position=UDim2.new(1,0,0,0),
-		Size=UDim2.fromOffset(88,44),BackgroundTransparency=1,ZIndex=11},tb)
+		Size=UDim2.fromOffset(132,44),BackgroundTransparency=1,ZIndex=11},tb)
 	hlist(right,0)
 
 	local function mkBtn(sym,hc,cb,lo)
@@ -378,6 +433,7 @@ function Lib:_buildTitleBar(win)
 		b.Activated:Connect(cb)
 		return b
 	end
+	mkBtn("⚙",C.TextDim,function() self:_openSettings() end,0)
 	self._minBtn = mkBtn("-",C.White,function() self:ToggleVisibility() end,1)
 	mkBtn("x",C.Red,function() self:Destroy() end,2)
 
@@ -620,6 +676,7 @@ function Lib:Minimise()
 			if self._body then self._body.Visible = false end
 		end)
 		if self._minBtn then self._minBtn.Text = "+" end
+		if self._dragHandle then self._dragHandle.Visible = false end
 	end
 end
 
@@ -640,20 +697,22 @@ function Lib:Maximise()
 		end
 		win.Visible=true
 		win.BackgroundTransparency=1
+		win.Position = UDim2.fromScale(.5,.5)
 		tw(win,.32,{BackgroundTransparency=0},Enum.EasingStyle.Quint)
 	else
 		local prev    = self._preMinSize
 		local cfg     = self.cfg
 		local targetW = prev and prev.W or cfg.WindowWidth
 		local targetH = prev and prev.H or cfg.WindowHeight
-		-- show body BEFORE tween — ClipsDescendants on win clips it while window is still small
 		if self._body then self._body.Visible = true end
 		win.BackgroundColor3 = C.Bg
 		if self._tbFiller then self._tbFiller.Visible = true end
 		if self._tbBorderLine then self._tbBorderLine.Visible = true end
+		win.Position = UDim2.fromScale(.5,.5)
 		tw(win,.45,{Size=UDim2.fromOffset(targetW, targetH)},Enum.EasingStyle.Back,Enum.EasingDirection.Out)
 		if self._minBtn then self._minBtn.Text = "-" end
 	end
+	if self._dragHandle then self._dragHandle.Visible = true end
 end
 
 function Lib:ToggleVisibility()
@@ -690,6 +749,51 @@ function Lib:Shake(intensity)
 end
 
 function Lib:Destroy()
+	local isMobile = UserInputService.TouchEnabled
+	local keyInfo = (not isMobile) and ("Press "..self._toggleKey.." to reopen.") or "Use the button to reopen."
+
+	-- send a standalone toast that survives the sg destruction
+	-- We build it in a temporary ScreenGui so it outlives the main one
+	pcall(function()
+		local tmpSg = new("ScreenGui",{
+			Name="SlaoqUIToast",ResetOnSpawn=false,
+			ZIndexBehavior=Enum.ZIndexBehavior.Sibling,DisplayOrder=1000,
+		}, self._sg.Parent)
+		pcall(function() tmpSg.IgnoreGuiInset = true end)
+
+		local toastW = 300
+		local toast = new("Frame",{
+			AnchorPoint = Vector2.new(1,0),
+			Position    = UDim2.new(1,320,0,16),
+			Size        = UDim2.fromOffset(toastW,0),
+			AutomaticSize = Enum.AutomaticSize.Y,
+			BackgroundColor3 = C.Card2,
+			BorderSizePixel  = 0,
+			ZIndex = 1001,
+		}, tmpSg)
+		corner(toast,10)
+		stroke(toast,C.Border2,1)
+		pad(toast,12,12,14,14)
+		vlist(toast,4)
+
+		local topRow=new("Frame",{Size=UDim2.new(1,0,0,16),BackgroundTransparency=1,LayoutOrder=0},toast)
+		hlist(topRow,8)
+		local dot=new("Frame",{Size=UDim2.fromOffset(8,8),BackgroundColor3=C.TextDim,BorderSizePixel=0,LayoutOrder=0},topRow)
+		corner(dot,4)
+		new("TextLabel",{Text="INTERFACE CLOSED",Font=Enum.Font.GothamBold,TextSize=11,TextColor3=C.TextDim,
+			BackgroundTransparency=1,Size=UDim2.new(0,0,1,0),AutomaticSize=Enum.AutomaticSize.X,
+			TextXAlignment=Enum.TextXAlignment.Left,ZIndex=1002,LayoutOrder=1},topRow)
+		new("TextLabel",{Text=keyInfo,Font=Enum.Font.Gotham,TextSize=12,TextColor3=C.TextDim,
+			BackgroundTransparency=1,Size=UDim2.new(1,0,0,0),AutomaticSize=Enum.AutomaticSize.Y,
+			TextXAlignment=Enum.TextXAlignment.Left,TextWrapped=true,ZIndex=1002,LayoutOrder=1},toast)
+
+		tw(toast,.38,{Position=UDim2.new(1,-16,0,16)},Enum.EasingStyle.Back,Enum.EasingDirection.Out)
+		task.delay(5,function()
+			tw(toast,.22,{Position=UDim2.new(1,320,0,16),BackgroundTransparency=1},Enum.EasingStyle.Quint,Enum.EasingDirection.In)
+			task.delay(.25,function() pcall(function() tmpSg:Destroy() end) end)
+		end)
+	end)
+
 	for _,c in ipairs(self._conns) do pcall(function() c:Disconnect() end) end
 	if self._sg and self._sg.Parent then
 		if self.Window then
@@ -701,6 +805,267 @@ function Lib:Destroy()
 		end
 		task.delay(.31,function() pcall(function() self._sg:Destroy() end) end)
 	end
+end
+
+function Lib:_buildToastSystem()
+	local holder = new("Frame",{
+		AnchorPoint = Vector2.new(1,0),
+		Position    = UDim2.new(1,-16,0,16),
+		Size        = UDim2.fromOffset(300,0),
+		AutomaticSize = Enum.AutomaticSize.Y,
+		BackgroundTransparency = 1,
+		ZIndex = 1000,
+	}, self._sg)
+	vlist(holder, 8)
+	self._toastHolder = holder
+end
+
+function Lib:ShowNotification(msg, style, duration, title)
+	if not self._toastHolder then return end
+	local styleMap = {
+		info    = {dot=C.Blue,   bg=C.BlueBg,   tc=C.Blue},
+		success = {dot=C.Green,  bg=C.GreenBg,  tc=C.Green},
+		warning = {dot=C.Yellow, bg=C.YellowBg, tc=C.Yellow},
+		error   = {dot=C.Red,    bg=C.RedBg,    tc=C.Red},
+		purple  = {dot=C.Purple, bg=C.PurpleBg, tc=C.Purple},
+	}
+	local st = styleMap[style or "info"] or styleMap.info
+
+	self._toastCount = (self._toastCount or 0) + 1
+	local lo = self._toastCount
+
+	local toast = new("Frame",{
+		Size = UDim2.new(1,0,0,0),
+		AutomaticSize = Enum.AutomaticSize.Y,
+		BackgroundColor3 = C.Card2,
+		BackgroundTransparency = 1,
+		BorderSizePixel = 0,
+		ZIndex = 1001,
+		LayoutOrder = lo,
+		ClipsDescendants = false,
+	}, self._toastHolder)
+	corner(toast, 10)
+	stroke(toast, C.Border2, 1)
+
+	local inner = new("Frame",{
+		Size = UDim2.new(1,0,0,0),
+		AutomaticSize = Enum.AutomaticSize.Y,
+		BackgroundTransparency = 1,
+	}, toast)
+	pad(inner, 12, 12, 14, 14)
+	vlist(inner, 4)
+
+	local topRow = new("Frame",{
+		Size = UDim2.new(1,0,0,0),
+		AutomaticSize = Enum.AutomaticSize.Y,
+		BackgroundTransparency = 1,
+		LayoutOrder = 0,
+	}, inner)
+	hlist(topRow, 8)
+
+	local dot = new("Frame",{
+		Size = UDim2.fromOffset(8,8),
+		BackgroundColor3 = st.dot,
+		BorderSizePixel = 0,
+		LayoutOrder = 0,
+	}, topRow)
+	corner(dot, 4)
+
+	local titleTxt = title or style or "info"
+	new("TextLabel",{
+		Text = string.upper(titleTxt),
+		Font = Enum.Font.GothamBold,
+		TextSize = 11,
+		TextColor3 = st.tc,
+		BackgroundTransparency = 1,
+		Size = UDim2.new(1,0,0,16),
+		AutomaticSize = Enum.AutomaticSize.X,
+		TextXAlignment = Enum.TextXAlignment.Left,
+		ZIndex = 1002,
+		LayoutOrder = 1,
+	}, topRow)
+
+	new("TextLabel",{
+		Text = msg or "",
+		Font = Enum.Font.Gotham,
+		TextSize = 12,
+		TextColor3 = C.TextDim,
+		BackgroundTransparency = 1,
+		Size = UDim2.new(1,0,0,0),
+		AutomaticSize = Enum.AutomaticSize.Y,
+		TextXAlignment = Enum.TextXAlignment.Left,
+		TextWrapped = true,
+		ZIndex = 1002,
+		LayoutOrder = 1,
+	}, inner)
+
+	-- progress bar
+	local pbg = new("Frame",{
+		Size = UDim2.new(1,0,0,2),
+		BackgroundColor3 = C.Card3,
+		BorderSizePixel = 0,
+		LayoutOrder = 2,
+	}, inner)
+	corner(pbg,1)
+	local pf = new("Frame",{Size=UDim2.fromScale(1,1),BackgroundColor3=st.dot,BorderSizePixel=0},pbg)
+	corner(pf,1)
+
+	-- slide in from right
+	toast.Position = UDim2.fromOffset(320, 0)
+	toast.BackgroundTransparency = 0
+	tw(toast, .38, {Position=UDim2.fromOffset(0,0)}, Enum.EasingStyle.Back, Enum.EasingDirection.Out)
+	tw(pf, duration or 3.5, {Size=UDim2.fromScale(0,1)}, Enum.EasingStyle.Linear)
+
+	local alive = true
+	table.insert(self._toasts, toast)
+
+	local function dismiss()
+		if not alive then return end
+		alive = false
+		for i,t in ipairs(self._toasts) do
+			if t == toast then table.remove(self._toasts, i) break end
+		end
+		tw(toast, .22, {Position=UDim2.fromOffset(320,0), BackgroundTransparency=1}, Enum.EasingStyle.Quint, Enum.EasingDirection.In)
+		task.delay(.25, function() if toast and toast.Parent then toast:Destroy() end end)
+	end
+
+	-- click to dismiss
+	local clickOverlay = new("TextButton",{Text="",BackgroundTransparency=1,Size=UDim2.fromScale(1,1),ZIndex=1003,AutoButtonColor=false},toast)
+	clickOverlay.Activated:Connect(dismiss)
+
+	task.delay(duration or 3.5, dismiss)
+end
+
+function Lib:_openSettings()
+	if self._settingsOpen then return end
+	self._settingsOpen = true
+
+	local isMobile = UserInputService.TouchEnabled
+
+	local overlay = new("TextButton",{
+		Text="",BackgroundColor3=Color3.new(0,0,0),BackgroundTransparency=0.55,
+		Size=UDim2.fromScale(1,1),ZIndex=900,AutoButtonColor=false,
+	}, self._sg)
+
+	local panel = new("Frame",{
+		AnchorPoint = Vector2.new(.5,.5),
+		Position    = UDim2.fromScale(.5,.52),
+		Size        = UDim2.fromOffset(360, isMobile and 160 or 260),
+		BackgroundColor3 = C.Card,
+		BorderSizePixel = 0,
+		ZIndex = 901,
+		BackgroundTransparency = 1,
+	}, self._sg)
+	corner(panel, 14)
+	stroke(panel, C.Border2, 1)
+
+	tw(overlay, .22, {BackgroundTransparency=0.55})
+	tw(panel, .32, {BackgroundTransparency=0, Position=UDim2.fromScale(.5,.5)}, Enum.EasingStyle.Back, Enum.EasingDirection.Out)
+
+	pad(panel, 20, 20, 20, 20)
+	vlist(panel, 14)
+
+	-- header
+	local hdr = new("Frame",{Size=UDim2.new(1,0,0,22),BackgroundTransparency=1,LayoutOrder=0},panel)
+	hlist(hdr, 0)
+	new("TextLabel",{Text="Settings",Font=Enum.Font.GothamBold,TextSize=16,TextColor3=C.White,
+		BackgroundTransparency=1,Size=UDim2.new(1,-28,1,0),TextXAlignment=Enum.TextXAlignment.Left,LayoutOrder=0},hdr)
+	local closeBtn = new("TextButton",{Text="×",Font=Enum.Font.GothamBold,TextSize=18,TextColor3=C.TextDim,
+		BackgroundTransparency=1,Size=UDim2.fromOffset(28,22),TextXAlignment=Enum.TextXAlignment.Center,
+		AutoButtonColor=false,LayoutOrder=1},hdr)
+	closeBtn.MouseEnter:Connect(function() tw(closeBtn,.1,{TextColor3=C.Red}) end)
+	closeBtn.MouseLeave:Connect(function() tw(closeBtn,.12,{TextColor3=C.TextDim}) end)
+
+	-- separator
+	new("Frame",{Size=UDim2.new(1,0,0,1),BackgroundColor3=C.Border,BorderSizePixel=0,LayoutOrder=1},panel)
+
+	local function closePanel()
+		self._settingsOpen = false
+		tw(panel,.2,{BackgroundTransparency=1,Position=UDim2.fromScale(.5,.52)},Enum.EasingStyle.Quint,Enum.EasingDirection.In)
+		tw(overlay,.2,{BackgroundTransparency=1})
+		task.delay(.22,function()
+			if panel and panel.Parent then panel:Destroy() end
+			if overlay and overlay.Parent then overlay:Destroy() end
+		end)
+	end
+
+	closeBtn.Activated:Connect(closePanel)
+	overlay.Activated:Connect(closePanel)
+
+	if isMobile then
+		new("TextLabel",{
+			Text="Keybind settings are not available on mobile.\nUse the floating button to show/hide the interface.",
+			Font=Enum.Font.Gotham,TextSize=12,TextColor3=C.TextDim,
+			BackgroundTransparency=1,Size=UDim2.new(1,0,0,0),AutomaticSize=Enum.AutomaticSize.Y,
+			TextXAlignment=Enum.TextXAlignment.Left,TextWrapped=true,LayoutOrder=2,
+		},panel)
+		return
+	end
+
+	-- keybind section
+	new("TextLabel",{Text="Toggle Interface Keybind",Font=Enum.Font.GothamBold,TextSize=11,TextColor3=C.TextDim,
+		BackgroundTransparency=1,Size=UDim2.new(1,0,0,16),TextXAlignment=Enum.TextXAlignment.Left,LayoutOrder=2},panel)
+
+	local kbRow = new("Frame",{Size=UDim2.new(1,0,0,44),BackgroundColor3=C.Card2,BorderSizePixel=0,LayoutOrder=3},panel)
+	corner(kbRow, 10)
+	stroke(kbRow, C.Border, 1)
+	pad(kbRow, 0, 0, 14, 14)
+
+	new("TextLabel",{Text="Show / Hide",Font=Enum.Font.Gotham,TextSize=13,TextColor3=C.Text,
+		BackgroundTransparency=1,Size=UDim2.new(1,-104,1,0),TextXAlignment=Enum.TextXAlignment.Left},kbRow)
+
+	local kbBtn = new("TextButton",{
+		Text=self._toggleKey,Font=Enum.Font.GothamBold,TextSize=11,TextColor3=C.White,
+		BackgroundColor3=C.Card3,BorderSizePixel=0,
+		AnchorPoint=Vector2.new(1,.5),Position=UDim2.new(1,0,.5,0),
+		Size=UDim2.fromOffset(90,32),AutoButtonColor=false,
+	},kbRow)
+	corner(kbBtn, 8)
+	stroke(kbBtn, C.Border2, 1)
+	pcall(function() kbBtn.CursorIcon="rbxasset://SystemCursors/PointingHand" end)
+
+	local kbListening = false
+	kbBtn.Activated:Connect(function()
+		if kbListening then return end
+		kbListening = true
+		kbBtn.Text = "..."
+		tw(kbBtn, .15, {BackgroundColor3=C.Card2})
+	end)
+
+	local kbConn
+	kbConn = UserInputService.InputBegan:Connect(function(inp, gp)
+		if not kbListening then return end
+		if inp.UserInputType ~= Enum.UserInputType.Keyboard then return end
+		local name = tostring(inp.KeyCode):gsub("Enum%.KeyCode%.","")
+		if name == "Escape" then
+			kbListening = false
+			kbBtn.Text = self._toggleKey
+			tw(kbBtn, .15, {BackgroundColor3=C.Card3})
+			return
+		end
+		self._toggleKey = name
+		kbBtn.Text = name
+		kbListening = false
+		tw(kbBtn, .15, {BackgroundColor3=C.Card3})
+		self:ShowNotification("Keybind set to: "..name, "success", 3, "Settings")
+	end)
+
+	-- info label
+	new("TextLabel",{
+		Text="Press the key above to rebind. Press Escape to cancel.",
+		Font=Enum.Font.Gotham,TextSize=11,TextColor3=C.TextDim,
+		BackgroundTransparency=1,Size=UDim2.new(1,0,0,0),AutomaticSize=Enum.AutomaticSize.Y,
+		TextXAlignment=Enum.TextXAlignment.Left,TextWrapped=true,LayoutOrder=4,
+	},panel)
+
+	-- disconnect keybind listener when panel closes
+	local origClose = closePanel
+	closePanel = function()
+		if kbConn then kbConn:Disconnect() end
+		origClose()
+	end
+	closeBtn.Activated:Connect(function() if kbConn then kbConn:Disconnect() end end)
+	overlay.Activated:Connect(function() if kbConn then kbConn:Disconnect() end end)
 end
 
 function Lib:_o(pi)

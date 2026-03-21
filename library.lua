@@ -166,6 +166,9 @@ function Lib.new(userCfg)
 	self._settingsScroll = nil
 	self._gearImg        = nil
 	self._searchBtnImg   = nil
+	self._searchNavUp    = nil
+	self._searchNavDown  = nil
+	self._searchIdx      = 0
 
 	local guiParent = self.cfg.GuiParent == "PlayerGui"
 		and LocalPlayer:WaitForChild("PlayerGui") or CoreGui
@@ -301,12 +304,7 @@ function Lib:_runSplash()
 		task.delay(.5, function()
 			if self._dragHandle then
 				self._dragHandle.Visible = true
-				local ap = self.Window.AbsolutePosition
-				local as = self.Window.AbsoluteSize
-				self._dragHandle.Position = UDim2.fromOffset(
-					math.floor(ap.X + as.X * 0.5),
-					math.floor(ap.Y + as.Y + 9)
-				)
+				if self._syncHandle then self._syncHandle() end
 			end
 		end)
 	end)
@@ -369,13 +367,13 @@ function Lib:_buildWindow()
 	self._dragTargetOX = 0
 	self._dragTargetOY = 0
 
-	local dhPillW, dhPillH = 110, 5
+	local dhPillW, dhPillH = 120, 5
 	local dh = new("Frame",{
 		AnchorPoint = Vector2.new(.5, 0),
-		Position    = UDim2.fromScale(.5, .5),
-		Size        = UDim2.fromOffset(dhPillW + 20, 22),
+		Position    = UDim2.fromOffset(0, 0),
+		Size        = UDim2.fromOffset(dhPillW + 24, 24),
 		BackgroundTransparency = 1,
-		ZIndex = 998,
+		ZIndex = 999,
 		Visible = false,
 	}, self._sg)
 	local dhPill = new("Frame",{
@@ -383,16 +381,17 @@ function Lib:_buildWindow()
 		Position    = UDim2.fromScale(.5, .5),
 		Size        = UDim2.fromOffset(dhPillW, dhPillH),
 		BackgroundColor3 = C.White,
-		BackgroundTransparency = 0.6,
+		BackgroundTransparency = 0.55,
 		BorderSizePixel = 0,
 	}, dh)
 	corner(dhPill, 3)
 	self._dragHandle = dh
 
 	local function syncHandle()
+		if not dh.Visible then return end
 		local ap = win.AbsolutePosition
 		local as = win.AbsoluteSize
-		dh.Position = UDim2.fromOffset(math.floor(ap.X + as.X * 0.5), math.floor(ap.Y + as.Y + 9))
+		dh.Position = UDim2.fromOffset(math.floor(ap.X + as.X * 0.5), math.floor(ap.Y + as.Y + 8))
 	end
 	self._syncHandle = syncHandle
 
@@ -410,10 +409,10 @@ function Lib:_buildWindow()
 		win.Position = UDim2.new(0.5, nx, 0.5, ny)
 		local cam = workspace.CurrentCamera
 		local vp  = cam and cam.ViewportSize or Vector2.new(1920, 1080)
-		local winH = win.AbsoluteSize.Y
-		local hx = vp.X * 0.5 + tx
-		local hy = vp.Y * 0.5 + ty + winH * 0.5 + 9
-		dh.Position = UDim2.fromOffset(math.floor(hx), math.floor(hy))
+		dh.Position = UDim2.fromOffset(
+			math.floor(vp.X * 0.5 + tx),
+			math.floor(vp.Y * 0.5 + ty + win.AbsoluteSize.Y * 0.5 + 8)
+		)
 	end)
 	table.insert(self._conns, lerpConn)
 
@@ -438,7 +437,7 @@ function Lib:_buildWindow()
 				self._dragTargetOX = wsOX
 				self._dragTargetOY = wsOY
 				self._dragActive = true
-				tw(dhPill, .1, {BackgroundTransparency=0.25, Size=UDim2.fromOffset(dhPillW+12, dhPillH+2)})
+				tw(dhPill, .1, {BackgroundTransparency=0.25, Size=UDim2.fromOffset(dhPillW+14, dhPillH+2)})
 			end
 		end)
 		dh.InputEnded:Connect(function(i)
@@ -447,15 +446,15 @@ function Lib:_buildWindow()
 				self._dragActive = false
 				win.Position = UDim2.new(0.5, self._dragTargetOX, 0.5, self._dragTargetOY)
 				syncHandle()
-				tw(dhPill, .18, {BackgroundTransparency=0.6, Size=UDim2.fromOffset(dhPillW, dhPillH)})
+				tw(dhPill, .18, {BackgroundTransparency=0.55, Size=UDim2.fromOffset(dhPillW, dhPillH)})
 			end
 		end)
 		dh.MouseEnter:Connect(function()
-			tw(dhPill, .12, {BackgroundTransparency=0.42, Size=UDim2.fromOffset(dhPillW+8, dhPillH+1)})
+			tw(dhPill, .12, {BackgroundTransparency=0.38, Size=UDim2.fromOffset(dhPillW+8, dhPillH+1)})
 		end)
 		dh.MouseLeave:Connect(function()
 			if not active then
-				tw(dhPill, .18, {BackgroundTransparency=0.6, Size=UDim2.fromOffset(dhPillW, dhPillH)})
+				tw(dhPill, .18, {BackgroundTransparency=0.55, Size=UDim2.fromOffset(dhPillW, dhPillH)})
 			end
 		end)
 		table.insert(self._conns, UserInputService.InputChanged:Connect(function(i)
@@ -512,7 +511,7 @@ function Lib:_buildTitleBar(win)
 	hlist(right,0)
 
 	local function mkBtn(sym,hc,cb,lo)
-		local b = new("TextButton",{Text=sym,Font=Enum.Font.GothamBold,TextSize=14,TextColor3=C.TextDim,
+		local b = new("TextButton",{Text=sym,Font=Enum.Font.GothamBold,TextSize=18,TextColor3=C.TextDim,
 			BackgroundTransparency=1,Size=UDim2.fromOffset(44,44),ZIndex=12,AutoButtonColor=false,LayoutOrder=lo},right)
 		b.MouseEnter:Connect(function() tw(b,.12,{TextColor3=hc,BackgroundTransparency=.93}) end)
 		b.MouseLeave:Connect(function() tw(b,.15,{TextColor3=C.TextDim,BackgroundTransparency=1}) end)
@@ -523,12 +522,14 @@ function Lib:_buildTitleBar(win)
 	do
 		local w = new("Frame",{Size=UDim2.fromOffset(44,44),BackgroundTransparency=1,ZIndex=12,LayoutOrder=0},right)
 		local img = new("ImageLabel",{AnchorPoint=Vector2.new(.5,.5),Position=UDim2.fromScale(.5,.5),
-			Size=UDim2.fromOffset(18,18),BackgroundTransparency=1,
-			Image="rbxassetid://132302594577680",ImageColor3=C.Text,ZIndex=13},w)
+			Size=UDim2.fromOffset(22,22),BackgroundTransparency=1,
+			Image="rbxassetid://132302594577680",
+			ImageColor3=C.Text,
+			ScaleType=Enum.ScaleType.Fit,
+			ZIndex=13},w)
 		local btn = new("TextButton",{Text="",BackgroundTransparency=1,Size=UDim2.fromScale(1,1),ZIndex=14,AutoButtonColor=false},w)
 		btn.MouseEnter:Connect(function() tw(img,.12,{ImageColor3=C.White}); tw(w,.12,{BackgroundTransparency=.93}) end)
 		btn.MouseLeave:Connect(function() tw(img,.15,{ImageColor3=C.Text}); tw(w,.15,{BackgroundTransparency=1}) end)
-		btn.MouseEnter:Connect(function() tw(img,.12,{ImageColor3=C.White}); tw(w,.12,{BackgroundTransparency=.93}) end)
 		btn.Activated:Connect(function() self:_toggleSearch() end)
 		self._searchBtnImg = img
 	end
@@ -536,8 +537,11 @@ function Lib:_buildTitleBar(win)
 	do
 		local w = new("Frame",{Size=UDim2.fromOffset(44,44),BackgroundTransparency=1,ZIndex=12,LayoutOrder=1},right)
 		local img = new("ImageLabel",{AnchorPoint=Vector2.new(.5,.5),Position=UDim2.fromScale(.5,.5),
-			Size=UDim2.fromOffset(18,18),BackgroundTransparency=1,
-			Image="rbxassetid://101671992802622",ImageColor3=C.Text,ZIndex=13},w)
+			Size=UDim2.fromOffset(22,22),BackgroundTransparency=1,
+			Image="rbxassetid://101671992802622",
+			ImageColor3=C.Text,
+			ScaleType=Enum.ScaleType.Fit,
+			ZIndex=13},w)
 		local btn = new("TextButton",{Text="",BackgroundTransparency=1,Size=UDim2.fromScale(1,1),ZIndex=14,AutoButtonColor=false},w)
 		btn.MouseEnter:Connect(function() tw(img,.12,{ImageColor3=C.White}); tw(w,.12,{BackgroundTransparency=.93}) end)
 		btn.MouseLeave:Connect(function() tw(img,.15,{ImageColor3=C.Text}); tw(w,.15,{BackgroundTransparency=1}) end)
@@ -641,32 +645,16 @@ function Lib:_buildBody(win)
 	new("Frame",{Position=UDim2.new(0,0,1,-1),Size=UDim2.new(1,0,0,1),
 		BackgroundColor3=C.Border,BorderSizePixel=0,ZIndex=21},searchBar)
 
-	local searchIconImg = new("ImageLabel",{
-		AnchorPoint=Vector2.new(0,.5),Position=UDim2.new(0,14,.5,0),
+	new("ImageLabel",{
+		AnchorPoint=Vector2.new(0,.5),Position=UDim2.new(0,12,.5,0),
 		Size=UDim2.fromOffset(16,16),BackgroundTransparency=1,
 		Image="rbxassetid://132302594577680",
-		ImageColor3=C.Text,ZIndex=22,
+		ImageColor3=C.Text,ScaleType=Enum.ScaleType.Fit,ZIndex=22,
 	}, searchBar)
-
-	local resultLbl = new("TextLabel",{
-		AnchorPoint=Vector2.new(1,.5),Position=UDim2.new(1,-40,.5,0),
-		Size=UDim2.fromOffset(60,30),
-		Text="",Font=Enum.Font.Gotham,TextSize=11,TextColor3=C.TextDim,
-		BackgroundTransparency=1,TextXAlignment=Enum.TextXAlignment.Right,ZIndex=22,
-	}, searchBar)
-
-	local closeSearchBtn = new("TextButton",{
-		AnchorPoint=Vector2.new(1,.5),Position=UDim2.new(1,-8,.5,0),
-		Size=UDim2.fromOffset(28,28),
-		Text="x",Font=Enum.Font.GothamBold,TextSize=16,TextColor3=C.TextDim,
-		BackgroundTransparency=1,AutoButtonColor=false,ZIndex=22,
-	}, searchBar)
-	closeSearchBtn.MouseEnter:Connect(function() tw(closeSearchBtn,.1,{TextColor3=C.Red}) end)
-	closeSearchBtn.MouseLeave:Connect(function() tw(closeSearchBtn,.12,{TextColor3=C.TextDim}) end)
 
 	local searchBox = new("TextBox",{
-		AnchorPoint=Vector2.new(0,.5),Position=UDim2.new(0,38,.5,0),
-		Size=UDim2.new(1,-140,0,30),
+		AnchorPoint=Vector2.new(0,.5),Position=UDim2.new(0,36,.5,0),
+		Size=UDim2.new(1,-220,0,30),
 		Text="",PlaceholderText="Search in page... (Ctrl+F)",
 		Font=Enum.Font.Gotham,TextSize=13,
 		TextColor3=C.Text,PlaceholderColor3=C.TextOff,
@@ -674,11 +662,55 @@ function Lib:_buildBody(win)
 		TextXAlignment=Enum.TextXAlignment.Left,ZIndex=22,
 	}, searchBar)
 
+	local resultLbl = new("TextLabel",{
+		AnchorPoint=Vector2.new(1,.5),Position=UDim2.new(1,-118,.5,0),
+		Size=UDim2.fromOffset(58,30),
+		Text="",Font=Enum.Font.Gotham,TextSize=11,TextColor3=C.TextDim,
+		BackgroundTransparency=1,TextXAlignment=Enum.TextXAlignment.Right,ZIndex=22,
+	}, searchBar)
+
+	local navUp = new("TextButton",{
+		AnchorPoint=Vector2.new(1,.5),Position=UDim2.new(1,-84,.5,0),
+		Size=UDim2.fromOffset(26,26),
+		Text="^",Font=Enum.Font.GothamBold,TextSize=13,TextColor3=C.TextDim,
+		BackgroundColor3=C.Card3,BorderSizePixel=0,AutoButtonColor=false,ZIndex=22,
+	}, searchBar)
+	corner(navUp,6)
+
+	local navDown = new("TextButton",{
+		AnchorPoint=Vector2.new(1,.5),Position=UDim2.new(1,-54,.5,0),
+		Size=UDim2.fromOffset(26,26),
+		Text="v",Font=Enum.Font.GothamBold,TextSize=11,TextColor3=C.TextDim,
+		BackgroundColor3=C.Card3,BorderSizePixel=0,AutoButtonColor=false,ZIndex=22,
+	}, searchBar)
+	corner(navDown,6)
+
+	local closeSearchBtn = new("TextButton",{
+		AnchorPoint=Vector2.new(1,.5),Position=UDim2.new(1,-16,.5,0),
+		Size=UDim2.fromOffset(28,28),
+		Text="x",Font=Enum.Font.GothamBold,TextSize=16,TextColor3=C.TextDim,
+		BackgroundTransparency=1,AutoButtonColor=false,ZIndex=22,
+	}, searchBar)
+	closeSearchBtn.MouseEnter:Connect(function() tw(closeSearchBtn,.1,{TextColor3=C.Red}) end)
+	closeSearchBtn.MouseLeave:Connect(function() tw(closeSearchBtn,.12,{TextColor3=C.TextDim}) end)
+
+	for _,nb in ipairs({navUp,navDown}) do
+		nb.MouseEnter:Connect(function() tw(nb,.1,{BackgroundColor3=C.Card2,TextColor3=C.White}) end)
+		nb.MouseLeave:Connect(function() tw(nb,.12,{BackgroundColor3=C.Card3,TextColor3=C.TextDim}) end)
+	end
+
+	self._searchBar       = searchBar
+	self._searchBox       = searchBox
+	self._searchResultLbl = resultLbl
+	self._searchNavUp     = navUp
+	self._searchNavDown   = navDown
+	self._searchOpen      = false
+	self._searchHighlights = {}
+	self._searchIdx       = 0
+
 	self._searchBar    = searchBar
 	self._searchBox    = searchBox
 	self._searchResultLbl = resultLbl
-	self._searchOpen   = false
-	self._searchHighlights = {}
 
 	local pagesWrap = new("Frame",{
 		Position=UDim2.fromOffset(0,0),Size=UDim2.fromScale(1,1),
@@ -698,6 +730,8 @@ function Lib:_buildBody(win)
 	self._notifHolder = nh
 
 	closeSearchBtn.Activated:Connect(function() self:_closeSearch() end)
+	navUp.Activated:Connect(function() self:_searchNavigate(-1) end)
+	navDown.Activated:Connect(function() self:_searchNavigate(1) end)
 
 	searchBox:GetPropertyChangedSignal("Text"):Connect(function()
 		self:_doSearch(searchBox.Text)
@@ -1383,10 +1417,35 @@ function Lib:_clearHighlights()
 	self._searchHighlights = {}
 end
 
+function Lib:_searchNavigate(dir)
+	local hits = self._searchHitObjs
+	if not hits or #hits == 0 then return end
+	self._searchIdx = self._searchIdx + dir
+	if self._searchIdx < 1 then self._searchIdx = #hits end
+	if self._searchIdx > #hits then self._searchIdx = 1 end
+	local obj = hits[self._searchIdx]
+	if self._searchResultLbl then
+		self._searchResultLbl.Text = self._searchIdx .. "/" .. #hits
+	end
+	local scroll = self._pages[self._pageIdx] and self._pages[self._pageIdx].Scroll
+	if scroll and obj and obj.Parent then
+		pcall(function()
+			local relY = obj.AbsolutePosition.Y - scroll.AbsolutePosition.Y + scroll.CanvasPosition.Y
+			scroll.CanvasPosition = Vector2.new(0, math.max(0, relY - scroll.AbsoluteSize.Y * 0.3))
+		end)
+	end
+end
+
 function Lib:_doSearch(query)
 	self:_clearHighlights()
+	self._searchIdx = 0
+	self._searchHitObjs = {}
 	if not query or query == "" then
 		if self._searchResultLbl then self._searchResultLbl.Text = "" end
+		local nu = self._searchNavUp
+		local nd = self._searchNavDown
+		if nu then nu.Visible = false end
+		if nd then nd.Visible = false end
 		return
 	end
 
@@ -1394,8 +1453,8 @@ function Lib:_doSearch(query)
 	if not currentScroll then return end
 
 	local qLower = query:lower()
-	local count = 0
 	local highlights = {}
+	local hitObjs = {}
 
 	local function scan(parent)
 		for _, child in ipairs(parent:GetChildren()) do
@@ -1412,13 +1471,13 @@ function Lib:_doSearch(query)
 							result = result .. escaped:sub(i, s-1)
 							result = result .. '<font color="rgb(255,210,0)"><b>' .. escaped:sub(s,e) .. '</b></font>'
 							i = e + 1
-							count = count + 1
 						else
 							result = result .. escaped:sub(i)
 							break
 						end
 					end
 					table.insert(highlights, {obj=child, original=txt, wasRich=wasRich})
+					table.insert(hitObjs, child)
 					pcall(function()
 						child.RichText = true
 						child.Text = result
@@ -1431,15 +1490,27 @@ function Lib:_doSearch(query)
 
 	scan(currentScroll)
 	self._searchHighlights = highlights
+	self._searchHitObjs = hitObjs
 
-	if self._searchResultLbl then
-		if count == 0 then
+	local total = #hitObjs
+	local nu = self._searchNavUp
+	local nd = self._searchNavDown
+	if total == 0 then
+		if self._searchResultLbl then
 			self._searchResultLbl.Text = "no results"
 			tw(self._searchResultLbl, .1, {TextColor3=C.Red})
-		else
-			self._searchResultLbl.Text = count .. " found"
+		end
+		if nu then nu.Visible = false end
+		if nd then nd.Visible = false end
+	else
+		self._searchIdx = 1
+		if self._searchResultLbl then
+			self._searchResultLbl.Text = "1/" .. total
 			tw(self._searchResultLbl, .1, {TextColor3=C.Green})
 		end
+		if nu then nu.Visible = total > 1 end
+		if nd then nd.Visible = total > 1 end
+		self:_searchNavigate(0)
 	end
 end
 
@@ -2703,7 +2774,7 @@ function Lib:CreateStatusBadge(parent,state)
 	return badge
 end
 
-function Lib:ShowNotification(msg,style,duration,title)
+function Lib:ShowInlineNotification(msg,style,duration,title)
 	local styleMap={
 		info    ={dot=C.Blue,  bg=C.BlueBg},
 		success ={dot=C.Green, bg=C.GreenBg},
@@ -2953,12 +3024,19 @@ function Lib:_runDemo()
 	)
 
 	self:AddDivider(3, "Notifications")
-	self:AddLabel(3, "These appear bottom-right, slide from the side, and stack upward. Click to dismiss early.", "muted")
+	self:AddLabel(3, "ShowNotification  =  external bottom-right toast (default). ShowInlineNotification  =  inside the UI at bottom.", "muted")
+	self:AddLabel(3, "External toast (bottom-right corner):", "body")
 	self:AddButtonRow(3, {
 		{Text="Info",    Style="ghost",   Width=100, Callback=function() self:ShowNotification("Informational message.", "info",    3.5, "Info")    end},
 		{Text="Success", Style="success", Width=100, Callback=function() self:ShowNotification("Operation completed!",   "success", 3.5, "Success") end},
 		{Text="Warning", Style="warning", Width=100, Callback=function() self:ShowNotification("Attention required.",    "warning", 3.5, "Warning") end},
 		{Text="Error",   Style="danger",  Width=100, Callback=function() self:ShowNotification("Something went wrong.",  "error",   3.5, "Error")   end},
+	})
+	self:AddLabel(3, "Inline notification (inside UI, bottom of page):", "body")
+	self:AddButtonRow(3, {
+		{Text="Inline Info",    Style="ghost",   Width=110, Callback=function() self:ShowInlineNotification("Inline info message.",    "info",    2.5, "Info")    end},
+		{Text="Inline Success", Style="success", Width=110, Callback=function() self:ShowInlineNotification("Inline success message.", "success", 2.5, "Success") end},
+		{Text="Inline Error",   Style="danger",  Width=110, Callback=function() self:ShowInlineNotification("Inline error message.",   "error",   2.5, "Error")   end},
 	})
 	self:AddButtonRow(3, {
 		{Text="Stack 3 Toasts", Style="primary", Width=150, Callback=function()

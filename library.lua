@@ -370,12 +370,12 @@ function Lib:_buildWindow()
 	local dhPillW, dhPillH = 120, 5
 	local dh = new("Frame",{
 		AnchorPoint = Vector2.new(.5, 0),
-		Position    = UDim2.fromOffset(0, 0),
-		Size        = UDim2.fromOffset(dhPillW + 24, 24),
+		Position    = UDim2.new(.5, 0, 1, 10),
+		Size        = UDim2.fromOffset(dhPillW + 24, 22),
 		BackgroundTransparency = 1,
-		ZIndex = 999,
+		ZIndex = 50,
 		Visible = false,
-	}, self._sg)
+	}, win)
 	local dhPill = new("Frame",{
 		AnchorPoint = Vector2.new(.5, .5),
 		Position    = UDim2.fromScale(.5, .5),
@@ -386,13 +386,7 @@ function Lib:_buildWindow()
 	}, dh)
 	corner(dhPill, 3)
 	self._dragHandle = dh
-
-	local function syncHandle()
-		local ap = win.AbsolutePosition
-		local as = win.AbsoluteSize
-		dh.Position = UDim2.fromOffset(math.floor(ap.X + as.X * 0.5), math.floor(ap.Y + as.Y + 8))
-	end
-	self._syncHandle = syncHandle
+	self._syncHandle = function() end
 
 	local lerpConn = RunService.Heartbeat:Connect(function()
 		if not self._dragActive then return end
@@ -406,23 +400,8 @@ function Lib:_buildWindow()
 		if math.abs(nx - tx) < 0.3 then nx = tx end
 		if math.abs(ny - ty) < 0.3 then ny = ty end
 		win.Position = UDim2.new(0.5, nx, 0.5, ny)
-		local cam = workspace.CurrentCamera
-		local vp  = cam and cam.ViewportSize or Vector2.new(1920, 1080)
-		dh.Position = UDim2.fromOffset(
-			math.floor(vp.X * 0.5 + tx),
-			math.floor(vp.Y * 0.5 + ty + win.AbsoluteSize.Y * 0.5 + 8)
-		)
 	end)
 	table.insert(self._conns, lerpConn)
-
-	table.insert(self._conns, win:GetPropertyChangedSignal("AbsolutePosition"):Connect(function()
-		if self._dragActive then return end
-		syncHandle()
-	end))
-	table.insert(self._conns, win:GetPropertyChangedSignal("AbsoluteSize"):Connect(function()
-		if self._dragActive then return end
-		syncHandle()
-	end))
 
 	do
 		local active = false
@@ -436,7 +415,7 @@ function Lib:_buildWindow()
 				self._dragTargetOX = wsOX
 				self._dragTargetOY = wsOY
 				self._dragActive = true
-				tw(dhPill, .1, {BackgroundTransparency=0.25, Size=UDim2.fromOffset(dhPillW+14, dhPillH+2)})
+				tw(dhPill, .1, {BackgroundTransparency=0.2, Size=UDim2.fromOffset(dhPillW+14, dhPillH+2)})
 			end
 		end)
 		dh.InputEnded:Connect(function(i)
@@ -444,12 +423,11 @@ function Lib:_buildWindow()
 				active = false
 				self._dragActive = false
 				win.Position = UDim2.new(0.5, self._dragTargetOX, 0.5, self._dragTargetOY)
-				syncHandle()
 				tw(dhPill, .18, {BackgroundTransparency=0.55, Size=UDim2.fromOffset(dhPillW, dhPillH)})
 			end
 		end)
 		dh.MouseEnter:Connect(function()
-			tw(dhPill, .12, {BackgroundTransparency=0.38, Size=UDim2.fromOffset(dhPillW+8, dhPillH+1)})
+			tw(dhPill, .12, {BackgroundTransparency=0.35, Size=UDim2.fromOffset(dhPillW+8, dhPillH+1)})
 		end)
 		dh.MouseLeave:Connect(function()
 			if not active then
@@ -548,7 +526,7 @@ function Lib:_buildTitleBar(win)
 			TextXAlignment=Enum.TextXAlignment.Center,ZIndex=13},w)
 		local img = new("ImageLabel",{AnchorPoint=Vector2.new(.5,.5),Position=UDim2.fromScale(.5,.5),
 			Size=UDim2.fromOffset(22,22),BackgroundTransparency=1,
-			Image="rbxassetid://101671992802622",
+			Image="rbxassetid://98211971158539",
 			ImageColor3=C.Text,ScaleType=Enum.ScaleType.Fit,ZIndex=14},w)
 		img:GetPropertyChangedSignal("IsLoaded"):connect(function()
 			if img.IsLoaded then fallback.Visible=false end

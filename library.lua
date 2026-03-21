@@ -42,7 +42,7 @@ local function stroke(obj, c, th, tr)
 	return new("UIStroke",{Color=c or fromHex("1a1a1a"),Thickness=th or 1,Transparency=tr or 0},obj)
 end
 
--- MOVER FUNÇÕES HELPER PARA AQUI (CORREÇÃO DO ERRO)
+-- MOVER FUNCOES HELPER PARA AQUI (CORRECAO DO ERRO)
 local function pad(obj, t, b, l, r)
 	new("UIPadding",{PaddingTop=UDim.new(0,t or 0),PaddingBottom=UDim.new(0,b or 0),PaddingLeft=UDim.new(0,l or 0),PaddingRight=UDim.new(0,r or 0)},obj)
 end
@@ -64,7 +64,7 @@ local function vlist(obj, spacing, halign)
 		Padding=UDim.new(0,spacing or 0)
 	},obj)
 end
--- FIM DA CORREÇÃO
+-- FIM DA CORRECAO
 
 local C = {
 	Bg       = fromHex("060606"),
@@ -372,12 +372,12 @@ function Lib:_buildWindow()
 	self:SetPage(1)
 	task.defer(doScale)
 
-	-- ── shared lerp-drag state ──────────────────────────────────────────
+	-- -- shared lerp-drag state ------------------------------------------
 	self._dragActive   = false
 	self._dragTargetOX = 0
 	self._dragTargetOY = 0
 
-	-- drag handle — sibling in _sg so it's independent from the window
+	-- drag handle  -  sibling in _sg so it's independent from the window
 	local dhPillW, dhPillH = 110, 5
 	local dh = new("Frame",{
 		AnchorPoint = Vector2.new(.5, 0),
@@ -673,7 +673,7 @@ function Lib:_buildBody(win)
 	}, searchBar)
 
 	local closeSearchBtn = new("TextButton",{
-		Text="×",Font=Enum.Font.GothamBold,TextSize=18,TextColor3=C.TextDim,
+		Text="x",Font=Enum.Font.GothamBold,TextSize=18,TextColor3=C.TextDim,
 		BackgroundTransparency=1,Size=UDim2.fromOffset(28,sbH),
 		TextXAlignment=Enum.TextXAlignment.Center,AutoButtonColor=false,ZIndex=22,LayoutOrder=3,
 	}, searchBar)
@@ -686,7 +686,7 @@ function Lib:_buildBody(win)
 	self._searchOpen   = false
 	self._searchHighlights = {}
 
-	-- pages wrapper — shrinks down when search bar is open
+	-- pages wrapper  -  shrinks down when search bar is open
 	local pagesWrap = new("Frame",{
 		Position=UDim2.fromOffset(0,0),Size=UDim2.fromScale(1,1),
 		BackgroundTransparency=1,ClipsDescendants=false,
@@ -1644,7 +1644,7 @@ function Lib:AddCheckbox(pi,label,default,callback)
 	corner(box,5)
 	local bStroke=stroke(box,state and fromHex("aaaaaa") or C.Border2,1)
 
-	local check=new("TextLabel",{Text="✓",Font=Enum.Font.GothamBold,TextSize=13,TextColor3=C.Bg,
+	local check=new("TextLabel",{Text="v",Font=Enum.Font.GothamBold,TextSize=13,TextColor3=C.Bg,
 		BackgroundTransparency=1,Size=UDim2.fromScale(1,1),
 		TextTransparency=state and 0 or 1,TextXAlignment=Enum.TextXAlignment.Center},box)
 
@@ -1707,16 +1707,16 @@ function Lib:AddSearchInput(pi,placeholder,callback)
 	pad(wrap,0,0,14,14)
 	hlist(wrap,8)
 
-	new("TextLabel",{Text="⌕",Font=Enum.Font.GothamBold,TextSize=16,TextColor3=C.TextDim,
-		BackgroundTransparency=1,Size=UDim2.fromOffset(20,44),
-		TextXAlignment=Enum.TextXAlignment.Center,LayoutOrder=0},wrap)
+	new("ImageLabel",{Image="rbxassetid://132302594577680",ImageColor3=C.TextDim,
+		BackgroundTransparency=1,Size=UDim2.fromOffset(16,16),
+		AnchorPoint=Vector2.new(0,.5),LayoutOrder=0},wrap)
 
 	local box=new("TextBox",{Text="",PlaceholderText=placeholder or "Search...",Font=Enum.Font.Gotham,TextSize=13,
 		TextColor3=C.Text,PlaceholderColor3=C.TextOff,BackgroundTransparency=1,
 		Size=UDim2.new(1,-62,1,0),ClearTextOnFocus=false,
 		TextXAlignment=Enum.TextXAlignment.Left,LayoutOrder=1},wrap)
 
-	local clearBtn=new("TextButton",{Text="×",Font=Enum.Font.GothamBold,TextSize=18,TextColor3=C.TextDim,
+	local clearBtn=new("TextButton",{Text="x",Font=Enum.Font.GothamBold,TextSize=18,TextColor3=C.TextDim,
 		BackgroundTransparency=1,Size=UDim2.fromOffset(26,44),
 		TextXAlignment=Enum.TextXAlignment.Center,AutoButtonColor=false,Visible=false,LayoutOrder=2},wrap)
 	clearBtn.MouseEnter:Connect(function() tw(clearBtn,.12,{TextColor3=C.White}) end)
@@ -2835,10 +2835,10 @@ function Lib:_runDemo()
 	self:AddDivider(1, "Alerts")
 	self:AddAlert(1, "Welcome!", "Run Lib.new({...}) to use this library in your project.", "info")
 	self:AddAlert(1, "Tip", "All pages below contain live, interactive components.", "success")
-	self:AddAlert(1, "Keyboard shortcut", "Press K (default) to hide/show the interface. Change the key via the ⚙ settings icon.", "warning")
+	self:AddAlert(1, "Keyboard shortcut", "Press K (default) to hide/show the interface. Change the key via the  settings icon.", "warning")
 
 	self:AddSectionHeader(2, "Player Controls", "Modify your character in real time")
-	self:AddLabel(2, "All sliders and toggles apply immediately — no need to confirm.", "muted")
+	self:AddLabel(2, "All sliders and toggles apply immediately  -  no need to confirm.", "muted")
 	self:AddDivider(2, "Movement")
 
 	local speedSlider = self:AddSlider(2, "Walk Speed", 0, 100, 16, function(v)
@@ -2875,7 +2875,7 @@ function Lib:_runDemo()
 	self:AddToggle(2, "Turbo Speed (x3)", false, function(v)
 		local hum = getHum()
 		if hum then hum.WalkSpeed = v and 48 or 16; speedSlider:SetValue(hum.WalkSpeed) end
-		self:ShowNotification(v and "Turbo enabled — 48 studs/s" or "Speed restored", v and "success" or "info", 2)
+		self:ShowNotification(v and "Turbo enabled  -  48 studs/s" or "Speed restored", v and "success" or "info", 2)
 	end)
 
 	self:AddDivider(2, "Actions")
@@ -2905,11 +2905,11 @@ function Lib:_runDemo()
 
 	self:AddSectionHeader(3, "Components", "Visual component catalogue")
 	self:AddDivider(3, "Labels")
-	self:AddLabel(3, "Title — GothamBold 19px", "title")
-	self:AddLabel(3, "Subtitle — GothamBold 14px", "subtitle")
-	self:AddLabel(3, "Body — Gotham 13px. Default text for content and long descriptions.", "body")
-	self:AddLabel(3, "Muted — Gotham 12px. Secondary information.", "muted")
-	self:AddLabel(3, "Caption — Gotham 10px. Metadata and footers.", "caption")
+	self:AddLabel(3, "Title  -  GothamBold 19px", "title")
+	self:AddLabel(3, "Subtitle  -  GothamBold 14px", "subtitle")
+	self:AddLabel(3, "Body  -  Gotham 13px. Default text for content and long descriptions.", "body")
+	self:AddLabel(3, "Muted  -  Gotham 12px. Secondary information.", "muted")
+	self:AddLabel(3, "Caption  -  Gotham 10px. Metadata and footers.", "caption")
 
 	self:AddDivider(3, "Rich Text")
 	self:AddRichLabel(3,
@@ -2987,11 +2987,11 @@ function Lib:_runDemo()
 	self:AddButtonRow(3, {
 		{Text="Stack 3 Toasts", Style="primary", Width=150, Callback=function()
 			task.spawn(function()
-				self:ShowNotification("First notification — oldest", "info", 4, "Stack Test")
+				self:ShowNotification("First notification  -  oldest", "info", 4, "Stack Test")
 				task.wait(0.4)
 				self:ShowNotification("Second notification appears above", "success", 4, "Stack Test")
 				task.wait(0.4)
-				self:ShowNotification("Third notification — newest (bottom)", "warning", 4, "Stack Test")
+				self:ShowNotification("Third notification  -  newest (bottom)", "warning", 4, "Stack Test")
 			end)
 		end},
 		{Text="Shake Window", Style="ghost", Width=130, Callback=function() self:Shake(8) end},
@@ -3050,7 +3050,7 @@ function Lib:_runDemo()
 	self:AddSectionHeader(5, "Logs", "Real-time logging console")
 	local console = self:AddLogConsole(5, 300)
 	console:Log("SlaoqUILib v5.0 initialized", "SUCCESS")
-	console:Log("Demo mode active — use Lib.new({...}) to build your own UI", "INFO")
+	console:Log("Demo mode active  -  use Lib.new({...}) to build your own UI", "INFO")
 	console:Log("Pages loaded: "..#self.cfg.Pages, "INFO")
 	console:Log("Player: "..lp.Name.."  |  UserID: "..lp.UserId, "INFO")
 	console:Log("New components: Checkbox, Stepper, SearchInput, RadioGroup, ColorPicker, Spinner", "DEBUG")

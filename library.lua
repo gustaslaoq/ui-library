@@ -1375,8 +1375,10 @@ end
 function Lib:_runDemo()
 	local lp = LocalPlayer
 
+	-- ──────────────────────────── PAGE 1 · DASHBOARD ────────────────────────────
 	self:AddSectionHeader(1, "Dashboard", "Status geral do SlaoqUILib demo")
 
+	-- Métricas ao vivo do personagem
 	local function getHum()
 		local char = lp.Character
 		return char and char:FindFirstChildOfClass("Humanoid")
@@ -1388,6 +1390,7 @@ function Lib:_runDemo()
 		{Label="Jump Power",  Value=getHum() and getHum().JumpPower  or 50,  Unit="power"},
 	})
 
+	-- Atualiza métricas a cada segundo
 	task.spawn(function()
 		while self._sg and self._sg.Parent do
 			task.wait(1)
@@ -1405,6 +1408,7 @@ function Lib:_runDemo()
 	local hpBar = self:AddProgressBar(1, "Health", 100, 100)
 	local xpBar = self:AddProgressBar(1, "Experience (exemplo)", 34, 100)
 
+	-- Atualiza barra de HP junto com o personagem
 	task.spawn(function()
 		while self._sg and self._sg.Parent do
 			task.wait(0.5)
@@ -1420,6 +1424,7 @@ function Lib:_runDemo()
 	self:AddAlert(1, "Dica", "Todas as páginas abaixo mostram componentes funcionais interativos.", "success")
 	self:AddAlert(1, "Aviso de exemplo", "Use AddAlert() com estilos: info, success, warning, error.", "warning")
 
+	-- ──────────────────────────── PAGE 2 · PLAYER ───────────────────────────────
 	self:AddSectionHeader(2, "Player Controls", "Controle seu personagem em tempo real")
 	self:AddLabel(2, "Sliders, toggles e botões que modificam o personagem direto no jogo.", "muted")
 	self:AddDivider(2, "Sliders")
@@ -1507,6 +1512,7 @@ function Lib:_runDemo()
 		"local Lib = loadstring(game:HttpGet('URL'))() \nlocal ui = Lib.new({ AppName='Meu App', Pages={{Name='Home'}} })\nui:AddSlider(1,'Speed',0,100,16,function(v) end)"
 	)
 
+	-- ──────────────────────────── PAGE 3 · COMPONENTS ───────────────────────────
 	self:AddSectionHeader(3, "Components", "Catálogo completo de elementos")
 
 	self:AddDivider(3, "Labels")
@@ -1595,6 +1601,7 @@ function Lib:_runDemo()
 			self:ShowNotification("Algo deu errado.",      "error",   3, "Erro") end},
 	})
 
+	-- ──────────────────────────── PAGE 4 · LOGS ─────────────────────────────────
 	self:AddSectionHeader(4, "Logs", "Console de logging em tempo real")
 
 	local console = self:AddLogConsole(4, 300)
@@ -1640,9 +1647,20 @@ function Lib:_runDemo()
 	)
 end
 
-return setmetatable({}, {
-	__index = Lib,
-	__call  = function(_, cfg)
-		return Lib.new(cfg)
-	end,
-})
+-- Auto-demo: intercept Lib.new para saber se o usuário chamou manualmente.
+-- Se após um frame ninguém chamou Lib.new(), roda o showcase automático.
+-- Assim loadstring(...)() dispara o demo, mas local L = loadstring(...)(); L.new({...}) funciona normal.
+local _newCalled = false
+local _origNew   = Lib.new
+Lib.new = function(cfg)
+	_newCalled = true
+	return _origNew(cfg)
+end
+
+task.defer(function()
+	if not _newCalled then
+		_origNew(nil) -- sem config = demo automático
+	end
+end)
+
+return Lib

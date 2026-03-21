@@ -82,24 +82,27 @@ local C = {
 	Orange   = fromHex("f07020"),
 	Blue     = fromHex("4488ff"),
 	BlueBg   = fromHex("030914"),
+	Purple   = fromHex("aa44ff"),
+	PurpleBg = fromHex("0a0414"),
 }
 
 local DefaultConfig = {
-	AppName          = "MY APP",
-	AppSubtitle      = "Subtitle",
-	AppVersion       = "1.0",
-	LogoImage        = "",
-	GuiParent        = "CoreGui",
-	WindowWidth      = 920,
-	WindowHeight     = 580,
-	SidebarWidth     = 210,
-	TweenSpeed       = 0.22,
-	BarTweenSpeed    = 0.28,
+	AppName            = "MY APP",
+	AppSubtitle        = "Subtitle",
+	AppVersion         = "1.0",
+	LogoImage          = "",
+	GuiParent          = "CoreGui",
+	WindowWidth        = 920,
+	WindowHeight       = 580,
+	SidebarWidth       = 210,
+	TweenSpeed         = 0.22,
+	BarTweenSpeed      = 0.28,
 	MiniModeBreakpoint = 700,
-	Pages            = {
-		{Icon="", Name="Dashboard"},
-		{Icon="", Name="Settings"},
-		{Icon="", Name="Logs"},
+	ToggleKey          = nil,
+	Pages = {
+		{Name="Dashboard"},
+		{Name="Settings"},
+		{Name="Logs"},
 	},
 	SplashTasks = {
 		"Initializing runtime...",
@@ -114,25 +117,24 @@ function Lib.new(userCfg)
 	self.cfg = {}
 	for k,v in pairs(DefaultConfig) do self.cfg[k]=v end
 
-	-- Auto-demo: if called with no config (e.g. just loadstring(...)()),
-	-- detect it and load a full feature showcase automatically.
 	local isDemo = (userCfg == nil)
 
 	if isDemo then
 		self.cfg.AppName     = "SlaoqUILib"
 		self.cfg.AppSubtitle = "Component Showcase"
-		self.cfg.AppVersion  = "4.0"
+		self.cfg.AppVersion  = "5.0"
 		self.cfg.Pages = {
-			{Icon="", Name="Dashboard"},
-			{Icon="", Name="Player"},
-			{Icon="", Name="Components"},
-			{Icon="", Name="Logs"},
+			{Name="Dashboard"},
+			{Name="Player"},
+			{Name="Components"},
+			{Name="Inputs"},
+			{Name="Logs"},
 		}
 		self.cfg.SplashTasks = {
-			"Carregando SlaoqUILib...",
-			"Preparando componentes...",
-			"Iniciando showcase...",
-			"Pronto!",
+			"Initializing SlaoqUILib...",
+			"Loading components...",
+			"Starting showcase...",
+			"Ready.",
 		}
 	else
 		for k,v in pairs(userCfg) do self.cfg[k]=v end
@@ -148,6 +150,8 @@ function Lib.new(userCfg)
 	self._mobilePill = nil
 	self._preMinSize = nil
 	self._minBtn     = nil
+	self._tbFiller   = nil
+	self._tbBorder   = nil
 
 	local guiParent = self.cfg.GuiParent == "PlayerGui"
 		and LocalPlayer:WaitForChild("PlayerGui") or CoreGui
@@ -161,9 +165,17 @@ function Lib.new(userCfg)
 	pcall(function() self._sg.IgnoreGuiInset = true end)
 
 	self:_buildWindow()
-	-- Populate demo content before the splash runs so pages are ready when window appears.
 	if isDemo then self:_runDemo() end
 	self:_runSplash()
+
+	if self.cfg.ToggleKey then
+		table.insert(self._conns, UserInputService.InputBegan:Connect(function(inp, gp)
+			if gp then return end
+			local kc = tostring(inp.KeyCode):gsub("Enum%.KeyCode%.","")
+			if kc == self.cfg.ToggleKey then self:ToggleVisibility() end
+		end))
+	end
+
 	return self
 end
 
@@ -174,53 +186,48 @@ function Lib:_useMiniMode()
 end
 
 function Lib:_runSplash()
-	local cfg = self.cfg
 	self.Window.Visible = false
+	local cfg = self.cfg
 
 	local card = new("Frame",{
 		AnchorPoint      = Vector2.new(.5,.5),
-		Position         = UDim2.fromScale(.5,.5),
+		Position         = UDim2.new(.5,0,.52,0),
 		Size             = UDim2.fromOffset(360,220),
 		BackgroundColor3 = C.Card,
 		BorderSizePixel  = 0,
 		ZIndex           = 600,
-		ClipsDescendants = false,
+		BackgroundTransparency = 1,
 	}, self._sg)
 	corner(card, 18)
 	stroke(card, C.Border2, 1)
 
 	local logoBox = new("Frame",{
-		AnchorPoint      = Vector2.new(.5,0),
-		Position         = UDim2.new(.5,0,0,30),
-		Size             = UDim2.fromOffset(54,54),
-		BackgroundColor3 = C.Card3,
-		BorderSizePixel  = 0,
-		ZIndex           = 601,
+		AnchorPoint=Vector2.new(.5,0), Position=UDim2.new(.5,0,0,30),
+		Size=UDim2.fromOffset(54,54), BackgroundColor3=C.Card3,
+		BorderSizePixel=0, ZIndex=601,
 	}, card)
 	corner(logoBox, 14)
 	stroke(logoBox, C.Border3, 1)
 	if cfg.LogoImage ~= "" then
 		new("ImageLabel",{Size=UDim2.fromScale(1,1),BackgroundTransparency=1,Image=cfg.LogoImage,ZIndex=602},logoBox)
 	else
-		new("TextLabel",{
-			Size=UDim2.fromScale(1,1),BackgroundTransparency=1,
+		new("TextLabel",{Size=UDim2.fromScale(1,1),BackgroundTransparency=1,
 			Text=string.upper(string.sub(cfg.AppName,1,1)),
-			Font=Enum.Font.GothamBold,TextSize=24,TextColor3=C.White,ZIndex=602,
-		},logoBox)
+			Font=Enum.Font.GothamBold,TextSize=24,TextColor3=C.White,ZIndex=602},logoBox)
 	end
 
 	new("TextLabel",{
 		AnchorPoint=Vector2.new(.5,0), Position=UDim2.new(.5,0,0,98),
 		Size=UDim2.new(1,-32,0,22), BackgroundTransparency=1,
 		Text=cfg.AppName, Font=Enum.Font.GothamBold, TextSize=16,
-		TextColor3=C.White, ZIndex=601,
+		TextColor3=C.White, ZIndex=601, TextTransparency=1,
 	}, card)
 
 	new("TextLabel",{
 		AnchorPoint=Vector2.new(.5,0), Position=UDim2.new(.5,0,0,122),
 		Size=UDim2.new(1,-32,0,15), BackgroundTransparency=1,
 		Text=cfg.AppSubtitle, Font=Enum.Font.Gotham, TextSize=11,
-		TextColor3=C.TextDim, ZIndex=601,
+		TextColor3=C.TextDim, ZIndex=601, TextTransparency=1,
 	}, card)
 
 	local taskLbl = new("TextLabel",{
@@ -228,7 +235,7 @@ function Lib:_runSplash()
 		Size=UDim2.new(1,-32,0,14), BackgroundTransparency=1,
 		Text=cfg.SplashTasks[1] or "Loading...",
 		Font=Enum.Font.Gotham, TextSize=10,
-		TextColor3=C.TextOff, ZIndex=601,
+		TextColor3=C.TextOff, ZIndex=601, TextTransparency=1,
 	}, card)
 
 	local barBg = new("Frame",{
@@ -245,25 +252,31 @@ function Lib:_runSplash()
 	corner(barFill, 2)
 
 	local tasks = cfg.SplashTasks
-	local n     = #tasks
+	local n = #tasks
 
 	task.spawn(function()
-		task.wait(.2)
+		tw(card,.4,{BackgroundTransparency=0,Position=UDim2.fromScale(.5,.5)},Enum.EasingStyle.Back,Enum.EasingDirection.Out)
+		task.wait(.3)
+		for _,lbl in ipairs(card:GetChildren()) do
+			if lbl:IsA("TextLabel") then tw(lbl,.25,{TextTransparency=0}) end
+		end
+		task.wait(.25)
 		for i,t in ipairs(tasks) do
-			tw(taskLbl,.15,{TextTransparency=1})
-			task.wait(.12)
+			tw(taskLbl,.12,{TextTransparency=1})
+			task.wait(.1)
 			taskLbl.Text = t
-			tw(taskLbl,.2,{TextTransparency=0})
-			tw(barFill,.45,{Size=UDim2.fromScale(i/n,1)},Enum.EasingStyle.Quint)
+			tw(taskLbl,.18,{TextTransparency=0})
+			tw(barFill,.5,{Size=UDim2.fromScale(i/n,1)},Enum.EasingStyle.Quint)
 			task.wait(.55)
 		end
-		task.wait(.2)
-		tw(card,.35,{BackgroundTransparency=1,Size=UDim2.fromOffset(340,200)},Enum.EasingStyle.Quint,Enum.EasingDirection.In)
-		task.wait(.38)
+		task.wait(.15)
+		tw(card,.3,{BackgroundTransparency=1,Position=UDim2.new(.5,0,.48,0)},Enum.EasingStyle.Quint,Enum.EasingDirection.In)
+		task.wait(.32)
 		pcall(function() card:Destroy() end)
 		self.Window.Visible = true
 		self.Window.BackgroundTransparency = 1
-		tw(self.Window,.35,{BackgroundTransparency=0},Enum.EasingStyle.Back,Enum.EasingDirection.Out)
+		self.Window.Position = UDim2.new(.5,0,.52,0)
+		tw(self.Window,.45,{BackgroundTransparency=0,Position=UDim2.fromScale(.5,.5)},Enum.EasingStyle.Back,Enum.EasingDirection.Out)
 	end)
 end
 
@@ -288,9 +301,9 @@ function Lib:_buildWindow()
 		if not cam then return end
 		local vp  = cam.ViewportSize
 		local mini = self:_useMiniMode()
-		local s   = math.min(math.clamp(vp.X/1920,.35,1),math.clamp(vp.Y/1080,.35,1))
-		local w   = mini and math.floor(vp.X*.97) or math.floor(cfg.WindowWidth*s)
-		local h   = mini and math.floor(vp.Y*.93) or math.floor(cfg.WindowHeight*s)
+		local s = math.min(math.clamp(vp.X/1920,.35,1),math.clamp(vp.Y/1080,.35,1))
+		local w = mini and math.floor(vp.X*.97) or math.floor(cfg.WindowWidth*s)
+		local h = mini and math.floor(vp.Y*.93) or math.floor(cfg.WindowHeight*s)
 		if not self._minimised then
 			win.Size = UDim2.fromOffset(w,h)
 		end
@@ -324,8 +337,8 @@ function Lib:_buildTitleBar(win)
 		ZIndex=10,
 	}, win)
 	corner(tb,12)
-	new("Frame",{Position=UDim2.new(0,0,1,-13),Size=UDim2.new(1,0,0,13),BackgroundColor3=C.Bg2,BorderSizePixel=0,ZIndex=10},tb)
-	new("Frame",{Position=UDim2.new(0,0,1,-1),Size=UDim2.new(1,0,0,1),BackgroundColor3=C.Border,BorderSizePixel=0,ZIndex=10},tb)
+	self._tbFiller = new("Frame",{Position=UDim2.new(0,0,1,-13),Size=UDim2.new(1,0,0,13),BackgroundColor3=C.Bg2,BorderSizePixel=0,ZIndex=10},tb)
+	self._tbBorderLine = new("Frame",{Position=UDim2.new(0,0,1,-1),Size=UDim2.new(1,0,0,1),BackgroundColor3=C.Border,BorderSizePixel=0,ZIndex=10},tb)
 	self.TitleBar = tb
 
 	local left = new("Frame",{Size=UDim2.new(1,-90,1,0),BackgroundTransparency=1,ZIndex=11},tb)
@@ -337,21 +350,29 @@ function Lib:_buildTitleBar(win)
 	if cfg.LogoImage ~= "" then
 		new("ImageLabel",{Size=UDim2.fromScale(1,1),BackgroundTransparency=1,Image=cfg.LogoImage,ZIndex=12},logoMini)
 	else
-		new("TextLabel",{Size=UDim2.fromScale(1,1),BackgroundTransparency=1,Text=string.upper(string.sub(cfg.AppName,1,1)),Font=Enum.Font.GothamBold,TextSize=12,TextColor3=C.White,ZIndex=12},logoMini)
+		new("TextLabel",{Size=UDim2.fromScale(1,1),BackgroundTransparency=1,
+			Text=string.upper(string.sub(cfg.AppName,1,1)),
+			Font=Enum.Font.GothamBold,TextSize=12,TextColor3=C.White,ZIndex=12},logoMini)
 	end
 
-	new("TextLabel",{Text=cfg.AppName,Font=Enum.Font.GothamBold,TextSize=13,TextColor3=C.White,BackgroundTransparency=1,Size=UDim2.fromOffset(0,26),AutomaticSize=Enum.AutomaticSize.X,TextXAlignment=Enum.TextXAlignment.Left,ZIndex=11,LayoutOrder=1},left)
+	new("TextLabel",{Text=cfg.AppName,Font=Enum.Font.GothamBold,TextSize=13,TextColor3=C.White,
+		BackgroundTransparency=1,Size=UDim2.fromOffset(0,26),AutomaticSize=Enum.AutomaticSize.X,
+		TextXAlignment=Enum.TextXAlignment.Left,ZIndex=11,LayoutOrder=1},left)
 
-	local ver = new("Frame",{Size=UDim2.fromOffset(0,22),AutomaticSize=Enum.AutomaticSize.X,BackgroundColor3=C.Card3,BorderSizePixel=0,ZIndex=11,LayoutOrder=2},left)
+	local ver = new("Frame",{Size=UDim2.fromOffset(0,22),AutomaticSize=Enum.AutomaticSize.X,
+		BackgroundColor3=C.Card3,BorderSizePixel=0,ZIndex=11,LayoutOrder=2},left)
 	corner(ver,5)
 	pad(ver,0,0,8,8)
-	new("TextLabel",{Text="v"..cfg.AppVersion,Font=Enum.Font.Gotham,TextSize=10,TextColor3=C.TextDim,BackgroundTransparency=1,Size=UDim2.fromOffset(0,22),AutomaticSize=Enum.AutomaticSize.X,ZIndex=12},ver)
+	new("TextLabel",{Text="v"..cfg.AppVersion,Font=Enum.Font.Gotham,TextSize=10,TextColor3=C.TextDim,
+		BackgroundTransparency=1,Size=UDim2.fromOffset(0,22),AutomaticSize=Enum.AutomaticSize.X,ZIndex=12},ver)
 
-	local right = new("Frame",{AnchorPoint=Vector2.new(1,0),Position=UDim2.new(1,0,0,0),Size=UDim2.fromOffset(88,44),BackgroundTransparency=1,ZIndex=11},tb)
+	local right = new("Frame",{AnchorPoint=Vector2.new(1,0),Position=UDim2.new(1,0,0,0),
+		Size=UDim2.fromOffset(88,44),BackgroundTransparency=1,ZIndex=11},tb)
 	hlist(right,0)
 
 	local function mkBtn(sym,hc,cb,lo)
-		local b = new("TextButton",{Text=sym,Font=Enum.Font.GothamBold,TextSize=14,TextColor3=C.TextDim,BackgroundTransparency=1,Size=UDim2.fromOffset(44,44),ZIndex=12,AutoButtonColor=false,LayoutOrder=lo},right)
+		local b = new("TextButton",{Text=sym,Font=Enum.Font.GothamBold,TextSize=14,TextColor3=C.TextDim,
+			BackgroundTransparency=1,Size=UDim2.fromOffset(44,44),ZIndex=12,AutoButtonColor=false,LayoutOrder=lo},right)
 		b.MouseEnter:Connect(function() tw(b,.12,{TextColor3=hc,BackgroundTransparency=.93}) end)
 		b.MouseLeave:Connect(function() tw(b,.15,{TextColor3=C.TextDim,BackgroundTransparency=1}) end)
 		b.Activated:Connect(cb)
@@ -368,7 +389,9 @@ function Lib:_buildTitleBar(win)
 			end
 		end)
 		tb.InputEnded:Connect(function(i)
-			if i.UserInputType==Enum.UserInputType.MouseButton1 or i.UserInputType==Enum.UserInputType.Touch then drag=false end
+			if i.UserInputType==Enum.UserInputType.MouseButton1 or i.UserInputType==Enum.UserInputType.Touch then
+				drag=false
+			end
 		end)
 		table.insert(self._conns, UserInputService.InputChanged:Connect(function(i)
 			if not drag then return end
@@ -389,27 +412,37 @@ function Lib:_buildBody(win)
 	new("Frame",{Size=UDim2.new(0,1,1,0),Position=UDim2.new(1,-1,0,0),BackgroundColor3=C.Border,BorderSizePixel=0,ZIndex=6},sidebar)
 	self._sidebar = sidebar
 
-	local ss = new("ScrollingFrame",{Size=UDim2.fromScale(1,1),BackgroundTransparency=1,ScrollBarThickness=0,CanvasSize=UDim2.new(0,0,0,0),AutomaticCanvasSize=Enum.AutomaticSize.Y},sidebar)
+	local ss = new("ScrollingFrame",{Size=UDim2.fromScale(1,1),BackgroundTransparency=1,
+		ScrollBarThickness=0,CanvasSize=UDim2.new(0,0,0,0),AutomaticCanvasSize=Enum.AutomaticSize.Y},sidebar)
 	vlist(ss,0,Enum.HorizontalAlignment.Center)
 	pad(ss,18,18,8,8)
 
 	local logoArea = new("Frame",{Size=UDim2.new(1,0,0,104),BackgroundTransparency=1,LayoutOrder=0},ss)
-	local logoWrap = new("Frame",{AnchorPoint=Vector2.new(.5,0),Position=UDim2.new(.5,0,0,0),Size=UDim2.fromOffset(52,52),BackgroundColor3=C.Card3,BorderSizePixel=0},logoArea)
+	local logoWrap = new("Frame",{AnchorPoint=Vector2.new(.5,0),Position=UDim2.new(.5,0,0,0),
+		Size=UDim2.fromOffset(52,52),BackgroundColor3=C.Card3,BorderSizePixel=0},logoArea)
 	corner(logoWrap,14)
 	stroke(logoWrap,C.Border2,1)
 	if cfg.LogoImage ~= "" then
 		new("ImageLabel",{Size=UDim2.fromScale(1,1),BackgroundTransparency=1,Image=cfg.LogoImage},logoWrap)
 	else
-		new("TextLabel",{Size=UDim2.fromScale(1,1),BackgroundTransparency=1,Text=string.upper(string.sub(cfg.AppName,1,1)),Font=Enum.Font.GothamBold,TextSize=23,TextColor3=C.White},logoWrap)
+		new("TextLabel",{Size=UDim2.fromScale(1,1),BackgroundTransparency=1,
+			Text=string.upper(string.sub(cfg.AppName,1,1)),
+			Font=Enum.Font.GothamBold,TextSize=23,TextColor3=C.White},logoWrap)
 	end
 
-	self._sideNameLbl = new("TextLabel",{AnchorPoint=Vector2.new(.5,0),Position=UDim2.new(.5,0,0,60),Size=UDim2.new(1,0,0,18),BackgroundTransparency=1,Text=cfg.AppName,Font=Enum.Font.GothamBold,TextSize=12,TextColor3=C.White,TextTruncate=Enum.TextTruncate.AtEnd},logoArea)
-	self._sideSubLbl  = new("TextLabel",{AnchorPoint=Vector2.new(.5,0),Position=UDim2.new(.5,0,0,80),Size=UDim2.new(1,0,0,14),BackgroundTransparency=1,Text=cfg.AppSubtitle,Font=Enum.Font.Gotham,TextSize=10,TextColor3=C.TextDim,TextTruncate=Enum.TextTruncate.AtEnd},logoArea)
+	self._sideNameLbl = new("TextLabel",{AnchorPoint=Vector2.new(.5,0),Position=UDim2.new(.5,0,0,60),
+		Size=UDim2.new(1,0,0,18),BackgroundTransparency=1,Text=cfg.AppName,
+		Font=Enum.Font.GothamBold,TextSize=12,TextColor3=C.White,TextTruncate=Enum.TextTruncate.AtEnd},logoArea)
+	self._sideSubLbl = new("TextLabel",{AnchorPoint=Vector2.new(.5,0),Position=UDim2.new(.5,0,0,80),
+		Size=UDim2.new(1,0,0,14),BackgroundTransparency=1,Text=cfg.AppSubtitle,
+		Font=Enum.Font.Gotham,TextSize=10,TextColor3=C.TextDim,TextTruncate=Enum.TextTruncate.AtEnd},logoArea)
 
 	local divArea = new("Frame",{Size=UDim2.new(1,0,0,22),BackgroundTransparency=1,LayoutOrder=1},ss)
-	new("Frame",{AnchorPoint=Vector2.new(.5,.5),Position=UDim2.fromScale(.5,.5),Size=UDim2.new(.8,0,0,1),BackgroundColor3=C.Border,BorderSizePixel=0},divArea)
+	new("Frame",{AnchorPoint=Vector2.new(.5,.5),Position=UDim2.fromScale(.5,.5),
+		Size=UDim2.new(.8,0,0,1),BackgroundColor3=C.Border,BorderSizePixel=0},divArea)
 
-	local bar = new("Frame",{Size=UDim2.fromOffset(3,0),AnchorPoint=Vector2.new(0,.5),Position=UDim2.fromOffset(0,100),BackgroundColor3=C.White,BorderSizePixel=0,ZIndex=9,Visible=false},sidebar)
+	local bar = new("Frame",{Size=UDim2.fromOffset(3,0),AnchorPoint=Vector2.new(0,.5),
+		Position=UDim2.fromOffset(0,100),BackgroundColor3=C.White,BorderSizePixel=0,ZIndex=9,Visible=false},sidebar)
 	corner(bar,2)
 	self._bar = bar
 
@@ -418,7 +451,8 @@ function Lib:_buildBody(win)
 	end
 	new("Frame",{Size=UDim2.fromOffset(1,14),BackgroundTransparency=1,LayoutOrder=#cfg.Pages+10},ss)
 
-	local content = new("Frame",{Position=UDim2.new(0,cfg.SidebarWidth,0,0),Size=UDim2.new(1,-cfg.SidebarWidth,1,0),BackgroundColor3=C.Bg2,BorderSizePixel=0,ClipsDescendants=true},body)
+	local content = new("Frame",{Position=UDim2.new(0,cfg.SidebarWidth,0,0),
+		Size=UDim2.new(1,-cfg.SidebarWidth,1,0),BackgroundColor3=C.Bg2,BorderSizePixel=0,ClipsDescendants=true},body)
 	self._content = content
 
 	table.insert(self._conns, sidebar:GetPropertyChangedSignal("Size"):Connect(function()
@@ -427,26 +461,28 @@ function Lib:_buildBody(win)
 		content.Size     = UDim2.new(1,-sw,1,0)
 	end))
 
-	local nh = new("Frame",{AnchorPoint=Vector2.new(.5,1),Position=UDim2.new(.5,0,1,-10),Size=UDim2.new(.65,0,0,0),AutomaticSize=Enum.AutomaticSize.Y,BackgroundTransparency=1,ZIndex=200},win)
+	local nh = new("Frame",{AnchorPoint=Vector2.new(.5,1),Position=UDim2.new(.5,0,1,-10),
+		Size=UDim2.new(.65,0,0,0),AutomaticSize=Enum.AutomaticSize.Y,BackgroundTransparency=1,ZIndex=200},win)
 	vlist(nh,6)
 	self._notifHolder = nh
 end
 
 function Lib:_makeNavBtn(page,index,parent)
-	local cfg = self.cfg
-
 	local frame = new("Frame",{Size=UDim2.new(1,0,0,40),BackgroundTransparency=1,LayoutOrder=index+1},parent)
 
-	local bg = new("Frame",{Size=UDim2.new(1,-8,1,-4),Position=UDim2.fromOffset(4,2),BackgroundColor3=C.Card2,BackgroundTransparency=1,BorderSizePixel=0,ZIndex=5},frame)
+	local bg = new("Frame",{Size=UDim2.new(1,-8,1,-4),Position=UDim2.fromOffset(4,2),
+		BackgroundColor3=C.Card2,BackgroundTransparency=1,BorderSizePixel=0,ZIndex=5},frame)
 	corner(bg,8)
 
-	local dot = new("Frame",{AnchorPoint=Vector2.new(.5,.5),Position=UDim2.new(0,22,.5,0),Size=UDim2.fromOffset(6,6),BackgroundColor3=C.TextOff,BorderSizePixel=0,ZIndex=6},frame)
+	local dot = new("Frame",{AnchorPoint=Vector2.new(.5,.5),Position=UDim2.new(0,22,.5,0),
+		Size=UDim2.fromOffset(6,6),BackgroundColor3=C.TextOff,BorderSizePixel=0,ZIndex=6},frame)
 	corner(dot,3)
 
-	local lbl = new("TextLabel",{Text=page.Name,Font=Enum.Font.GothamBold,TextSize=12,TextColor3=C.TextDim,BackgroundTransparency=1,Position=UDim2.fromOffset(36,0),Size=UDim2.new(1,-44,1,0),TextXAlignment=Enum.TextXAlignment.Left,TextTruncate=Enum.TextTruncate.AtEnd,ZIndex=6},frame)
+	local lbl = new("TextLabel",{Text=page.Name,Font=Enum.Font.GothamBold,TextSize=12,TextColor3=C.TextDim,
+		BackgroundTransparency=1,Position=UDim2.fromOffset(36,0),Size=UDim2.new(1,-44,1,0),
+		TextXAlignment=Enum.TextXAlignment.Left,TextTruncate=Enum.TextTruncate.AtEnd,ZIndex=6},frame)
 
 	local click = new("TextButton",{Text="",BackgroundTransparency=1,Size=UDim2.fromScale(1,1),ZIndex=7,AutoButtonColor=false},frame)
-	click.AutoButtonColor = false
 	pcall(function() click.CursorIcon = "rbxasset://SystemCursors/PointingHand" end)
 
 	click.MouseEnter:Connect(function()
@@ -469,22 +505,20 @@ end
 
 function Lib:_initPages()
 	for i=1,#self.cfg.Pages do
-		-- BackgroundTransparency=1 always — the frame must never show its own color.
-		-- The _content frame behind it provides the background.
 		local frame = new("Frame",{Size=UDim2.fromScale(1,1),BackgroundTransparency=1,Visible=false},self._content)
-		local scroll = new("ScrollingFrame",{Size=UDim2.fromScale(1,1),BackgroundTransparency=1,ScrollBarThickness=3,ScrollBarImageColor3=C.Border3,ScrollBarImageTransparency=.5,CanvasSize=UDim2.new(0,0,0,0),AutomaticCanvasSize=Enum.AutomaticSize.Y,ElasticBehavior=Enum.ElasticBehavior.Never},frame)
+		local scroll = new("ScrollingFrame",{Size=UDim2.fromScale(1,1),BackgroundTransparency=1,
+			ScrollBarThickness=3,ScrollBarImageColor3=C.Border3,ScrollBarImageTransparency=.5,
+			CanvasSize=UDim2.new(0,0,0,0),AutomaticCanvasSize=Enum.AutomaticSize.Y,
+			ElasticBehavior=Enum.ElasticBehavior.Never},frame)
 		new("UIListLayout",{SortOrder=Enum.SortOrder.LayoutOrder,Padding=UDim.new(0,0)},scroll)
 		pad(scroll,24,24,24,24)
-		self._pages[i]  = {Frame=frame,Scroll=scroll}
-		self._ord[i]    = 0
+		self._pages[i] = {Frame=frame,Scroll=scroll}
+		self._ord[i]   = 0
 	end
 end
 
 function Lib:SetPage(index)
 	local cfg = self.cfg
-	-- FIX: page frames must always stay transparent (BackgroundTransparency=1).
-	-- Tweening them to opaque was the cause of the gray/white background bug.
-	-- The _content frame already provides the correct dark background.
 	if self._pages[self._pageIdx] then
 		self._pages[self._pageIdx].Frame.Visible = false
 	end
@@ -514,7 +548,7 @@ function Lib:_animBar(target)
 		return target.AbsolutePosition.Y - self._sidebar.AbsolutePosition.Y + target.AbsoluteSize.Y*.5
 	end)
 	if not ok then return end
-	bar.Visible=true
+	bar.Visible = true
 	local cfg = self.cfg
 	local t1 = tw(bar,cfg.BarTweenSpeed*.4,{Size=UDim2.fromOffset(3,0)},Enum.EasingStyle.Quint,Enum.EasingDirection.In)
 	if t1 then
@@ -568,8 +602,8 @@ function Lib:Minimise()
 	if mini then
 		self:_ensurePill()
 		local pill = self._mobilePill
-		tw(win,.2,{BackgroundTransparency=1},Enum.EasingStyle.Quint,Enum.EasingDirection.In)
-		task.delay(.22,function()
+		tw(win,.25,{BackgroundTransparency=1},Enum.EasingStyle.Quint,Enum.EasingDirection.In)
+		task.delay(.27,function()
 			if win and win.Parent then win.Visible=false end
 		end)
 		pill.Visible=true
@@ -579,8 +613,13 @@ function Lib:Minimise()
 	else
 		self._preMinSize = {W=win.AbsoluteSize.X, H=win.AbsoluteSize.Y}
 		self._body.Visible = false
+
+		if self._tbFiller then self._tbFiller.Visible = false end
+		if self._tbBorderLine then self._tbBorderLine.Visible = false end
+		win.BackgroundColor3 = C.Bg2
+
 		local miniW = math.max(380, math.floor(win.AbsoluteSize.X*.68))
-		tw(win,.4,{Size=UDim2.fromOffset(miniW,44)},Enum.EasingStyle.Quint)
+		tw(win,.38,{Size=UDim2.fromOffset(miniW,44)},Enum.EasingStyle.Back,Enum.EasingDirection.Out)
 		if self._minBtn then self._minBtn.Text = "+" end
 	end
 end
@@ -608,10 +647,18 @@ function Lib:Maximise()
 		local cfg     = self.cfg
 		local targetW = prev and prev.W or cfg.WindowWidth
 		local targetH = prev and prev.H or cfg.WindowHeight
-		tw(win,.45,{Size=UDim2.fromOffset(targetW,targetH)},Enum.EasingStyle.Back,Enum.EasingDirection.Out)
-		task.delay(.18,function()
+		local t = tw(win,.45,{Size=UDim2.fromOffset(targetW,targetH)},Enum.EasingStyle.Back,Enum.EasingDirection.Out)
+		local function onExpanded()
 			if self._body then self._body.Visible = true end
-		end)
+			win.BackgroundColor3 = C.Bg
+			if self._tbFiller then self._tbFiller.Visible = true end
+			if self._tbBorderLine then self._tbBorderLine.Visible = true end
+		end
+		if t then
+			t.Completed:Connect(onExpanded)
+		else
+			task.delay(.5, onExpanded)
+		end
 		if self._minBtn then self._minBtn.Text = "-" end
 	end
 end
@@ -622,11 +669,44 @@ end
 
 function Lib:SetVisible(v)
 	if v then
-		if self._minimised then self:Maximise() else
-			if self.Window then self.Window.Visible=true; self.Window.BackgroundTransparency=0 end
-		end
+		if self._minimised then self:Maximise()
+		elseif self.Window then self.Window.Visible=true; self.Window.BackgroundTransparency=0 end
 	else
 		if not self._minimised then self:Minimise() end
+	end
+end
+
+function Lib:Shake(intensity)
+	local win = self.Window
+	if not win then return end
+	intensity = intensity or 6
+	local ox = win.Position.X.Offset
+	local oy = win.Position.Y.Offset
+	local sx = win.Position.X.Scale
+	local sy = win.Position.Y.Scale
+	task.spawn(function()
+		for i=1,10 do
+			local f = 1 - i/11
+			local dx = (math.random()-.5)*2*intensity*f
+			local dy = (math.random()-.5)*intensity*f
+			win.Position = UDim2.new(sx,ox+dx,sy,oy+dy)
+			task.wait(0.035)
+		end
+		win.Position = UDim2.new(sx,ox,sy,oy)
+	end)
+end
+
+function Lib:Destroy()
+	for _,c in ipairs(self._conns) do pcall(function() c:Disconnect() end) end
+	if self._sg and self._sg.Parent then
+		if self.Window then
+			local ws = self.Window.AbsoluteSize
+			tw(self.Window,.28,{
+				BackgroundTransparency=1,
+				Size=UDim2.fromOffset(ws.X*.93, ws.Y*.93),
+			},Enum.EasingStyle.Quint,Enum.EasingDirection.In)
+		end
+		task.delay(.31,function() pcall(function() self._sg:Destroy() end) end)
 	end
 end
 
@@ -647,10 +727,14 @@ function Lib:AddSectionHeader(pi,title,sub)
 	local s=self:GetPage(pi); if not s then return end
 	self:_gap(s,pi,4)
 	if title then
-		new("TextLabel",{Text=title,Font=Enum.Font.GothamBold,TextSize=20,TextColor3=C.White,BackgroundTransparency=1,Size=UDim2.new(1,0,0,28),TextXAlignment=Enum.TextXAlignment.Left,LayoutOrder=self:_o(pi)},s)
+		new("TextLabel",{Text=title,Font=Enum.Font.GothamBold,TextSize=20,TextColor3=C.White,
+			BackgroundTransparency=1,Size=UDim2.new(1,0,0,28),
+			TextXAlignment=Enum.TextXAlignment.Left,LayoutOrder=self:_o(pi)},s)
 	end
 	if sub then
-		new("TextLabel",{Text=sub,Font=Enum.Font.Gotham,TextSize=12,TextColor3=C.TextDim,BackgroundTransparency=1,Size=UDim2.new(1,0,0,20),TextXAlignment=Enum.TextXAlignment.Left,LayoutOrder=self:_o(pi)},s)
+		new("TextLabel",{Text=sub,Font=Enum.Font.Gotham,TextSize=12,TextColor3=C.TextDim,
+			BackgroundTransparency=1,Size=UDim2.new(1,0,0,20),
+			TextXAlignment=Enum.TextXAlignment.Left,LayoutOrder=self:_o(pi)},s)
 	end
 	new("Frame",{Size=UDim2.new(1,0,0,1),BackgroundColor3=C.Border,BorderSizePixel=0,LayoutOrder=self:_o(pi)},s)
 	self:_gap(s,pi,16)
@@ -658,29 +742,31 @@ end
 
 function Lib:AddMetricRow(pi,cards)
 	local s=self:GetPage(pi); if not s then return end
-	local n=# cards; local cols=math.min(n,3); local rows=math.ceil(n/cols)
+	local n=#cards; local cols=math.min(n,3); local rows=math.ceil(n/cols)
 	local H=82; local G=10
 
 	local wrap=new("Frame",{Size=UDim2.new(1,0,0,rows*(H+G)-G),BackgroundTransparency=1,LayoutOrder=self:_o(pi)},s)
-
 	local objects={}
 	for i,card in ipairs(cards) do
 		local row=math.floor((i-1)/cols); local col=(i-1)%cols
 		local wOff = n==1 and 0 or (col==0 or col==cols-1) and -G/2 or -G
-
-		local f=new("Frame",{BackgroundColor3=C.Card,BorderSizePixel=0,ZIndex=2,Position=UDim2.new(col/cols,col>0 and G or 0,0,row*(H+G)),Size=UDim2.new(1/cols,wOff,0,H)},wrap)
+		local f=new("Frame",{BackgroundColor3=C.Card,BorderSizePixel=0,ZIndex=2,
+			Position=UDim2.new(col/cols,col>0 and G or 0,0,row*(H+G)),
+			Size=UDim2.new(1/cols,wOff,0,H)},wrap)
 		corner(f,10)
 		stroke(f,C.Border,1)
 		pad(f,14,14,16,14)
-
-		new("TextLabel",{Text=string.upper(card.Label or ""),Font=Enum.Font.GothamBold,TextSize=9,TextColor3=C.TextDim,BackgroundTransparency=1,Size=UDim2.new(1,0,0,13),TextXAlignment=Enum.TextXAlignment.Left,ZIndex=3},f)
-
-		local valLbl=new("TextLabel",{Text=tostring(card.Value or "---"),Font=Enum.Font.GothamBold,TextSize=24,TextColor3=C.White,BackgroundTransparency=1,Position=UDim2.fromOffset(0,16),Size=UDim2.new(1,0,0,32),TextXAlignment=Enum.TextXAlignment.Left,ZIndex=3},f)
-
+		new("TextLabel",{Text=string.upper(card.Label or ""),Font=Enum.Font.GothamBold,TextSize=9,
+			TextColor3=C.TextDim,BackgroundTransparency=1,Size=UDim2.new(1,0,0,13),
+			TextXAlignment=Enum.TextXAlignment.Left,ZIndex=3},f)
+		local valLbl=new("TextLabel",{Text=tostring(card.Value or "---"),Font=Enum.Font.GothamBold,TextSize=24,
+			TextColor3=C.White,BackgroundTransparency=1,Position=UDim2.fromOffset(0,16),
+			Size=UDim2.new(1,0,0,32),TextXAlignment=Enum.TextXAlignment.Left,ZIndex=3},f)
 		if card.Unit and card.Unit~="" then
-			new("TextLabel",{Text=card.Unit,Font=Enum.Font.Gotham,TextSize=10,TextColor3=C.TextOff,BackgroundTransparency=1,Position=UDim2.fromOffset(0,50),Size=UDim2.new(1,0,0,14),TextXAlignment=Enum.TextXAlignment.Left,ZIndex=3},f)
+			new("TextLabel",{Text=card.Unit,Font=Enum.Font.Gotham,TextSize=10,TextColor3=C.TextOff,
+				BackgroundTransparency=1,Position=UDim2.fromOffset(0,50),
+				Size=UDim2.new(1,0,0,14),TextXAlignment=Enum.TextXAlignment.Left,ZIndex=3},f)
 		end
-
 		local hov=new("TextButton",{Text="",BackgroundTransparency=1,Size=UDim2.fromScale(1,1),ZIndex=4,AutoButtonColor=false},f)
 		hov.MouseEnter:Connect(function() tw(f,.14,{BackgroundColor3=C.Card2}) end)
 		hov.MouseLeave:Connect(function() tw(f,.16,{BackgroundColor3=C.Card}) end)
@@ -704,38 +790,38 @@ end
 
 function Lib:AddButtonRow(pi,defs)
 	local s=self:GetPage(pi); if not s then return end
-
 	local row=new("Frame",{Size=UDim2.new(1,0,0,44),BackgroundTransparency=1,LayoutOrder=self:_o(pi)},s)
 	hlist(row,10)
 
 	local styles={
 		primary = {bg=C.White,    tc=C.Bg,    hov=fromHex("e0e0e0"),dn=fromHex("c0c0c0")},
 		danger  = {bg=C.Red,      tc=C.White, hov=fromHex("ff5555"),dn=fromHex("bb2222")},
-		warning = {bg=C.Yellow,   tc=C.Bg,    hov=C.Orange,          dn=fromHex("b04010")},
-		ghost   = {bg=C.Card2,    tc=C.Text,  hov=C.Card3,           dn=C.Card},
-		outline = {bg=C.Card,     tc=C.Text,  hov=C.Card2,           dn=C.Sidebar},
+		warning = {bg=C.Yellow,   tc=C.Bg,    hov=C.Orange,         dn=fromHex("b04010")},
+		ghost   = {bg=C.Card2,    tc=C.Text,  hov=C.Card3,          dn=C.Card},
+		outline = {bg=C.Card,     tc=C.Text,  hov=C.Card2,          dn=C.Sidebar},
 		success = {bg=C.GreenBg,  tc=C.Green, hov=fromHex("061a0d"),dn=fromHex("030a06")},
+		purple  = {bg=C.PurpleBg, tc=C.Purple,hov=fromHex("150820"),dn=fromHex("0a0414")},
 	}
 
 	local btns={}
 	for i,def in ipairs(defs) do
 		local st=styles[def.Style or "primary"]
 		local w=def.Width or 130
-
-		local btn=new("TextButton",{Text=def.Text or "",Font=Enum.Font.GothamBold,TextSize=12,TextColor3=st.tc,BackgroundColor3=st.bg,BorderSizePixel=0,Size=UDim2.fromOffset(w,40),AutoButtonColor=false,LayoutOrder=i},row)
+		local btn=new("TextButton",{Text=def.Text or "",Font=Enum.Font.GothamBold,TextSize=12,
+			TextColor3=st.tc,BackgroundColor3=st.bg,BorderSizePixel=0,
+			Size=UDim2.fromOffset(w,40),AutoButtonColor=false,LayoutOrder=i},row)
 		corner(btn,9)
 		if def.Style=="outline" then stroke(btn,C.Border2,1) end
-
 		btn.MouseEnter:Connect(function() tw(btn,.14,{BackgroundColor3=st.hov}) end)
 		btn.MouseLeave:Connect(function() tw(btn,.16,{BackgroundColor3=st.bg}) end)
 		btn.MouseButton1Down:Connect(function() tw(btn,.07,{BackgroundColor3=st.dn,Size=UDim2.fromOffset(w-4,38)}) end)
 		btn.MouseButton1Up:Connect(function() tw(btn,.2,{BackgroundColor3=st.hov,Size=UDim2.fromOffset(w,40)},Enum.EasingStyle.Back,Enum.EasingDirection.Out) end)
-		pcall(function() btn.CursorIcon = "rbxasset://SystemCursors/PointingHand" end)
+		pcall(function() btn.CursorIcon="rbxasset://SystemCursors/PointingHand" end)
 		if def.Callback then
 			btn.Activated:Connect(function()
-				local ok,err = pcall(def.Callback)
+				local ok,_ = pcall(def.Callback)
 				if not ok then
-					local orig = st.bg
+					local orig=st.bg
 					tw(btn,.15,{BackgroundColor3=C.Red})
 					task.delay(.5,function() tw(btn,.3,{BackgroundColor3=orig}) end)
 				end
@@ -754,21 +840,21 @@ end
 
 function Lib:AddToggle(pi,label,default,callback)
 	local s=self:GetPage(pi); if not s then return end
-
 	local row=new("Frame",{Size=UDim2.new(1,0,0,48),BackgroundColor3=C.Card,BorderSizePixel=0,LayoutOrder=self:_o(pi)},s)
 	corner(row,10)
 	stroke(row,C.Border,1)
 	pad(row,0,0,16,16)
-
-	new("TextLabel",{Text=label or "",Font=Enum.Font.Gotham,TextSize=13,TextColor3=C.Text,BackgroundTransparency=1,Size=UDim2.new(1,-64,1,0),TextXAlignment=Enum.TextXAlignment.Left},row)
+	new("TextLabel",{Text=label or "",Font=Enum.Font.Gotham,TextSize=13,TextColor3=C.Text,
+		BackgroundTransparency=1,Size=UDim2.new(1,-64,1,0),TextXAlignment=Enum.TextXAlignment.Left},row)
 
 	local state=default==true
-
-	local track=new("Frame",{AnchorPoint=Vector2.new(1,.5),Position=UDim2.new(1,0,.5,0),Size=UDim2.fromOffset(44,24),BackgroundColor3=state and C.White or C.Card3,BorderSizePixel=0},row)
+	local track=new("Frame",{AnchorPoint=Vector2.new(1,.5),Position=UDim2.new(1,0,.5,0),
+		Size=UDim2.fromOffset(44,24),BackgroundColor3=state and C.White or C.Card3,BorderSizePixel=0},row)
 	corner(track,12)
 	local tStroke=stroke(track,state and fromHex("aaaaaa") or C.Border2,1)
-
-	local knob=new("Frame",{AnchorPoint=Vector2.new(0,.5),Position=UDim2.new(0,state and 22 or 2,.5,0),Size=UDim2.fromOffset(20,20),BackgroundColor3=state and C.Bg or C.TextDim,BorderSizePixel=0},track)
+	local knob=new("Frame",{AnchorPoint=Vector2.new(0,.5),
+		Position=UDim2.new(0,state and 22 or 2,.5,0),
+		Size=UDim2.fromOffset(20,20),BackgroundColor3=state and C.Bg or C.TextDim,BorderSizePixel=0},track)
 	corner(knob,10)
 
 	local function apply(v,silent)
@@ -780,11 +866,10 @@ function Lib:AddToggle(pi,label,default,callback)
 	end
 
 	local click=new("TextButton",{Text="",BackgroundTransparency=1,Size=UDim2.fromScale(1,1),ZIndex=5,AutoButtonColor=false},track)
-	pcall(function() click.CursorIcon = "rbxasset://SystemCursors/PointingHand" end)
+	pcall(function() click.CursorIcon="rbxasset://SystemCursors/PointingHand" end)
 	click.MouseButton1Down:Connect(function() tw(knob,.07,{Size=UDim2.fromOffset(22,18)}) end)
 	click.MouseButton1Up:Connect(function() tw(knob,.15,{Size=UDim2.fromOffset(20,20)},Enum.EasingStyle.Back,Enum.EasingDirection.Out) end)
 	click.Activated:Connect(function() apply(not state) end)
-
 	row.MouseEnter:Connect(function() tw(row,.15,{BackgroundColor3=C.Card2}) end)
 	row.MouseLeave:Connect(function() tw(row,.18,{BackgroundColor3=C.Card}) end)
 
@@ -795,23 +880,108 @@ function Lib:AddToggle(pi,label,default,callback)
 	return t
 end
 
-function Lib:AddInput(pi,labelTxt,placeholder,callback)
+function Lib:AddCheckbox(pi,label,default,callback)
 	local s=self:GetPage(pi); if not s then return end
+	local state=default==true
 
-	if labelTxt then
-		new("TextLabel",{Text=labelTxt,Font=Enum.Font.GothamBold,TextSize=11,TextColor3=C.TextDim,BackgroundTransparency=1,Size=UDim2.new(1,0,0,18),TextXAlignment=Enum.TextXAlignment.Left,LayoutOrder=self:_o(pi)},s)
-		self:_gap(s,pi,4)
+	local row=new("Frame",{Size=UDim2.new(1,0,0,44),BackgroundColor3=C.Card,BorderSizePixel=0,LayoutOrder=self:_o(pi)},s)
+	corner(row,10)
+	stroke(row,C.Border,1)
+	pad(row,0,0,16,16)
+
+	local box=new("Frame",{AnchorPoint=Vector2.new(0,.5),Position=UDim2.new(0,0,.5,0),
+		Size=UDim2.fromOffset(20,20),BackgroundColor3=state and C.White or C.Card3,BorderSizePixel=0},row)
+	corner(box,5)
+	local bStroke=stroke(box,state and fromHex("aaaaaa") or C.Border2,1)
+
+	local check=new("TextLabel",{Text="✓",Font=Enum.Font.GothamBold,TextSize=13,TextColor3=C.Bg,
+		BackgroundTransparency=1,Size=UDim2.fromScale(1,1),
+		TextTransparency=state and 0 or 1,TextXAlignment=Enum.TextXAlignment.Center},box)
+
+	new("TextLabel",{Text=label or "",Font=Enum.Font.Gotham,TextSize=13,TextColor3=C.Text,
+		BackgroundTransparency=1,Position=UDim2.fromOffset(32,0),
+		Size=UDim2.new(1,-32,1,0),TextXAlignment=Enum.TextXAlignment.Left},row)
+
+	local function apply(v,silent)
+		state=v
+		tw(box,.18,{BackgroundColor3=v and C.White or C.Card3},Enum.EasingStyle.Quart)
+		tw(bStroke,.18,{Color=v and fromHex("aaaaaa") or C.Border2})
+		tw(check,.12,{TextTransparency=v and 0 or 1})
+		if not silent and callback then callback(v) end
 	end
 
+	local click=new("TextButton",{Text="",BackgroundTransparency=1,Size=UDim2.fromScale(1,1),ZIndex=5,AutoButtonColor=false},row)
+	pcall(function() click.CursorIcon="rbxasset://SystemCursors/PointingHand" end)
+	click.Activated:Connect(function() apply(not state) end)
+	row.MouseEnter:Connect(function() tw(row,.15,{BackgroundColor3=C.Card2}) end)
+	row.MouseLeave:Connect(function() tw(row,.18,{BackgroundColor3=C.Card}) end)
+
+	self:_gap(s,pi,6)
+	local obj={Frame=row,Box=box}
+	function obj:SetState(v) apply(v,true) end
+	function obj:GetState() return state end
+	return obj
+end
+
+function Lib:AddInput(pi,labelTxt,placeholder,callback)
+	local s=self:GetPage(pi); if not s then return end
+	if labelTxt then
+		new("TextLabel",{Text=labelTxt,Font=Enum.Font.GothamBold,TextSize=11,TextColor3=C.TextDim,
+			BackgroundTransparency=1,Size=UDim2.new(1,0,0,18),
+			TextXAlignment=Enum.TextXAlignment.Left,LayoutOrder=self:_o(pi)},s)
+		self:_gap(s,pi,4)
+	end
 	local wrap=new("Frame",{Size=UDim2.new(1,0,0,44),BackgroundColor3=C.Card,BorderSizePixel=0,LayoutOrder=self:_o(pi)},s)
 	corner(wrap,10)
 	local ws=stroke(wrap,C.Border,1)
 	pad(wrap,0,0,16,16)
-
-	local box=new("TextBox",{Text="",PlaceholderText=placeholder or "",Font=Enum.Font.Gotham,TextSize=13,TextColor3=C.Text,PlaceholderColor3=C.TextOff,BackgroundTransparency=1,Size=UDim2.fromScale(1,1),ClearTextOnFocus=false,TextXAlignment=Enum.TextXAlignment.Left},wrap)
-
+	local box=new("TextBox",{Text="",PlaceholderText=placeholder or "",Font=Enum.Font.Gotham,TextSize=13,
+		TextColor3=C.Text,PlaceholderColor3=C.TextOff,BackgroundTransparency=1,
+		Size=UDim2.fromScale(1,1),ClearTextOnFocus=false,TextXAlignment=Enum.TextXAlignment.Left},wrap)
 	box.Focused:Connect(function() tw(wrap,.16,{BackgroundColor3=C.Card2}); tw(ws,.16,{Color=C.Border3}) end)
-	box.FocusLost:Connect(function(enter) tw(wrap,.18,{BackgroundColor3=C.Card}); tw(ws,.18,{Color=C.Border}); if callback then callback(box.Text,enter) end end)
+	box.FocusLost:Connect(function(enter)
+		tw(wrap,.18,{BackgroundColor3=C.Card}); tw(ws,.18,{Color=C.Border})
+		if callback then callback(box.Text,enter) end
+	end)
+	wrap.MouseEnter:Connect(function() if not box:IsFocused() then tw(wrap,.15,{BackgroundColor3=C.Card2}) end end)
+	wrap.MouseLeave:Connect(function() if not box:IsFocused() then tw(wrap,.18,{BackgroundColor3=C.Card}) end end)
+	self:_gap(s,pi,10)
+	return box
+end
+
+function Lib:AddSearchInput(pi,placeholder,callback)
+	local s=self:GetPage(pi); if not s then return end
+	local wrap=new("Frame",{Size=UDim2.new(1,0,0,44),BackgroundColor3=C.Card,BorderSizePixel=0,LayoutOrder=self:_o(pi)},s)
+	corner(wrap,10)
+	local ws=stroke(wrap,C.Border,1)
+	pad(wrap,0,0,14,14)
+	hlist(wrap,8)
+
+	new("TextLabel",{Text="⌕",Font=Enum.Font.GothamBold,TextSize=16,TextColor3=C.TextDim,
+		BackgroundTransparency=1,Size=UDim2.fromOffset(20,44),
+		TextXAlignment=Enum.TextXAlignment.Center,LayoutOrder=0},wrap)
+
+	local box=new("TextBox",{Text="",PlaceholderText=placeholder or "Search...",Font=Enum.Font.Gotham,TextSize=13,
+		TextColor3=C.Text,PlaceholderColor3=C.TextOff,BackgroundTransparency=1,
+		Size=UDim2.new(1,-62,1,0),ClearTextOnFocus=false,
+		TextXAlignment=Enum.TextXAlignment.Left,LayoutOrder=1},wrap)
+
+	local clearBtn=new("TextButton",{Text="×",Font=Enum.Font.GothamBold,TextSize=18,TextColor3=C.TextDim,
+		BackgroundTransparency=1,Size=UDim2.fromOffset(26,44),
+		TextXAlignment=Enum.TextXAlignment.Center,AutoButtonColor=false,Visible=false,LayoutOrder=2},wrap)
+	clearBtn.MouseEnter:Connect(function() tw(clearBtn,.12,{TextColor3=C.White}) end)
+	clearBtn.MouseLeave:Connect(function() tw(clearBtn,.15,{TextColor3=C.TextDim}) end)
+	clearBtn.Activated:Connect(function()
+		box.Text=""; clearBtn.Visible=false
+		if callback then callback("") end
+	end)
+
+	box:GetPropertyChangedSignal("Text"):Connect(function()
+		clearBtn.Visible = box.Text ~= ""
+		if callback then callback(box.Text) end
+	end)
+	box.Focused:Connect(function() tw(wrap,.16,{BackgroundColor3=C.Card2}); tw(ws,.16,{Color=C.Border3}) end)
+	box.FocusLost:Connect(function() tw(wrap,.18,{BackgroundColor3=C.Card}); tw(ws,.18,{Color=C.Border}) end)
 	wrap.MouseEnter:Connect(function() if not box:IsFocused() then tw(wrap,.15,{BackgroundColor3=C.Card2}) end end)
 	wrap.MouseLeave:Connect(function() if not box:IsFocused() then tw(wrap,.18,{BackgroundColor3=C.Card}) end end)
 
@@ -819,209 +989,66 @@ function Lib:AddInput(pi,labelTxt,placeholder,callback)
 	return box
 end
 
-function Lib:AddCard(pi,title,subtitle)
+function Lib:AddStepper(pi,label,min,max,default,step,callback)
 	local s=self:GetPage(pi); if not s then return end
+	min=min or 0; max=max or 100; step=step or 1
+	local val=math.clamp(default or min,min,max)
 
-	local card=new("Frame",{Size=UDim2.new(1,0,0,0),AutomaticSize=Enum.AutomaticSize.Y,BackgroundColor3=C.Card,BorderSizePixel=0,LayoutOrder=self:_o(pi)},s)
-	corner(card,10)
-	stroke(card,C.Border,1)
+	local row=new("Frame",{Size=UDim2.new(1,0,0,48),BackgroundColor3=C.Card,BorderSizePixel=0,LayoutOrder=self:_o(pi)},s)
+	corner(row,10)
+	stroke(row,C.Border,1)
+	pad(row,0,0,16,16)
 
-	if title then
-		local hdr=new("Frame",{Size=UDim2.new(1,0,0,subtitle and 54 or 42),BackgroundColor3=C.Card2,BorderSizePixel=0},card)
-		corner(hdr,10)
-		new("Frame",{Position=UDim2.new(0,0,1,-11),Size=UDim2.new(1,0,0,11),BackgroundColor3=C.Card2,BorderSizePixel=0},hdr)
-		new("Frame",{Position=UDim2.new(0,0,1,0),Size=UDim2.new(1,0,0,1),BackgroundColor3=C.Border,BorderSizePixel=0},hdr)
-		pad(hdr,0,0,16,16)
-		new("TextLabel",{Text=title,Font=Enum.Font.GothamBold,TextSize=13,TextColor3=C.White,BackgroundTransparency=1,Position=UDim2.fromOffset(0,11),Size=UDim2.new(1,0,0,20),TextXAlignment=Enum.TextXAlignment.Left},hdr)
-		if subtitle then
-			new("TextLabel",{Text=subtitle,Font=Enum.Font.Gotham,TextSize=11,TextColor3=C.TextDim,BackgroundTransparency=1,Position=UDim2.fromOffset(0,33),Size=UDim2.new(1,0,0,16),TextXAlignment=Enum.TextXAlignment.Left},hdr)
-		end
+	new("TextLabel",{Text=label or "",Font=Enum.Font.Gotham,TextSize=13,TextColor3=C.Text,
+		BackgroundTransparency=1,Size=UDim2.new(1,-130,1,0),TextXAlignment=Enum.TextXAlignment.Left},row)
+
+	local ctrl=new("Frame",{AnchorPoint=Vector2.new(1,.5),Position=UDim2.new(1,0,.5,0),
+		Size=UDim2.fromOffset(120,34),BackgroundColor3=C.Card3,BorderSizePixel=0},row)
+	corner(ctrl,8)
+	stroke(ctrl,C.Border2,1)
+
+	local function mkSBtn(txt,xA,xP,lo)
+		local b=new("TextButton",{Text=txt,Font=Enum.Font.GothamBold,TextSize=15,TextColor3=C.TextDim,
+			BackgroundColor3=C.Card3,BorderSizePixel=0,
+			AnchorPoint=Vector2.new(xA,.5),Position=UDim2.new(xP,0,.5,0),
+			Size=UDim2.fromOffset(34,34),AutoButtonColor=false,LayoutOrder=lo},ctrl)
+		corner(b,8)
+		b.MouseEnter:Connect(function() tw(b,.12,{BackgroundColor3=C.Card2,TextColor3=C.White}) end)
+		b.MouseLeave:Connect(function() tw(b,.15,{BackgroundColor3=C.Card3,TextColor3=C.TextDim}) end)
+		b.MouseButton1Down:Connect(function() tw(b,.07,{Size=UDim2.fromOffset(32,32)}) end)
+		b.MouseButton1Up:Connect(function() tw(b,.15,{Size=UDim2.fromOffset(34,34)},Enum.EasingStyle.Back,Enum.EasingDirection.Out) end)
+		pcall(function() b.CursorIcon="rbxasset://SystemCursors/PointingHand" end)
+		return b
 	end
 
-	local inner=new("Frame",{Size=UDim2.new(1,0,0,0),AutomaticSize=Enum.AutomaticSize.Y,BackgroundTransparency=1},card)
-	pad(inner,14,14,16,16)
-	new("UIListLayout",{SortOrder=Enum.SortOrder.LayoutOrder,Padding=UDim.new(0,8)},inner)
+	local minusBtn=mkSBtn("-",0,0,0)
+	local plusBtn=mkSBtn("+",1,1,2)
+	local valLbl=new("TextLabel",{Text=tostring(val),Font=Enum.Font.GothamBold,TextSize=13,TextColor3=C.White,
+		BackgroundTransparency=1,AnchorPoint=Vector2.new(.5,.5),Position=UDim2.fromScale(.5,.5),
+		Size=UDim2.fromOffset(52,34),TextXAlignment=Enum.TextXAlignment.Center},ctrl)
 
-	self:_gap(s,pi,10)
-	return inner
-end
-
-function Lib:AddLogConsole(pi,height)
-	local s=self:GetPage(pi); if not s then return end
-
-	local frame=new("Frame",{Size=UDim2.new(1,0,0,height or 220),BackgroundColor3=fromHex("050505"),BorderSizePixel=0,ClipsDescendants=true,LayoutOrder=self:_o(pi)},s)
-	corner(frame,10)
-	stroke(frame,C.Border,1)
-
-	local hdr=new("Frame",{Size=UDim2.new(1,0,0,34),BackgroundColor3=C.Card,BorderSizePixel=0},frame)
-	corner(hdr,10)
-	new("Frame",{Position=UDim2.new(0,0,1,-11),Size=UDim2.new(1,0,0,11),BackgroundColor3=C.Card,BorderSizePixel=0},hdr)
-	new("Frame",{Position=UDim2.new(0,0,1,0),Size=UDim2.new(1,0,0,1),BackgroundColor3=C.Border,BorderSizePixel=0},hdr)
-	pad(hdr,0,0,14,14)
-	hlist(hdr,8)
-
-	local dot=new("Frame",{Size=UDim2.fromOffset(7,7),BackgroundColor3=C.Green,BorderSizePixel=0,LayoutOrder=0},hdr)
-	corner(dot,4)
-	new("TextLabel",{Text="CONSOLE",Font=Enum.Font.GothamBold,TextSize=10,TextColor3=C.TextDim,BackgroundTransparency=1,Size=UDim2.new(1,0,1,0),TextXAlignment=Enum.TextXAlignment.Left,LayoutOrder=1},hdr)
-
-	local textBox=new("TextBox",{Text="",Font=Enum.Font.Code,TextSize=11,TextColor3=C.TextDim,BackgroundTransparency=1,Position=UDim2.fromOffset(0,35),Size=UDim2.new(1,0,1,-35),MultiLine=true,TextEditable=false,TextXAlignment=Enum.TextXAlignment.Left,TextYAlignment=Enum.TextYAlignment.Bottom,ClearTextOnFocus=false,TextWrapped=true,ZIndex=2},frame)
-	pad(textBox,8,8,12,12)
-
-	self:_gap(s,pi,10)
-
-	local console={Frame=frame,TextBox=textBox,_dot=dot,_lines={}}
-	local pfx={INFO="[INFO]  ",SUCCESS="[OK]    ",WARN="[WARN]  ",ERROR="[ERR]   ",SNIPE="[SNIPE] ",DEBUG="[DBG]   "}
-	function console:Log(msg,level)
-		local lv=string.upper(level or "INFO")
-		local ts=os.date("%H:%M:%S")
-		table.insert(self._lines,("%s  %s  %s"):format(ts,pfx[lv] or "[INFO]  ",tostring(msg)))
-		if #self._lines>400 then table.remove(self._lines,1) end
-		self.TextBox.Text=table.concat(self._lines,"\n")
-	end
-	function console:Clear() self._lines={}; self.TextBox.Text="" end
-	function console:SetActive(v) tw(self._dot,.2,{BackgroundColor3=v and C.Green or C.Red}) end
-	return console
-end
-
-function Lib:AddLabel(pi,text,style)
-	local s=self:GetPage(pi); if not s then return end
-	local styles={
-		title    = {size=19,color=C.White,  font=Enum.Font.GothamBold},
-		subtitle = {size=14,color=C.Text,   font=Enum.Font.GothamBold},
-		body     = {size=13,color=C.Text,   font=Enum.Font.Gotham},
-		muted    = {size=12,color=C.TextDim,font=Enum.Font.Gotham},
-		caption  = {size=10,color=C.TextOff,font=Enum.Font.Gotham},
-	}
-	local st=styles[style or "body"]
-	local lbl=new("TextLabel",{Text=text or "",Font=st.font,TextSize=st.size,TextColor3=st.color,BackgroundTransparency=1,Size=UDim2.new(1,0,0,st.size+12),TextXAlignment=Enum.TextXAlignment.Left,TextWrapped=true,LayoutOrder=self:_o(pi)},s)
-	self:_gap(s,pi,4)
-	return lbl
-end
-
-function Lib:AddSeparator(pi,spacing)
-	local s=self:GetPage(pi); if not s then return end
-	local sp=spacing or 6
-	self:_gap(s,pi,sp)
-	new("Frame",{Size=UDim2.new(1,0,0,1),BackgroundColor3=C.Border,BorderSizePixel=0,LayoutOrder=self:_o(pi)},s)
-	self:_gap(s,pi,sp)
-end
-
-function Lib:AddDropdown(pi,labelTxt,options,callback)
-	local s=self:GetPage(pi); if not s then return end
-
-	if labelTxt then
-		new("TextLabel",{Text=labelTxt,Font=Enum.Font.GothamBold,TextSize=11,TextColor3=C.TextDim,BackgroundTransparency=1,Size=UDim2.new(1,0,0,18),TextXAlignment=Enum.TextXAlignment.Left,LayoutOrder=self:_o(pi)},s)
-		self:_gap(s,pi,4)
-	end
-
-	local selected=options[1] or ""
-	local open=false
-
-	local wrapper=new("Frame",{Size=UDim2.new(1,0,0,0),AutomaticSize=Enum.AutomaticSize.Y,BackgroundTransparency=1,ClipsDescendants=false,LayoutOrder=self:_o(pi),ZIndex=50},s)
-
-	local btn=new("TextButton",{Text="",BackgroundColor3=C.Card,BorderSizePixel=0,Size=UDim2.new(1,0,0,44),AutoButtonColor=false,ZIndex=51},wrapper)
-	corner(btn,10)
-	local bStroke=stroke(btn,C.Border,1)
-	pad(btn,0,0,16,16)
-	hlist(btn,0)
-
-	local selLbl=new("TextLabel",{Text=selected,Font=Enum.Font.Gotham,TextSize=13,TextColor3=C.Text,BackgroundTransparency=1,Size=UDim2.new(1,-22,1,0),TextXAlignment=Enum.TextXAlignment.Left,ZIndex=52,LayoutOrder=0},btn)
-	local arrow=new("TextLabel",{Text="v",Font=Enum.Font.GothamBold,TextSize=11,TextColor3=C.TextDim,BackgroundTransparency=1,Size=UDim2.fromOffset(22,22),TextXAlignment=Enum.TextXAlignment.Center,ZIndex=52,LayoutOrder=1},btn)
-
-	local listH=#options*40
-	local optList=new("Frame",{Position=UDim2.fromOffset(0,48),Size=UDim2.new(1,0,0,0),BackgroundColor3=C.Card2,BorderSizePixel=0,ClipsDescendants=true,ZIndex=60,Visible=false},wrapper)
-	corner(optList,10)
-	stroke(optList,C.Border2,1)
-	new("UIListLayout",{SortOrder=Enum.SortOrder.LayoutOrder,Padding=UDim.new(0,0)},optList)
-
-	for i,opt in ipairs(options) do
-		local ob=new("TextButton",{Text=opt,Font=Enum.Font.Gotham,TextSize=13,TextColor3=C.Text,BackgroundColor3=C.Card2,BackgroundTransparency=1,BorderSizePixel=0,Size=UDim2.new(1,0,0,40),AutoButtonColor=false,LayoutOrder=i,ZIndex=61,TextXAlignment=Enum.TextXAlignment.Left},optList)
-		pad(ob,0,0,16,16)
-		ob.MouseEnter:Connect(function() tw(ob,.1,{BackgroundTransparency=.84}) end)
-		ob.MouseLeave:Connect(function() tw(ob,.12,{BackgroundTransparency=1}) end)
-		ob.Activated:Connect(function()
-			selected=opt; selLbl.Text=opt; open=false
-			tw(optList,.18,{Size=UDim2.new(1,0,0,0)},Enum.EasingStyle.Quint,Enum.EasingDirection.In)
-			tw(arrow,.18,{Rotation=0})
-			task.delay(.2,function() if optList then optList.Visible=false end end)
-			if callback then callback(opt) end
+	local function update(delta)
+		val=math.clamp(val+delta,min,max)
+		tw(valLbl,.06,{TextTransparency=.7})
+		task.delay(.07,function()
+			if valLbl and valLbl.Parent then
+				valLbl.Text=tostring(val)
+				tw(valLbl,.14,{TextTransparency=0})
+			end
 		end)
+		if callback then callback(val) end
 	end
 
-	btn.MouseEnter:Connect(function() tw(btn,.14,{BackgroundColor3=C.Card2}) end)
-	btn.MouseLeave:Connect(function() tw(btn,.16,{BackgroundColor3=C.Card}) end)
-	pcall(function() btn.CursorIcon = "rbxasset://SystemCursors/PointingHand" end)
-	btn.Activated:Connect(function()
-		open=not open; optList.Visible=true
-		if open then
-			tw(optList,.25,{Size=UDim2.new(1,0,0,listH)},Enum.EasingStyle.Back,Enum.EasingDirection.Out)
-			tw(arrow,.2,{Rotation=180})
-		else
-			tw(optList,.18,{Size=UDim2.new(1,0,0,0)},Enum.EasingStyle.Quint,Enum.EasingDirection.In)
-			tw(arrow,.2,{Rotation=0})
-			task.delay(.2,function() if optList then optList.Visible=false end end)
-		end
-	end)
+	minusBtn.Activated:Connect(function() update(-step) end)
+	plusBtn.Activated:Connect(function()  update(step)  end)
+	row.MouseEnter:Connect(function() tw(row,.15,{BackgroundColor3=C.Card2}) end)
+	row.MouseLeave:Connect(function() tw(row,.18,{BackgroundColor3=C.Card}) end)
 
-	self:_gap(s,pi,10)
-	return {Button=btn,List=optList,GetSelected=function() return selected end}
-end
-
-function Lib:CreateStatusBadge(parent,state)
-	local sp={
-		on   ={text="ONLINE", bg=C.GreenBg, tc=C.Green, dot=C.Green},
-		off  ={text="OFFLINE",bg=C.RedBg,   tc=C.Red,   dot=C.Red},
-		idle ={text="IDLE",   bg=C.YellowBg,tc=C.Yellow,dot=C.Yellow},
-	}
-	local st=sp[state or "idle"]
-	local frame=new("Frame",{Size=UDim2.fromOffset(82,26),BackgroundColor3=st.bg,BorderSizePixel=0},parent)
-	corner(frame,7)
-	pad(frame,0,0,10,10)
-	hlist(frame,7)
-	local dot=new("Frame",{Size=UDim2.fromOffset(6,6),BackgroundColor3=st.dot,BorderSizePixel=0,LayoutOrder=0},frame)
-	corner(dot,3)
-	local lbl=new("TextLabel",{Text=st.text,Font=Enum.Font.GothamBold,TextSize=10,TextColor3=st.tc,BackgroundTransparency=1,Size=UDim2.new(0,0,1,0),AutomaticSize=Enum.AutomaticSize.X,LayoutOrder=1},frame)
-	local badge={Frame=frame,Label=lbl,Dot=dot,_sp=sp}
-	function badge:SetState(ns)
-		local p=self._sp[ns]; if not p then return end
-		tw(self.Frame,.2,{BackgroundColor3=p.bg})
-		tw(self.Dot,.2,{BackgroundColor3=p.dot})
-		self.Label.Text=p.text; self.Label.TextColor3=p.tc
-	end
-	return badge
-end
-
-function Lib:ShowNotification(msg,style,duration,title)
-	local styleMap={
-		info    ={dot=C.Blue,  bg=C.BlueBg},
-		success ={dot=C.Green, bg=C.GreenBg},
-		warning ={dot=C.Yellow,bg=C.YellowBg},
-		error   ={dot=C.Red,   bg=C.RedBg},
-	}
-	local st=styleMap[style or "info"] or styleMap.info
-	local h=title and 60 or 44
-
-	local notif=new("Frame",{Size=UDim2.new(1,0,0,h),BackgroundColor3=C.Card2,BackgroundTransparency=1,BorderSizePixel=0,ZIndex=201,Position=UDim2.new(0,0,1,0)},self._notifHolder)
-	corner(notif,10)
-	stroke(notif,C.Border2,1)
-	pad(notif,10,10,14,14)
-
-	new("Frame",{Size=UDim2.fromOffset(3,h>44 and 40 or 24),BackgroundColor3=st.dot,BorderSizePixel=0,ZIndex=202,AnchorPoint=Vector2.new(0,.5),Position=UDim2.new(0,0,.5,0)},notif)
-
-	if title then
-		new("TextLabel",{Text=title,Font=Enum.Font.GothamBold,TextSize=13,TextColor3=C.White,BackgroundTransparency=1,Position=UDim2.fromOffset(12,0),Size=UDim2.new(1,-12,0,20),TextXAlignment=Enum.TextXAlignment.Left,ZIndex=202},notif)
-	end
-	new("TextLabel",{Text=msg or "",Font=Enum.Font.Gotham,TextSize=12,TextColor3=C.TextDim,BackgroundTransparency=1,Position=title and UDim2.fromOffset(12,22) or UDim2.fromOffset(12,0),Size=UDim2.new(1,-12,0,0),AutomaticSize=Enum.AutomaticSize.Y,TextXAlignment=Enum.TextXAlignment.Left,TextWrapped=true,ZIndex=202},notif)
-
-	tw(notif,.35,{BackgroundTransparency=0,Position=UDim2.new(0,0,0,0)},Enum.EasingStyle.Back,Enum.EasingDirection.Out)
-
-	task.delay(duration or 3.5,function()
-		if not notif or not notif.Parent then return end
-		tw(notif,.22,{BackgroundTransparency=1,Position=UDim2.new(0,0,1,0)},Enum.EasingStyle.Quint,Enum.EasingDirection.In)
-		task.delay(.25,function()
-			if notif and notif.Parent then notif:Destroy() end
-		end)
-	end)
+	self:_gap(s,pi,6)
+	local obj={Frame=row,ValueLabel=valLbl}
+	function obj:GetValue() return val end
+	function obj:SetValue(v) val=math.clamp(v,min,max); valLbl.Text=tostring(val) end
+	return obj
 end
 
 function Lib:AddSlider(pi,label,min,max,default,callback)
@@ -1034,18 +1061,25 @@ function Lib:AddSlider(pi,label,min,max,default,callback)
 	pad(wrap,12,12,16,16)
 
 	local topRow=new("Frame",{Size=UDim2.new(1,0,0,18),BackgroundTransparency=1},wrap)
-	new("TextLabel",{Text=label or "",Font=Enum.Font.Gotham,TextSize=13,TextColor3=C.Text,BackgroundTransparency=1,Size=UDim2.new(1,-50,1,0),TextXAlignment=Enum.TextXAlignment.Left},topRow)
-	local valLbl=new("TextLabel",{Text=tostring(default),Font=Enum.Font.GothamBold,TextSize=12,TextColor3=C.White,BackgroundTransparency=1,AnchorPoint=Vector2.new(1,0),Position=UDim2.new(1,0,0,0),Size=UDim2.fromOffset(50,18),TextXAlignment=Enum.TextXAlignment.Right},topRow)
+	new("TextLabel",{Text=label or "",Font=Enum.Font.Gotham,TextSize=13,TextColor3=C.Text,
+		BackgroundTransparency=1,Size=UDim2.new(1,-50,1,0),TextXAlignment=Enum.TextXAlignment.Left},topRow)
+	local valLbl=new("TextLabel",{Text=tostring(default),Font=Enum.Font.GothamBold,TextSize=12,TextColor3=C.White,
+		BackgroundTransparency=1,AnchorPoint=Vector2.new(1,0),Position=UDim2.new(1,0,0,0),
+		Size=UDim2.fromOffset(50,18),TextXAlignment=Enum.TextXAlignment.Right},topRow)
 
-	local trackBg=new("Frame",{Position=UDim2.fromOffset(0,30),Size=UDim2.new(1,0,0,6),BackgroundColor3=C.Card3,BorderSizePixel=0},wrap)
+	local trackBg=new("Frame",{Position=UDim2.fromOffset(0,30),Size=UDim2.new(1,0,0,6),
+		BackgroundColor3=C.Card3,BorderSizePixel=0},wrap)
 	corner(trackBg,3)
 	local fill=new("Frame",{Size=UDim2.fromScale((default-min)/(max-min),1),BackgroundColor3=C.White,BorderSizePixel=0},trackBg)
 	corner(fill,3)
-	local knobSl=new("Frame",{AnchorPoint=Vector2.new(.5,.5),Position=UDim2.new((default-min)/(max-min),0,.5,0),Size=UDim2.fromOffset(14,14),BackgroundColor3=C.White,BorderSizePixel=0,ZIndex=3},trackBg)
+	local knobSl=new("Frame",{AnchorPoint=Vector2.new(.5,.5),
+		Position=UDim2.new((default-min)/(max-min),0,.5,0),
+		Size=UDim2.fromOffset(14,14),BackgroundColor3=C.White,BorderSizePixel=0,ZIndex=3},trackBg)
 	corner(knobSl,7)
 
 	local dragging=false
-	local interact=new("TextButton",{Text="",BackgroundTransparency=1,Size=UDim2.new(1,0,1,14),Position=UDim2.fromOffset(0,-7),ZIndex=4,AutoButtonColor=false},trackBg)
+	local interact=new("TextButton",{Text="",BackgroundTransparency=1,
+		Size=UDim2.new(1,0,1,14),Position=UDim2.fromOffset(0,-7),ZIndex=4,AutoButtonColor=false},trackBg)
 	pcall(function() interact.CursorIcon="rbxasset://SystemCursors/PointingHand" end)
 
 	local function updateVal(absX)
@@ -1063,11 +1097,8 @@ function Lib:AddSlider(pi,label,min,max,default,callback)
 		if i.UserInputType==Enum.UserInputType.MouseButton1 then dragging=false end
 	end))
 	table.insert(self._conns,UserInputService.InputChanged:Connect(function(i)
-		if dragging and i.UserInputType==Enum.UserInputType.MouseMovement then
-			updateVal(i.Position.X)
-		end
+		if dragging and i.UserInputType==Enum.UserInputType.MouseMovement then updateVal(i.Position.X) end
 	end))
-
 	wrap.MouseEnter:Connect(function() tw(wrap,.15,{BackgroundColor3=C.Card2}) end)
 	wrap.MouseLeave:Connect(function() tw(wrap,.18,{BackgroundColor3=C.Card}) end)
 
@@ -1083,19 +1114,396 @@ function Lib:AddSlider(pi,label,min,max,default,callback)
 	return obj
 end
 
+function Lib:AddDropdown(pi,labelTxt,options,callback)
+	local s=self:GetPage(pi); if not s then return end
+	if labelTxt then
+		new("TextLabel",{Text=labelTxt,Font=Enum.Font.GothamBold,TextSize=11,TextColor3=C.TextDim,
+			BackgroundTransparency=1,Size=UDim2.new(1,0,0,18),
+			TextXAlignment=Enum.TextXAlignment.Left,LayoutOrder=self:_o(pi)},s)
+		self:_gap(s,pi,4)
+	end
+
+	local selected=options[1] or ""
+	local open=false
+	local wrapper=new("Frame",{Size=UDim2.new(1,0,0,0),AutomaticSize=Enum.AutomaticSize.Y,
+		BackgroundTransparency=1,ClipsDescendants=false,LayoutOrder=self:_o(pi),ZIndex=50},s)
+
+	local btn=new("TextButton",{Text="",BackgroundColor3=C.Card,BorderSizePixel=0,
+		Size=UDim2.new(1,0,0,44),AutoButtonColor=false,ZIndex=51},wrapper)
+	corner(btn,10)
+	local bStroke=stroke(btn,C.Border,1)
+	pad(btn,0,0,16,16)
+	hlist(btn,0)
+
+	local selLbl=new("TextLabel",{Text=selected,Font=Enum.Font.Gotham,TextSize=13,TextColor3=C.Text,
+		BackgroundTransparency=1,Size=UDim2.new(1,-22,1,0),
+		TextXAlignment=Enum.TextXAlignment.Left,ZIndex=52,LayoutOrder=0},btn)
+	local arrow=new("TextLabel",{Text="v",Font=Enum.Font.GothamBold,TextSize=11,TextColor3=C.TextDim,
+		BackgroundTransparency=1,Size=UDim2.fromOffset(22,22),
+		TextXAlignment=Enum.TextXAlignment.Center,ZIndex=52,LayoutOrder=1},btn)
+
+	local listH=#options*40
+	local optList=new("Frame",{Position=UDim2.fromOffset(0,48),Size=UDim2.new(1,0,0,0),
+		BackgroundColor3=C.Card2,BorderSizePixel=0,ClipsDescendants=true,ZIndex=60,Visible=false},wrapper)
+	corner(optList,10)
+	stroke(optList,C.Border2,1)
+	new("UIListLayout",{SortOrder=Enum.SortOrder.LayoutOrder,Padding=UDim.new(0,0)},optList)
+
+	for i,opt in ipairs(options) do
+		local ob=new("TextButton",{Text=opt,Font=Enum.Font.Gotham,TextSize=13,TextColor3=C.Text,
+			BackgroundColor3=C.Card2,BackgroundTransparency=1,BorderSizePixel=0,
+			Size=UDim2.new(1,0,0,40),AutoButtonColor=false,LayoutOrder=i,ZIndex=61,
+			TextXAlignment=Enum.TextXAlignment.Left},optList)
+		pad(ob,0,0,16,16)
+		ob.MouseEnter:Connect(function() tw(ob,.1,{BackgroundTransparency=.84}) end)
+		ob.MouseLeave:Connect(function() tw(ob,.12,{BackgroundTransparency=1}) end)
+		ob.Activated:Connect(function()
+			selected=opt; selLbl.Text=opt; open=false
+			tw(optList,.18,{Size=UDim2.new(1,0,0,0)},Enum.EasingStyle.Quint,Enum.EasingDirection.In)
+			tw(arrow,.18,{Rotation=0})
+			task.delay(.2,function() if optList then optList.Visible=false end end)
+			if callback then callback(opt) end
+		end)
+	end
+
+	btn.MouseEnter:Connect(function() tw(btn,.14,{BackgroundColor3=C.Card2}) end)
+	btn.MouseLeave:Connect(function() tw(btn,.16,{BackgroundColor3=C.Card}) end)
+	pcall(function() btn.CursorIcon="rbxasset://SystemCursors/PointingHand" end)
+	btn.Activated:Connect(function()
+		open=not open; optList.Visible=true
+		if open then
+			tw(optList,.28,{Size=UDim2.new(1,0,0,listH)},Enum.EasingStyle.Back,Enum.EasingDirection.Out)
+			tw(arrow,.2,{Rotation=180})
+		else
+			tw(optList,.18,{Size=UDim2.new(1,0,0,0)},Enum.EasingStyle.Quint,Enum.EasingDirection.In)
+			tw(arrow,.2,{Rotation=0})
+			task.delay(.2,function() if optList then optList.Visible=false end end)
+		end
+	end)
+
+	self:_gap(s,pi,10)
+	return {Button=btn,List=optList,GetSelected=function() return selected end}
+end
+
+function Lib:AddRadioGroup(pi,label,options,default,callback)
+	local s=self:GetPage(pi); if not s then return end
+	local selected=default or (options[1] or "")
+
+	if label then
+		new("TextLabel",{Text=label,Font=Enum.Font.GothamBold,TextSize=11,TextColor3=C.TextDim,
+			BackgroundTransparency=1,Size=UDim2.new(1,0,0,18),
+			TextXAlignment=Enum.TextXAlignment.Left,LayoutOrder=self:_o(pi)},s)
+		self:_gap(s,pi,4)
+	end
+
+	local wrap=new("Frame",{Size=UDim2.new(1,0,0,0),AutomaticSize=Enum.AutomaticSize.Y,
+		BackgroundColor3=C.Card,BorderSizePixel=0,LayoutOrder=self:_o(pi)},s)
+	corner(wrap,10)
+	stroke(wrap,C.Border,1)
+
+	local items={}
+	for i,opt in ipairs(options) do
+		local isLast=i==#options
+		local row=new("Frame",{Size=UDim2.new(1,0,0,44),BackgroundTransparency=1,LayoutOrder=i},wrap)
+		pad(row,0,0,16,16)
+		if not isLast then
+			new("Frame",{Position=UDim2.new(0,0,1,-1),Size=UDim2.new(1,0,0,1),BackgroundColor3=C.Border,BorderSizePixel=0},row)
+		end
+
+		local isActive=opt==selected
+		local radio=new("Frame",{AnchorPoint=Vector2.new(0,.5),Position=UDim2.new(0,0,.5,0),
+			Size=UDim2.fromOffset(18,18),BackgroundColor3=isActive and C.White or C.Card3,BorderSizePixel=0},row)
+		corner(radio,9)
+		stroke(radio,isActive and fromHex("aaaaaa") or C.Border2,1)
+
+		local dot=new("Frame",{AnchorPoint=Vector2.new(.5,.5),Position=UDim2.fromScale(.5,.5),
+			Size=UDim2.fromOffset(isActive and 8 or 0,isActive and 8 or 0),
+			BackgroundColor3=C.Bg,BorderSizePixel=0},radio)
+		corner(dot,4)
+
+		local lbl=new("TextLabel",{Text=opt,Font=Enum.Font.Gotham,TextSize=13,
+			TextColor3=isActive and C.White or C.Text,BackgroundTransparency=1,
+			Position=UDim2.fromOffset(28,0),Size=UDim2.new(1,-28,1,0),TextXAlignment=Enum.TextXAlignment.Left},row)
+
+		items[opt]={Radio=radio,Dot=dot,Label=lbl}
+
+		local click=new("TextButton",{Text="",BackgroundTransparency=1,Size=UDim2.fromScale(1,1),ZIndex=5,AutoButtonColor=false},row)
+		pcall(function() click.CursorIcon="rbxasset://SystemCursors/PointingHand" end)
+		click.MouseEnter:Connect(function() if opt~=selected then tw(row,.12,{BackgroundTransparency=.93}) end end)
+		click.MouseLeave:Connect(function() tw(row,.15,{BackgroundTransparency=1}) end)
+		click.Activated:Connect(function()
+			if selected==opt then return end
+			for k,v in pairs(items) do
+				local a=k==opt
+				tw(v.Radio,.2,{BackgroundColor3=a and C.White or C.Card3})
+				tw(v.Dot,.2,{Size=a and UDim2.fromOffset(8,8) or UDim2.fromOffset(0,0)})
+				tw(v.Label,.2,{TextColor3=a and C.White or C.Text})
+			end
+			selected=opt
+			if callback then callback(opt) end
+		end)
+	end
+
+	new("UIListLayout",{SortOrder=Enum.SortOrder.LayoutOrder,Padding=UDim.new(0,0)},wrap)
+	self:_gap(s,pi,6)
+	local obj={Frame=wrap}
+	function obj:GetSelected() return selected end
+	function obj:SetSelected(v)
+		if not items[v] then return end
+		for k,item in pairs(items) do
+			local a=k==v
+			tw(item.Radio,.2,{BackgroundColor3=a and C.White or C.Card3})
+			tw(item.Dot,.2,{Size=a and UDim2.fromOffset(8,8) or UDim2.fromOffset(0,0)})
+			tw(item.Label,.2,{TextColor3=a and C.White or C.Text})
+		end
+		selected=v
+	end
+	return obj
+end
+
+function Lib:AddColorPicker(pi,label,default,callback)
+	local s=self:GetPage(pi); if not s then return end
+	local palette={
+		"ffffff","d8d8d8","aaaaaa","666666","333333","000000",
+		"e84040","f07020","f0c030","00e87a","4488ff","aa44ff",
+		"ff6699","ff9966","ffee66","66ffaa","66aaff","cc88ff",
+		"ffcccc","ffddb0","fff0b0","b0ffe0","b0d0ff","e0b0ff",
+	}
+	local selected=default or palette[1]
+	local previewRef
+
+	local wrap=new("Frame",{Size=UDim2.new(1,0,0,0),AutomaticSize=Enum.AutomaticSize.Y,
+		BackgroundColor3=C.Card,BorderSizePixel=0,LayoutOrder=self:_o(pi)},s)
+	corner(wrap,10)
+	stroke(wrap,C.Border,1)
+
+	if label then
+		local hdr=new("Frame",{Size=UDim2.new(1,0,0,42),BackgroundColor3=C.Card2,BorderSizePixel=0},wrap)
+		corner(hdr,10)
+		new("Frame",{Position=UDim2.new(0,0,1,-10),Size=UDim2.new(1,0,0,10),BackgroundColor3=C.Card2,BorderSizePixel=0},hdr)
+		new("Frame",{Position=UDim2.new(0,0,1,0),Size=UDim2.new(1,0,0,1),BackgroundColor3=C.Border,BorderSizePixel=0},hdr)
+		pad(hdr,0,0,14,14)
+		hlist(hdr,10)
+		new("TextLabel",{Text=label,Font=Enum.Font.GothamBold,TextSize=12,TextColor3=C.White,
+			BackgroundTransparency=1,Size=UDim2.new(1,-40,1,0),TextXAlignment=Enum.TextXAlignment.Left,LayoutOrder=0},hdr)
+		previewRef=new("Frame",{Size=UDim2.fromOffset(24,24),BackgroundColor3=fromHex(selected),BorderSizePixel=0,LayoutOrder=1},hdr)
+		corner(previewRef,6)
+		stroke(previewRef,C.Border2,1)
+	end
+
+	local grid=new("Frame",{Size=UDim2.new(1,0,0,0),AutomaticSize=Enum.AutomaticSize.Y,BackgroundTransparency=1},wrap)
+	pad(grid,12,12,14,14)
+	new("UIGridLayout",{CellSize=UDim2.fromOffset(28,28),CellPadding=UDim2.fromOffset(6,6),SortOrder=Enum.SortOrder.LayoutOrder},grid)
+
+	local swatches={}
+	for i,hex in ipairs(palette) do
+		local sw=new("TextButton",{Text="",BackgroundColor3=fromHex(hex),BorderSizePixel=0,
+			Size=UDim2.fromOffset(28,28),AutoButtonColor=false,LayoutOrder=i},grid)
+		corner(sw,6)
+		if hex==selected then stroke(sw,C.White,2) end
+		pcall(function() sw.CursorIcon="rbxasset://SystemCursors/PointingHand" end)
+		sw.MouseEnter:Connect(function() tw(sw,.1,{Size=UDim2.fromOffset(26,26)}) end)
+		sw.MouseLeave:Connect(function() tw(sw,.12,{Size=UDim2.fromOffset(28,28)}) end)
+		swatches[hex]=sw
+		sw.Activated:Connect(function()
+			for _,s2 in pairs(swatches) do
+				local st2=s2:FindFirstChildOfClass("UIStroke")
+				if st2 then st2:Destroy() end
+			end
+			stroke(sw,C.White,2)
+			selected=hex
+			if previewRef then previewRef.BackgroundColor3=fromHex(hex) end
+			if callback then callback(fromHex(hex),hex) end
+		end)
+	end
+
+	self:_gap(s,pi,6)
+	local obj={Frame=wrap}
+	function obj:GetColor() return fromHex(selected),selected end
+	return obj
+end
+
+function Lib:AddCard(pi,title,subtitle)
+	local s=self:GetPage(pi); if not s then return end
+	local card=new("Frame",{Size=UDim2.new(1,0,0,0),AutomaticSize=Enum.AutomaticSize.Y,
+		BackgroundColor3=C.Card,BorderSizePixel=0,LayoutOrder=self:_o(pi)},s)
+	corner(card,10)
+	stroke(card,C.Border,1)
+
+	if title then
+		local hdr=new("Frame",{Size=UDim2.new(1,0,0,subtitle and 54 or 42),BackgroundColor3=C.Card2,BorderSizePixel=0},card)
+		corner(hdr,10)
+		new("Frame",{Position=UDim2.new(0,0,1,-11),Size=UDim2.new(1,0,0,11),BackgroundColor3=C.Card2,BorderSizePixel=0},hdr)
+		new("Frame",{Position=UDim2.new(0,0,1,0),Size=UDim2.new(1,0,0,1),BackgroundColor3=C.Border,BorderSizePixel=0},hdr)
+		pad(hdr,0,0,16,16)
+		new("TextLabel",{Text=title,Font=Enum.Font.GothamBold,TextSize=13,TextColor3=C.White,
+			BackgroundTransparency=1,Position=UDim2.fromOffset(0,11),
+			Size=UDim2.new(1,0,0,20),TextXAlignment=Enum.TextXAlignment.Left},hdr)
+		if subtitle then
+			new("TextLabel",{Text=subtitle,Font=Enum.Font.Gotham,TextSize=11,TextColor3=C.TextDim,
+				BackgroundTransparency=1,Position=UDim2.fromOffset(0,33),
+				Size=UDim2.new(1,0,0,16),TextXAlignment=Enum.TextXAlignment.Left},hdr)
+		end
+	end
+
+	local inner=new("Frame",{Size=UDim2.new(1,0,0,0),AutomaticSize=Enum.AutomaticSize.Y,BackgroundTransparency=1},card)
+	pad(inner,14,14,16,16)
+	new("UIListLayout",{SortOrder=Enum.SortOrder.LayoutOrder,Padding=UDim.new(0,8)},inner)
+	self:_gap(s,pi,10)
+	return inner
+end
+
+function Lib:AddLogConsole(pi,height)
+	local s=self:GetPage(pi); if not s then return end
+	local frame=new("Frame",{Size=UDim2.new(1,0,0,height or 220),BackgroundColor3=fromHex("050505"),
+		BorderSizePixel=0,ClipsDescendants=true,LayoutOrder=self:_o(pi)},s)
+	corner(frame,10)
+	stroke(frame,C.Border,1)
+
+	local hdr=new("Frame",{Size=UDim2.new(1,0,0,34),BackgroundColor3=C.Card,BorderSizePixel=0},frame)
+	corner(hdr,10)
+	new("Frame",{Position=UDim2.new(0,0,1,-11),Size=UDim2.new(1,0,0,11),BackgroundColor3=C.Card,BorderSizePixel=0},hdr)
+	new("Frame",{Position=UDim2.new(0,0,1,0),Size=UDim2.new(1,0,0,1),BackgroundColor3=C.Border,BorderSizePixel=0},hdr)
+	pad(hdr,0,0,14,14)
+	hlist(hdr,8)
+
+	local dot=new("Frame",{Size=UDim2.fromOffset(7,7),BackgroundColor3=C.Green,BorderSizePixel=0,LayoutOrder=0},hdr)
+	corner(dot,4)
+	new("TextLabel",{Text="CONSOLE",Font=Enum.Font.GothamBold,TextSize=10,TextColor3=C.TextDim,
+		BackgroundTransparency=1,Size=UDim2.new(1,0,1,0),TextXAlignment=Enum.TextXAlignment.Left,LayoutOrder=1},hdr)
+
+	local textBox=new("TextBox",{Text="",Font=Enum.Font.Code,TextSize=11,TextColor3=C.TextDim,
+		BackgroundTransparency=1,Position=UDim2.fromOffset(0,35),Size=UDim2.new(1,0,1,-35),
+		MultiLine=true,TextEditable=false,TextXAlignment=Enum.TextXAlignment.Left,
+		TextYAlignment=Enum.TextYAlignment.Bottom,ClearTextOnFocus=false,TextWrapped=true,ZIndex=2},frame)
+	pad(textBox,8,8,12,12)
+
+	self:_gap(s,pi,10)
+	local console={Frame=frame,TextBox=textBox,_dot=dot,_lines={}}
+	local pfx={INFO="[INFO]  ",SUCCESS="[OK]    ",WARN="[WARN]  ",ERROR="[ERR]   ",SNIPE="[SNIPE] ",DEBUG="[DBG]   "}
+	function console:Log(msg,level)
+		local lv=string.upper(level or "INFO")
+		local ts=os.date("%H:%M:%S")
+		table.insert(self._lines,("%s  %s  %s"):format(ts,pfx[lv] or "[INFO]  ",tostring(msg)))
+		if #self._lines>400 then table.remove(self._lines,1) end
+		self.TextBox.Text=table.concat(self._lines,"\n")
+	end
+	function console:Clear() self._lines={}; self.TextBox.Text="" end
+	function console:SetActive(v) tw(self._dot,.2,{BackgroundColor3=v and C.Green or C.Red}) end
+	return console
+end
+
+function Lib:AddSpinner(pi,label)
+	local s=self:GetPage(pi); if not s then return end
+	local row=new("Frame",{Size=UDim2.new(1,0,0,44),BackgroundColor3=C.Card,BorderSizePixel=0,LayoutOrder=self:_o(pi)},s)
+	corner(row,10)
+	stroke(row,C.Border,1)
+	pad(row,0,0,16,16)
+	hlist(row,12)
+
+	local spinWrap=new("Frame",{Size=UDim2.fromOffset(24,24),BackgroundTransparency=1,LayoutOrder=0},row)
+	local arc=new("Frame",{Size=UDim2.fromOffset(24,24),BackgroundColor3=C.Card3,BorderSizePixel=0},spinWrap)
+	corner(arc,12)
+	local arcStroke=stroke(arc,C.White,2)
+	local innerMask=new("Frame",{Size=UDim2.fromOffset(16,16),AnchorPoint=Vector2.new(.5,.5),
+		Position=UDim2.fromScale(.5,.5),BackgroundColor3=C.Card,BorderSizePixel=0},arc)
+	corner(innerMask,8)
+	new("Frame",{Size=UDim2.fromOffset(12,12),AnchorPoint=Vector2.new(0,.5),Position=UDim2.new(0,0,.5,0),
+		BackgroundColor3=C.Card3,BorderSizePixel=0},arc)
+
+	new("TextLabel",{Text=label or "Loading...",Font=Enum.Font.Gotham,TextSize=13,TextColor3=C.TextDim,
+		BackgroundTransparency=1,Size=UDim2.new(1,-36,1,0),TextXAlignment=Enum.TextXAlignment.Left,LayoutOrder=1},row)
+
+	local spinning=true
+	local angle=0
+	task.spawn(function()
+		while spinning and row and row.Parent do
+			angle=(angle+7)%360
+			arc.Rotation=angle
+			task.wait(0.033)
+		end
+	end)
+
+	self:_gap(s,pi,6)
+	local obj={Frame=row,_spinning=spinning,_arc=arc}
+	function obj:Stop()
+		spinning=false; obj._spinning=false
+		tw(arcStroke,.3,{Color=C.Border2})
+	end
+	function obj:Start()
+		if obj._spinning then return end
+		obj._spinning=true; spinning=true
+		tw(arcStroke,.3,{Color=C.White})
+		task.spawn(function()
+			while spinning and row and row.Parent do
+				angle=(angle+7)%360
+				arc.Rotation=angle
+				task.wait(0.033)
+			end
+		end)
+	end
+	return obj
+end
+
+function Lib:AddLabel(pi,text,style)
+	local s=self:GetPage(pi); if not s then return end
+	local styles={
+		title    = {size=19,color=C.White,  font=Enum.Font.GothamBold},
+		subtitle = {size=14,color=C.Text,   font=Enum.Font.GothamBold},
+		body     = {size=13,color=C.Text,   font=Enum.Font.Gotham},
+		muted    = {size=12,color=C.TextDim,font=Enum.Font.Gotham},
+		caption  = {size=10,color=C.TextOff,font=Enum.Font.Gotham},
+	}
+	local st=styles[style or "body"]
+	local lbl=new("TextLabel",{Text=text or "",Font=st.font,TextSize=st.size,TextColor3=st.color,
+		BackgroundTransparency=1,Size=UDim2.new(1,0,0,st.size+12),
+		TextXAlignment=Enum.TextXAlignment.Left,TextWrapped=true,LayoutOrder=self:_o(pi)},s)
+	self:_gap(s,pi,4)
+	return lbl
+end
+
+function Lib:AddSeparator(pi,spacing)
+	local s=self:GetPage(pi); if not s then return end
+	local sp=spacing or 6
+	self:_gap(s,pi,sp)
+	new("Frame",{Size=UDim2.new(1,0,0,1),BackgroundColor3=C.Border,BorderSizePixel=0,LayoutOrder=self:_o(pi)},s)
+	self:_gap(s,pi,sp)
+end
+
+function Lib:AddDivider(pi,text,spacing)
+	local s=self:GetPage(pi); if not s then return end
+	local sp=spacing or 8
+	self:_gap(s,pi,sp)
+	if text and text~="" then
+		local row=new("Frame",{Size=UDim2.new(1,0,0,16),BackgroundTransparency=1,LayoutOrder=self:_o(pi)},s)
+		new("Frame",{AnchorPoint=Vector2.new(0,.5),Position=UDim2.new(0,0,.5,0),
+			Size=UDim2.new(.36,0,0,1),BackgroundColor3=C.Border,BorderSizePixel=0},row)
+		new("TextLabel",{Text=string.upper(text),Font=Enum.Font.GothamBold,TextSize=9,TextColor3=C.TextOff,
+			BackgroundTransparency=1,AnchorPoint=Vector2.new(.5,.5),Position=UDim2.fromScale(.5,.5),
+			Size=UDim2.new(.24,0,1,0),TextXAlignment=Enum.TextXAlignment.Center},row)
+		new("Frame",{AnchorPoint=Vector2.new(1,.5),Position=UDim2.new(1,0,.5,0),
+			Size=UDim2.new(.36,0,0,1),BackgroundColor3=C.Border,BorderSizePixel=0},row)
+	else
+		new("Frame",{Size=UDim2.new(1,0,0,1),BackgroundColor3=C.Border,BorderSizePixel=0,LayoutOrder=self:_o(pi)},s)
+	end
+	self:_gap(s,pi,sp)
+end
+
 function Lib:AddParagraph(pi,title,content)
 	local s=self:GetPage(pi); if not s then return end
-
-	local wrap=new("Frame",{Size=UDim2.new(1,0,0,0),AutomaticSize=Enum.AutomaticSize.Y,BackgroundColor3=C.Card,BorderSizePixel=0,LayoutOrder=self:_o(pi)},s)
+	local wrap=new("Frame",{Size=UDim2.new(1,0,0,0),AutomaticSize=Enum.AutomaticSize.Y,
+		BackgroundColor3=C.Card,BorderSizePixel=0,LayoutOrder=self:_o(pi)},s)
 	corner(wrap,10)
 	stroke(wrap,C.Border,1)
 	pad(wrap,14,14,16,16)
 	vlist(wrap,8)
-
-	local titleLbl=new("TextLabel",{Text=title or "",Font=Enum.Font.GothamBold,TextSize=13,TextColor3=C.White,BackgroundTransparency=1,Size=UDim2.new(1,0,0,0),AutomaticSize=Enum.AutomaticSize.Y,TextXAlignment=Enum.TextXAlignment.Left,TextWrapped=true,LayoutOrder=0},wrap)
+	local titleLbl=new("TextLabel",{Text=title or "",Font=Enum.Font.GothamBold,TextSize=13,TextColor3=C.White,
+		BackgroundTransparency=1,Size=UDim2.new(1,0,0,0),AutomaticSize=Enum.AutomaticSize.Y,
+		TextXAlignment=Enum.TextXAlignment.Left,TextWrapped=true,LayoutOrder=0},wrap)
 	new("Frame",{Size=UDim2.new(1,0,0,1),BackgroundColor3=C.Border,BorderSizePixel=0,LayoutOrder=1},wrap)
-	local contentLbl=new("TextLabel",{Text=content or "",Font=Enum.Font.Gotham,TextSize=12,TextColor3=C.TextDim,BackgroundTransparency=1,Size=UDim2.new(1,0,0,0),AutomaticSize=Enum.AutomaticSize.Y,TextXAlignment=Enum.TextXAlignment.Left,TextWrapped=true,LayoutOrder=2},wrap)
-
+	local contentLbl=new("TextLabel",{Text=content or "",Font=Enum.Font.Gotham,TextSize=12,TextColor3=C.TextDim,
+		BackgroundTransparency=1,Size=UDim2.new(1,0,0,0),AutomaticSize=Enum.AutomaticSize.Y,
+		TextXAlignment=Enum.TextXAlignment.Left,TextWrapped=true,LayoutOrder=2},wrap)
 	self:_gap(s,pi,6)
 	local obj={Frame=wrap,TitleLabel=titleLbl,ContentLabel=contentLbl}
 	function obj:Set(t,c)
@@ -1105,109 +1513,48 @@ function Lib:AddParagraph(pi,title,content)
 	return obj
 end
 
-function Lib:AddKeybind(pi,label,default,callback)
+function Lib:AddRichLabel(pi,content)
 	local s=self:GetPage(pi); if not s then return end
-	local currentKey=default or "None"
-	local listening=false
-
-	local row=new("Frame",{Size=UDim2.new(1,0,0,48),BackgroundColor3=C.Card,BorderSizePixel=0,LayoutOrder=self:_o(pi)},s)
-	corner(row,10)
-	stroke(row,C.Border,1)
-	pad(row,0,0,16,16)
-
-	new("TextLabel",{Text=label or "",Font=Enum.Font.Gotham,TextSize=13,TextColor3=C.Text,BackgroundTransparency=1,Size=UDim2.new(1,-120,1,0),TextXAlignment=Enum.TextXAlignment.Left},row)
-
-	local keyBtn=new("TextButton",{Text=currentKey,Font=Enum.Font.GothamBold,TextSize=11,TextColor3=C.White,BackgroundColor3=C.Card3,BorderSizePixel=0,AnchorPoint=Vector2.new(1,.5),Position=UDim2.new(1,0,.5,0),Size=UDim2.fromOffset(90,32),AutoButtonColor=false},row)
-	corner(keyBtn,8)
-	stroke(keyBtn,C.Border2,1)
-	pcall(function() keyBtn.CursorIcon="rbxasset://SystemCursors/PointingHand" end)
-
-	keyBtn.Activated:Connect(function()
-		if listening then return end
-		listening=true
-		keyBtn.Text="..."
-		tw(keyBtn,.15,{BackgroundColor3=C.Card2})
-	end)
-
-	table.insert(self._conns,UserInputService.InputBegan:Connect(function(input,gp)
-		if not listening then return end
-		if input.UserInputType~=Enum.UserInputType.Keyboard then return end
-		local kc=input.KeyCode
-		if kc==Enum.KeyCode.Escape then
-			listening=false
-			keyBtn.Text=currentKey
-			tw(keyBtn,.15,{BackgroundColor3=C.Card3})
-			return
-		end
-		local name=tostring(kc):gsub("Enum.KeyCode.","")
-		currentKey=name
-		keyBtn.Text=name
-		listening=false
-		tw(keyBtn,.15,{BackgroundColor3=C.Card3})
-		if callback then callback(name) end
-	end))
-
-	row.MouseEnter:Connect(function() tw(row,.15,{BackgroundColor3=C.Card2}) end)
-	row.MouseLeave:Connect(function() tw(row,.18,{BackgroundColor3=C.Card}) end)
-
+	local lbl=new("TextLabel",{
+		Text=content or "",Font=Enum.Font.Gotham,TextSize=13,TextColor3=C.Text,
+		BackgroundTransparency=1,Size=UDim2.new(1,0,0,0),AutomaticSize=Enum.AutomaticSize.Y,
+		TextXAlignment=Enum.TextXAlignment.Left,TextWrapped=true,RichText=true,LayoutOrder=self:_o(pi),
+	},s)
 	self:_gap(s,pi,6)
-	local obj={Frame=row,Button=keyBtn}
-	function obj:GetKey() return currentKey end
-	function obj:SetKey(k) currentKey=k; keyBtn.Text=k end
+	local obj={Label=lbl}
+	function obj:Set(text) self.Label.Text=text end
+	function obj:Show() self.Label.Visible=true end
+	function obj:Hide() self.Label.Visible=false end
 	return obj
 end
 
-function Lib:AddBadge(pi, text, style)
-	local s=self:GetPage(pi); if not s then return end
-	local styleMap={
-		default ={bg=C.Card3,   tc=C.TextDim, dot=nil},
-		success ={bg=C.GreenBg, tc=C.Green,   dot=C.Green},
-		error   ={bg=C.RedBg,   tc=C.Red,     dot=C.Red},
-		warning ={bg=C.YellowBg,tc=C.Yellow,  dot=C.Yellow},
-		info    ={bg=C.BlueBg,  tc=C.Blue,    dot=C.Blue},
-		white   ={bg=C.Card2,   tc=C.White,   dot=nil},
-	}
-	local st=styleMap[style or "default"] or styleMap.default
-	local wrap=new("Frame",{Size=UDim2.new(0,0,0,26),AutomaticSize=Enum.AutomaticSize.X,BackgroundColor3=st.bg,BorderSizePixel=0,LayoutOrder=self:_o(pi)},s)
-	corner(wrap,6)
-	pad(wrap,0,0,st.dot and 8 or 10, 10)
-	hlist(wrap,6)
-	if st.dot then
-		local d=new("Frame",{Size=UDim2.fromOffset(6,6),BackgroundColor3=st.dot,BorderSizePixel=0,LayoutOrder=0},wrap)
-		corner(d,3)
-	end
-	local lbl=new("TextLabel",{Text=text or "",Font=Enum.Font.GothamBold,TextSize=11,TextColor3=st.tc,BackgroundTransparency=1,Size=UDim2.new(0,0,1,0),AutomaticSize=Enum.AutomaticSize.X,LayoutOrder=1},wrap)
-	self:_gap(s,pi,6)
-	local obj={Frame=wrap,Label=lbl}
-	function obj:Set(t) self.Label.Text=t end
-	return obj
-end
-
-function Lib:AddAlert(pi, title, message, style)
+function Lib:AddAlert(pi,title,message,style)
 	local s=self:GetPage(pi); if not s then return end
 	local styleMap={
 		info    ={accent=C.Blue,   bg=C.BlueBg,   tc=C.Blue},
 		success ={accent=C.Green,  bg=C.GreenBg,  tc=C.Green},
 		warning ={accent=C.Yellow, bg=C.YellowBg, tc=C.Yellow},
 		error   ={accent=C.Red,    bg=C.RedBg,    tc=C.Red},
+		purple  ={accent=C.Purple, bg=C.PurpleBg, tc=C.Purple},
 	}
 	local st=styleMap[style or "info"] or styleMap.info
-
-	local wrap=new("Frame",{Size=UDim2.new(1,0,0,0),AutomaticSize=Enum.AutomaticSize.Y,BackgroundColor3=st.bg,BorderSizePixel=0,LayoutOrder=self:_o(pi)},s)
+	local wrap=new("Frame",{Size=UDim2.new(1,0,0,0),AutomaticSize=Enum.AutomaticSize.Y,
+		BackgroundColor3=st.bg,BorderSizePixel=0,LayoutOrder=self:_o(pi)},s)
 	corner(wrap,10)
 	pad(wrap,12,12,16,16)
-
-	local accent=new("Frame",{Size=UDim2.fromOffset(3,0),AutomaticSize=Enum.AutomaticSize.Y,BackgroundColor3=st.accent,BorderSizePixel=0,AnchorPoint=Vector2.new(0,.5),Position=UDim2.new(0,0,.5,0)},wrap)
-	corner(accent,2)
-
-	local inner=new("Frame",{Position=UDim2.fromOffset(12,0),Size=UDim2.new(1,-12,0,0),AutomaticSize=Enum.AutomaticSize.Y,BackgroundTransparency=1},wrap)
+	new("Frame",{Size=UDim2.fromOffset(3,0),AutomaticSize=Enum.AutomaticSize.Y,BackgroundColor3=st.accent,
+		BorderSizePixel=0,AnchorPoint=Vector2.new(0,.5),Position=UDim2.new(0,0,.5,0)},wrap)
+	local inner=new("Frame",{Position=UDim2.fromOffset(12,0),Size=UDim2.new(1,-12,0,0),
+		AutomaticSize=Enum.AutomaticSize.Y,BackgroundTransparency=1},wrap)
 	vlist(inner,4)
-
 	if title and title~="" then
-		new("TextLabel",{Text=title,Font=Enum.Font.GothamBold,TextSize=13,TextColor3=st.tc,BackgroundTransparency=1,Size=UDim2.new(1,0,0,0),AutomaticSize=Enum.AutomaticSize.Y,TextXAlignment=Enum.TextXAlignment.Left,TextWrapped=true,LayoutOrder=0},inner)
+		new("TextLabel",{Text=title,Font=Enum.Font.GothamBold,TextSize=13,TextColor3=st.tc,
+			BackgroundTransparency=1,Size=UDim2.new(1,0,0,0),AutomaticSize=Enum.AutomaticSize.Y,
+			TextXAlignment=Enum.TextXAlignment.Left,TextWrapped=true,LayoutOrder=0},inner)
 	end
-	local msgLbl=new("TextLabel",{Text=message or "",Font=Enum.Font.Gotham,TextSize=12,TextColor3=C.TextDim,BackgroundTransparency=1,Size=UDim2.new(1,0,0,0),AutomaticSize=Enum.AutomaticSize.Y,TextXAlignment=Enum.TextXAlignment.Left,TextWrapped=true,LayoutOrder=1},inner)
-
+	local msgLbl=new("TextLabel",{Text=message or "",Font=Enum.Font.Gotham,TextSize=12,TextColor3=C.TextDim,
+		BackgroundTransparency=1,Size=UDim2.new(1,0,0,0),AutomaticSize=Enum.AutomaticSize.Y,
+		TextXAlignment=Enum.TextXAlignment.Left,TextWrapped=true,LayoutOrder=1},inner)
 	self:_gap(s,pi,6)
 	local obj={Frame=wrap,MessageLabel=msgLbl}
 	function obj:Set(msg) self.MessageLabel.Text=msg or "" end
@@ -1216,7 +1563,36 @@ function Lib:AddAlert(pi, title, message, style)
 	return obj
 end
 
-function Lib:AddProgressBar(pi, label, value, maxVal)
+function Lib:AddBadge(pi,text,style)
+	local s=self:GetPage(pi); if not s then return end
+	local styleMap={
+		default ={bg=C.Card3,    tc=C.TextDim,dot=nil},
+		success ={bg=C.GreenBg,  tc=C.Green,  dot=C.Green},
+		error   ={bg=C.RedBg,    tc=C.Red,    dot=C.Red},
+		warning ={bg=C.YellowBg, tc=C.Yellow, dot=C.Yellow},
+		info    ={bg=C.BlueBg,   tc=C.Blue,   dot=C.Blue},
+		white   ={bg=C.Card2,    tc=C.White,  dot=nil},
+		purple  ={bg=C.PurpleBg, tc=C.Purple, dot=C.Purple},
+	}
+	local st=styleMap[style or "default"] or styleMap.default
+	local wrap=new("Frame",{Size=UDim2.new(0,0,0,26),AutomaticSize=Enum.AutomaticSize.X,
+		BackgroundColor3=st.bg,BorderSizePixel=0,LayoutOrder=self:_o(pi)},s)
+	corner(wrap,6)
+	pad(wrap,0,0,st.dot and 8 or 10,10)
+	hlist(wrap,6)
+	if st.dot then
+		local d=new("Frame",{Size=UDim2.fromOffset(6,6),BackgroundColor3=st.dot,BorderSizePixel=0,LayoutOrder=0},wrap)
+		corner(d,3)
+	end
+	local lbl=new("TextLabel",{Text=text or "",Font=Enum.Font.GothamBold,TextSize=11,TextColor3=st.tc,
+		BackgroundTransparency=1,Size=UDim2.new(0,0,1,0),AutomaticSize=Enum.AutomaticSize.X,LayoutOrder=1},wrap)
+	self:_gap(s,pi,6)
+	local obj={Frame=wrap,Label=lbl}
+	function obj:Set(t) self.Label.Text=t end
+	return obj
+end
+
+function Lib:AddProgressBar(pi,label,value,maxVal)
 	local s=self:GetPage(pi); if not s then return end
 	value=value or 0; maxVal=maxVal or 100
 	local pct=math.clamp(value/maxVal,0,1)
@@ -1227,10 +1603,14 @@ function Lib:AddProgressBar(pi, label, value, maxVal)
 	pad(wrap,12,12,16,16)
 
 	local topRow=new("Frame",{Size=UDim2.new(1,0,0,16),BackgroundTransparency=1},wrap)
-	new("TextLabel",{Text=label or "",Font=Enum.Font.Gotham,TextSize=12,TextColor3=C.Text,BackgroundTransparency=1,Size=UDim2.new(1,-40,1,0),TextXAlignment=Enum.TextXAlignment.Left},topRow)
-	local pctLbl=new("TextLabel",{Text=math.floor(pct*100).."%",Font=Enum.Font.GothamBold,TextSize=11,TextColor3=C.White,BackgroundTransparency=1,AnchorPoint=Vector2.new(1,0),Position=UDim2.new(1,0,0,0),Size=UDim2.fromOffset(40,16),TextXAlignment=Enum.TextXAlignment.Right},topRow)
+	new("TextLabel",{Text=label or "",Font=Enum.Font.Gotham,TextSize=12,TextColor3=C.Text,
+		BackgroundTransparency=1,Size=UDim2.new(1,-40,1,0),TextXAlignment=Enum.TextXAlignment.Left},topRow)
+	local pctLbl=new("TextLabel",{Text=math.floor(pct*100).."%",Font=Enum.Font.GothamBold,TextSize=11,TextColor3=C.White,
+		BackgroundTransparency=1,AnchorPoint=Vector2.new(1,0),Position=UDim2.new(1,0,0,0),
+		Size=UDim2.fromOffset(40,16),TextXAlignment=Enum.TextXAlignment.Right},topRow)
 
-	local trackBg=new("Frame",{Position=UDim2.fromOffset(0,26),Size=UDim2.new(1,0,0,8),BackgroundColor3=C.Card3,BorderSizePixel=0},wrap)
+	local trackBg=new("Frame",{Position=UDim2.fromOffset(0,26),Size=UDim2.new(1,0,0,8),
+		BackgroundColor3=C.Card3,BorderSizePixel=0},wrap)
 	corner(trackBg,4)
 	local fill=new("Frame",{Size=UDim2.fromScale(pct,1),BackgroundColor3=C.White,BorderSizePixel=0},trackBg)
 	corner(fill,4)
@@ -1247,67 +1627,25 @@ function Lib:AddProgressBar(pi, label, value, maxVal)
 	return obj
 end
 
-function Lib:AddRichLabel(pi, content)
-	local s=self:GetPage(pi); if not s then return end
-	local lbl=new("TextLabel",{
-		Text=content or "",
-		Font=Enum.Font.Gotham,
-		TextSize=13,
-		TextColor3=C.Text,
-		BackgroundTransparency=1,
-		Size=UDim2.new(1,0,0,0),
-		AutomaticSize=Enum.AutomaticSize.Y,
-		TextXAlignment=Enum.TextXAlignment.Left,
-		TextWrapped=true,
-		RichText=true,
-		LayoutOrder=self:_o(pi),
-	},s)
-	self:_gap(s,pi,6)
-	local obj={Label=lbl}
-	function obj:Set(text) self.Label.Text=text end
-	function obj:Show() self.Label.Visible=true end
-	function obj:Hide() self.Label.Visible=false end
-	return obj
-end
-
-function Lib:AddDivider(pi, text, spacing)
-	local s=self:GetPage(pi); if not s then return end
-	local sp=spacing or 8
-	self:_gap(s,pi,sp)
-
-	if text and text~="" then
-		local row=new("Frame",{Size=UDim2.new(1,0,0,16),BackgroundTransparency=1,LayoutOrder=self:_o(pi)},s)
-		new("Frame",{AnchorPoint=Vector2.new(0,.5),Position=UDim2.new(0,0,.5,0),Size=UDim2.new(.36,0,0,1),BackgroundColor3=C.Border,BorderSizePixel=0},row)
-		new("TextLabel",{Text=string.upper(text),Font=Enum.Font.GothamBold,TextSize=9,TextColor3=C.TextOff,BackgroundTransparency=1,AnchorPoint=Vector2.new(.5,.5),Position=UDim2.fromScale(.5,.5),Size=UDim2.new(.24,0,1,0),TextXAlignment=Enum.TextXAlignment.Center},row)
-		new("Frame",{AnchorPoint=Vector2.new(1,.5),Position=UDim2.new(1,0,.5,0),Size=UDim2.new(.36,0,0,1),BackgroundColor3=C.Border,BorderSizePixel=0},row)
-	else
-		new("Frame",{Size=UDim2.new(1,0,0,1),BackgroundColor3=C.Border,BorderSizePixel=0,LayoutOrder=self:_o(pi)},s)
-	end
-	self:_gap(s,pi,sp)
-end
-
-function Lib:AddTable(pi, headers, rows)
+function Lib:AddTable(pi,headers,rows)
 	local s=self:GetPage(pi); if not s then return end
 	local cols=#headers
 	local rowH=36
 
 	local wrap=new("Frame",{
 		Size=UDim2.new(1,0,0,(#rows+1)*rowH),
-		BackgroundColor3=C.Card,
-		BorderSizePixel=0,
-		LayoutOrder=self:_o(pi),
-		ClipsDescendants=true,
+		BackgroundColor3=C.Card,BorderSizePixel=0,
+		LayoutOrder=self:_o(pi),ClipsDescendants=true,
 	},s)
 	corner(wrap,10)
 	stroke(wrap,C.Border,1)
 
-	local function makeRow(data, isHeader, rowIndex)
+	local function makeRow(data,isHeader,rowIndex)
 		local bg=isHeader and C.Card2 or (rowIndex%2==0 and C.Card or C.Sidebar)
 		local f=new("Frame",{
 			Size=UDim2.new(1,0,0,rowH),
-			Position=UDim2.fromOffset(0,(rowIndex)*rowH),
-			BackgroundColor3=bg,
-			BorderSizePixel=0,
+			Position=UDim2.fromOffset(0,rowIndex*rowH),
+			BackgroundColor3=bg,BorderSizePixel=0,
 		},wrap)
 		if isHeader then
 			new("Frame",{Position=UDim2.new(0,0,1,-1),Size=UDim2.new(1,0,0,1),BackgroundColor3=C.Border,BorderSizePixel=0},f)
@@ -1316,8 +1654,7 @@ function Lib:AddTable(pi, headers, rows)
 			new("TextLabel",{
 				Text=tostring(txt),
 				Font=isHeader and Enum.Font.GothamBold or Enum.Font.Gotham,
-				TextSize=11,
-				TextColor3=isHeader and C.White or C.Text,
+				TextSize=11,TextColor3=isHeader and C.White or C.Text,
 				BackgroundTransparency=1,
 				Position=UDim2.new((c-1)/cols,8,0,0),
 				Size=UDim2.new(1/cols,-10,1,0),
@@ -1333,15 +1670,129 @@ function Lib:AddTable(pi, headers, rows)
 	end
 
 	makeRow(headers,true,0)
-	for i,row in ipairs(rows) do
-		makeRow(row,false,i)
-	end
+	for i,row in ipairs(rows) do makeRow(row,false,i) end
 
 	self:_gap(s,pi,10)
-	local obj={Frame=wrap,_headers=headers,_rows=rows}
+	local obj={Frame=wrap}
 	function obj:Show() self.Frame.Visible=true end
 	function obj:Hide() self.Frame.Visible=false end
 	return obj
+end
+
+function Lib:AddKeybind(pi,label,default,callback)
+	local s=self:GetPage(pi); if not s then return end
+	local currentKey=default or "None"
+	local listening=false
+
+	local row=new("Frame",{Size=UDim2.new(1,0,0,48),BackgroundColor3=C.Card,BorderSizePixel=0,LayoutOrder=self:_o(pi)},s)
+	corner(row,10)
+	stroke(row,C.Border,1)
+	pad(row,0,0,16,16)
+	new("TextLabel",{Text=label or "",Font=Enum.Font.Gotham,TextSize=13,TextColor3=C.Text,
+		BackgroundTransparency=1,Size=UDim2.new(1,-120,1,0),TextXAlignment=Enum.TextXAlignment.Left},row)
+
+	local keyBtn=new("TextButton",{Text=currentKey,Font=Enum.Font.GothamBold,TextSize=11,TextColor3=C.White,
+		BackgroundColor3=C.Card3,BorderSizePixel=0,AnchorPoint=Vector2.new(1,.5),Position=UDim2.new(1,0,.5,0),
+		Size=UDim2.fromOffset(90,32),AutoButtonColor=false},row)
+	corner(keyBtn,8)
+	stroke(keyBtn,C.Border2,1)
+	pcall(function() keyBtn.CursorIcon="rbxasset://SystemCursors/PointingHand" end)
+
+	keyBtn.Activated:Connect(function()
+		if listening then return end
+		listening=true; keyBtn.Text="..."
+		tw(keyBtn,.15,{BackgroundColor3=C.Card2})
+	end)
+	table.insert(self._conns,UserInputService.InputBegan:Connect(function(input,gp)
+		if not listening then return end
+		if input.UserInputType~=Enum.UserInputType.Keyboard then return end
+		local kc=input.KeyCode
+		if kc==Enum.KeyCode.Escape then
+			listening=false; keyBtn.Text=currentKey
+			tw(keyBtn,.15,{BackgroundColor3=C.Card3})
+			return
+		end
+		local name=tostring(kc):gsub("Enum.KeyCode.","")
+		currentKey=name; keyBtn.Text=name; listening=false
+		tw(keyBtn,.15,{BackgroundColor3=C.Card3})
+		if callback then callback(name) end
+	end))
+	row.MouseEnter:Connect(function() tw(row,.15,{BackgroundColor3=C.Card2}) end)
+	row.MouseLeave:Connect(function() tw(row,.18,{BackgroundColor3=C.Card}) end)
+
+	self:_gap(s,pi,6)
+	local obj={Frame=row,Button=keyBtn}
+	function obj:GetKey() return currentKey end
+	function obj:SetKey(k) currentKey=k; keyBtn.Text=k end
+	return obj
+end
+
+function Lib:CreateStatusBadge(parent,state)
+	local sp={
+		on   ={text="ONLINE", bg=C.GreenBg, tc=C.Green,  dot=C.Green},
+		off  ={text="OFFLINE",bg=C.RedBg,   tc=C.Red,    dot=C.Red},
+		idle ={text="IDLE",   bg=C.YellowBg,tc=C.Yellow, dot=C.Yellow},
+	}
+	local st=sp[state or "idle"]
+	local frame=new("Frame",{Size=UDim2.fromOffset(82,26),BackgroundColor3=st.bg,BorderSizePixel=0},parent)
+	corner(frame,7)
+	pad(frame,0,0,10,10)
+	hlist(frame,7)
+	local dot=new("Frame",{Size=UDim2.fromOffset(6,6),BackgroundColor3=st.dot,BorderSizePixel=0,LayoutOrder=0},frame)
+	corner(dot,3)
+	local lbl=new("TextLabel",{Text=st.text,Font=Enum.Font.GothamBold,TextSize=10,TextColor3=st.tc,
+		BackgroundTransparency=1,Size=UDim2.new(0,0,1,0),AutomaticSize=Enum.AutomaticSize.X,LayoutOrder=1},frame)
+	local badge={Frame=frame,Label=lbl,Dot=dot,_sp=sp}
+	function badge:SetState(ns)
+		local p=self._sp[ns]; if not p then return end
+		tw(self.Frame,.2,{BackgroundColor3=p.bg})
+		tw(self.Dot,.2,{BackgroundColor3=p.dot})
+		self.Label.Text=p.text; self.Label.TextColor3=p.tc
+	end
+	return badge
+end
+
+function Lib:ShowNotification(msg,style,duration,title)
+	local styleMap={
+		info    ={dot=C.Blue,  bg=C.BlueBg},
+		success ={dot=C.Green, bg=C.GreenBg},
+		warning ={dot=C.Yellow,bg=C.YellowBg},
+		error   ={dot=C.Red,   bg=C.RedBg},
+		purple  ={dot=C.Purple,bg=C.PurpleBg},
+	}
+	local st=styleMap[style or "info"] or styleMap.info
+	local h=title and 60 or 44
+
+	local notif=new("Frame",{Size=UDim2.new(1,0,0,h),BackgroundColor3=C.Card2,
+		BackgroundTransparency=1,BorderSizePixel=0,ZIndex=201,
+		Position=UDim2.new(0,0,1,0)},self._notifHolder)
+	corner(notif,10)
+	stroke(notif,C.Border2,1)
+	pad(notif,10,10,14,14)
+
+	new("Frame",{Size=UDim2.fromOffset(3,h>44 and 40 or 24),BackgroundColor3=st.dot,
+		BorderSizePixel=0,ZIndex=202,AnchorPoint=Vector2.new(0,.5),Position=UDim2.new(0,0,.5,0)},notif)
+
+	if title then
+		new("TextLabel",{Text=title,Font=Enum.Font.GothamBold,TextSize=13,TextColor3=C.White,
+			BackgroundTransparency=1,Position=UDim2.fromOffset(12,0),
+			Size=UDim2.new(1,-12,0,20),TextXAlignment=Enum.TextXAlignment.Left,ZIndex=202},notif)
+	end
+	new("TextLabel",{Text=msg or "",Font=Enum.Font.Gotham,TextSize=12,TextColor3=C.TextDim,
+		BackgroundTransparency=1,
+		Position=title and UDim2.fromOffset(12,22) or UDim2.fromOffset(12,0),
+		Size=UDim2.new(1,-12,0,0),AutomaticSize=Enum.AutomaticSize.Y,
+		TextXAlignment=Enum.TextXAlignment.Left,TextWrapped=true,ZIndex=202},notif)
+
+	tw(notif,.38,{BackgroundTransparency=0,Position=UDim2.new(0,0,0,0)},Enum.EasingStyle.Back,Enum.EasingDirection.Out)
+
+	task.delay(duration or 3.5,function()
+		if not notif or not notif.Parent then return end
+		tw(notif,.22,{BackgroundTransparency=1,Position=UDim2.new(0,0,1,0)},Enum.EasingStyle.Quint,Enum.EasingDirection.In)
+		task.delay(.25,function()
+			if notif and notif.Parent then notif:Destroy() end
+		end)
+	end)
 end
 
 function Lib:ShowElement(obj)
@@ -1364,25 +1815,15 @@ function Lib:HideElement(obj)
 	task.delay(.24,function() if f and f.Parent then f.Visible=false end end)
 end
 
-function Lib:Destroy()
-	for _,c in ipairs(self._conns) do pcall(function() c:Disconnect() end) end
-	if self._sg and self._sg.Parent then
-		if self.Window then tw(self.Window,.2,{BackgroundTransparency=1}) end
-		task.delay(.24,function() pcall(function() self._sg:Destroy() end) end)
-	end
-end
-
 function Lib:_runDemo()
 	local lp = LocalPlayer
 
-	-- ──────────────────────────── PAGE 1 · DASHBOARD ────────────────────────────
-	self:AddSectionHeader(1, "Dashboard", "Status geral do SlaoqUILib demo")
-
-	-- Métricas ao vivo do personagem
 	local function getHum()
 		local char = lp.Character
 		return char and char:FindFirstChildOfClass("Humanoid")
 	end
+
+	self:AddSectionHeader(1, "Dashboard", "Live overview of SlaoqUILib v5.0")
 
 	local metrics = self:AddMetricRow(1, {
 		{Label="Walk Speed",  Value=getHum() and getHum().WalkSpeed  or 16,  Unit="studs/s"},
@@ -1390,72 +1831,58 @@ function Lib:_runDemo()
 		{Label="Jump Power",  Value=getHum() and getHum().JumpPower  or 50,  Unit="power"},
 	})
 
-	-- Atualiza métricas a cada segundo
 	task.spawn(function()
 		while self._sg and self._sg.Parent do
 			task.wait(1)
 			local hum = getHum()
 			if hum and metrics then
-				self:SetMetricValue(metrics[1], hum.WalkSpeed)
+				self:SetMetricValue(metrics[1], math.floor(hum.WalkSpeed))
 				self:SetMetricValue(metrics[2], math.floor(hum.Health))
-				self:SetMetricValue(metrics[3], hum.JumpPower)
+				self:SetMetricValue(metrics[3], math.floor(hum.JumpPower))
 			end
 		end
 	end)
 
 	self:AddDivider(1, "Status")
-
 	local hpBar = self:AddProgressBar(1, "Health", 100, 100)
-	local xpBar = self:AddProgressBar(1, "Experience (exemplo)", 34, 100)
+	self:AddProgressBar(1, "Experience (demo)", 34, 100)
 
-	-- Atualiza barra de HP junto com o personagem
 	task.spawn(function()
 		while self._sg and self._sg.Parent do
 			task.wait(0.5)
 			local hum = getHum()
 			if hum and hpBar then
-				hpBar:SetValue(math.floor(hum.Health / hum.MaxHealth * 100))
+				hpBar:SetValue(math.floor(hum.Health / math.max(hum.MaxHealth,1) * 100))
 			end
 		end
 	end)
 
-	self:AddDivider(1, "Alertas")
-	self:AddAlert(1, "Bem-vindo!", "Execute Lib.new({...}) para usar a lib no seu projeto.", "info")
-	self:AddAlert(1, "Dica", "Todas as páginas abaixo mostram componentes funcionais interativos.", "success")
-	self:AddAlert(1, "Aviso de exemplo", "Use AddAlert() com estilos: info, success, warning, error.", "warning")
+	self:AddDivider(1, "Alerts")
+	self:AddAlert(1, "Welcome!", "Run Lib.new({...}) to use this library in your project.", "info")
+	self:AddAlert(1, "Tip", "All pages below contain live, interactive components.", "success")
+	self:AddAlert(1, "Keyboard shortcut", "Set ToggleKey='RightShift' in your config to bind a hide/show key.", "warning")
 
-	-- ──────────────────────────── PAGE 2 · PLAYER ───────────────────────────────
-	self:AddSectionHeader(2, "Player Controls", "Controle seu personagem em tempo real")
-	self:AddLabel(2, "Sliders, toggles e botões que modificam o personagem direto no jogo.", "muted")
-	self:AddDivider(2, "Sliders")
+	self:AddSectionHeader(2, "Player Controls", "Modify your character in real time")
+	self:AddLabel(2, "All sliders and toggles apply immediately — no need to confirm.", "muted")
+	self:AddDivider(2, "Movement")
 
 	local speedSlider = self:AddSlider(2, "Walk Speed", 0, 100, 16, function(v)
-		local hum = getHum()
-		if hum then hum.WalkSpeed = v end
+		local hum = getHum(); if hum then hum.WalkSpeed = v end
 	end)
-
 	local jumpSlider = self:AddSlider(2, "Jump Power", 0, 200, 50, function(v)
-		local hum = getHum()
-		if hum then hum.JumpPower = v end
+		local hum = getHum(); if hum then hum.JumpPower = v end
 	end)
 
+	self:AddDivider(2, "Health")
 	local healthSlider = self:AddSlider(2, "Health", 0, 100, 100, function(v)
-		local hum = getHum()
-		if hum then hum.Health = v end
+		local hum = getHum(); if hum then hum.Health = v end
 	end)
 
 	self:AddDivider(2, "Toggles")
-
-	self:AddToggle(2, "God Mode (vida infinita)", false, function(v)
+	self:AddToggle(2, "God Mode", false, function(v)
 		local hum = getHum()
-		if hum then
-			hum.MaxHealth = v and math.huge or 100
-			if v then hum.Health = math.huge end
-		end
-		self:ShowNotification(
-			v and "God Mode ativado!" or "God Mode desativado",
-			v and "success" or "warning", 2.5
-		)
+		if hum then hum.MaxHealth = v and math.huge or 100; if v then hum.Health = math.huge end end
+		self:ShowNotification(v and "God Mode enabled" or "God Mode disabled", v and "success" or "warning", 2.5)
 	end)
 
 	local _jumpConn
@@ -1467,189 +1894,208 @@ function Lib:_runDemo()
 				if hum then hum:ChangeState(Enum.HumanoidStateType.Jumping) end
 			end)
 		end
-		self:ShowNotification(
-			v and "Infinite Jump ativado!" or "Infinite Jump desativado",
-			v and "success" or "info", 2.5
-		)
+		self:ShowNotification(v and "Infinite Jump enabled" or "Infinite Jump disabled", v and "success" or "info", 2.5)
 	end)
 
-	self:AddToggle(2, "Velocidade turbo (x3)", false, function(v)
+	self:AddToggle(2, "Turbo Speed (x3)", false, function(v)
 		local hum = getHum()
-		if hum then
-			hum.WalkSpeed = v and 48 or 16
-			speedSlider:SetValue(hum.WalkSpeed)
-		end
-		self:ShowNotification(
-			v and "Turbo ativado! (48 studs/s)" or "Velocidade normal restaurada",
-			v and "success" or "info", 2
-		)
+		if hum then hum.WalkSpeed = v and 48 or 16; speedSlider:SetValue(hum.WalkSpeed) end
+		self:ShowNotification(v and "Turbo enabled — 48 studs/s" or "Speed restored", v and "success" or "info", 2)
 	end)
 
-	self:AddDivider(2, "Ações")
-
+	self:AddDivider(2, "Actions")
 	self:AddButtonRow(2, {
-		{Text="Full Health",   Style="success", Width=120, Callback=function()
-			local hum = getHum()
-			if hum then hum.Health = hum.MaxHealth end
+		{Text="Full Health",  Style="success", Width=120, Callback=function()
+			local hum = getHum(); if hum then hum.Health = hum.MaxHealth end
 			healthSlider:SetValue(100)
-			self:ShowNotification("Vida totalmente restaurada!", "success", 2)
+			self:ShowNotification("Health fully restored!", "success", 2)
 		end},
-		{Text="Reset Speed",  Style="ghost",   Width=120, Callback=function()
+		{Text="Reset Stats",  Style="ghost",   Width=120, Callback=function()
 			local hum = getHum()
-			if hum then hum.WalkSpeed = 16 end
-			speedSlider:SetValue(16)
-			jumpSlider:SetValue(50)
-			self:ShowNotification("Stats resetados para o padrão", "info", 2)
+			if hum then hum.WalkSpeed=16; hum.JumpPower=50 end
+			speedSlider:SetValue(16); jumpSlider:SetValue(50)
+			self:ShowNotification("Stats reset to default", "info", 2)
 		end},
 		{Text="Respawn",      Style="warning", Width=120, Callback=function()
 			lp:LoadCharacter()
-			self:ShowNotification("Personagem respawnado!", "info", 2)
+			self:ShowNotification("Character respawned!", "info", 2)
 		end},
 	})
 
-	self:AddParagraph(2,
-		"Como usar no seu script",
-		"local Lib = loadstring(game:HttpGet('URL'))() \nlocal ui = Lib.new({ AppName='Meu App', Pages={{Name='Home'}} })\nui:AddSlider(1,'Speed',0,100,16,function(v) end)"
+	self:AddParagraph(2, "Usage example",
+		"local Lib = loadstring(game:HttpGet('URL'))()\n"..
+		"local ui = Lib.new({ AppName='My App', ToggleKey='RightShift', Pages={{Name='Home'}} })\n"..
+		"ui:AddSlider(1,'Walk Speed',0,100,16,function(v) hum.WalkSpeed=v end)"
 	)
 
-	-- ──────────────────────────── PAGE 3 · COMPONENTS ───────────────────────────
-	self:AddSectionHeader(3, "Components", "Catálogo completo de elementos")
-
+	self:AddSectionHeader(3, "Components", "Visual component catalogue")
 	self:AddDivider(3, "Labels")
-	self:AddLabel(3, "Title Label  —  GothamBold 19px", "title")
-	self:AddLabel(3, "Subtitle Label  —  GothamBold 14px", "subtitle")
-	self:AddLabel(3, "Body Label  —  Gotham 13px. Texto padrão para conteúdo e descrições longas.", "body")
-	self:AddLabel(3, "Muted Label  —  Gotham 12px. Informações secundárias.", "muted")
-	self:AddLabel(3, "Caption Label  —  Gotham 10px. Rodapés e metadados.", "caption")
+	self:AddLabel(3, "Title — GothamBold 19px", "title")
+	self:AddLabel(3, "Subtitle — GothamBold 14px", "subtitle")
+	self:AddLabel(3, "Body — Gotham 13px. Default text for content and long descriptions.", "body")
+	self:AddLabel(3, "Muted — Gotham 12px. Secondary information.", "muted")
+	self:AddLabel(3, "Caption — Gotham 10px. Metadata and footers.", "caption")
 
 	self:AddDivider(3, "Rich Text")
 	self:AddRichLabel(3,
-		'Use <b>negrito</b>, <i>itálico</i>, <u>sublinhado</u> e '..
-		'<font color="rgb(0,232,122)">cores</font> com AddRichLabel().'
+		'Use <b>bold</b>, <i>italic</i>, <u>underline</u> and '..
+		'<font color="rgb(0,232,122)">color</font> via AddRichLabel().'
 	)
 
 	self:AddDivider(3, "Badges")
-	self:AddBadge(3, "DEFAULT", "default")
-	self:AddBadge(3, "SUCCESS", "success")
-	self:AddBadge(3, "ERROR",   "error")
-	self:AddBadge(3, "WARNING", "warning")
-	self:AddBadge(3, "INFO",    "info")
-	self:AddBadge(3, "WHITE",   "white")
+	self:AddBadge(3, "DEFAULT","default")
+	self:AddBadge(3, "SUCCESS","success")
+	self:AddBadge(3, "ERROR",  "error")
+	self:AddBadge(3, "WARNING","warning")
+	self:AddBadge(3, "INFO",   "info")
+	self:AddBadge(3, "WHITE",  "white")
+	self:AddBadge(3, "PURPLE", "purple")
 
 	self:AddDivider(3, "Alerts")
-	self:AddAlert(3, "Info",    "Mensagem informativa.",    "info")
-	self:AddAlert(3, "Success", "Operação bem-sucedida!",   "success")
-	self:AddAlert(3, "Warning", "Atenção necessária.",      "warning")
-	self:AddAlert(3, "Error",   "Algo deu errado.",         "error")
-
-	self:AddDivider(3, "Inputs & Dropdown")
-
-	self:AddInput(3, "Campo de texto", "Digite e pressione Enter...", function(text, enter)
-		if enter and text ~= "" then
-			self:ShowNotification('Input recebido: "' .. text .. '"', "info", 3, "Input")
-		end
-	end)
-
-	self:AddDropdown(3, "Escolha uma opção", {
-		"Opção 1", "Opção 2", "Opção 3", "Opção 4", "Opção 5"
-	}, function(v)
-		self:ShowNotification("Selecionado: " .. v, "success", 2)
-	end)
-
-	self:AddDivider(3, "Keybind")
-	self:AddKeybind(3, "Tecla de atalho (clique para redefinir)", "F", function(key)
-		self:ShowNotification("Tecla definida: " .. key, "success", 2)
-	end)
+	self:AddAlert(3, "Info",    "Informational message.",         "info")
+	self:AddAlert(3, "Success", "Operation completed!",           "success")
+	self:AddAlert(3, "Warning", "Attention required.",            "warning")
+	self:AddAlert(3, "Error",   "Something went wrong.",          "error")
+	self:AddAlert(3, "Purple",  "Custom purple style available.", "purple")
 
 	self:AddDivider(3, "Progress Bars")
-	local pb1 = self:AddProgressBar(3, "Progresso A", 72, 100)
-	local pb2 = self:AddProgressBar(3, "Progresso B", 30, 100)
-
+	local pb1 = self:AddProgressBar(3, "Progress A", 72, 100)
+	local pb2 = self:AddProgressBar(3, "Progress B", 30, 100)
 	self:AddButtonRow(3, {
-		{Text="Animar Barras", Style="primary", Width=140, Callback=function()
-			pb1:SetValue(math.random(10, 100))
-			pb2:SetValue(math.random(10, 100))
+		{Text="Randomize", Style="primary", Width=120, Callback=function()
+			pb1:SetValue(math.random(10,100))
+			pb2:SetValue(math.random(10,100))
 		end},
 	})
 
-	self:AddDivider(3, "Tabela")
+	self:AddDivider(3, "Spinner")
+	local spinner = self:AddSpinner(3, "Processing request...")
+	self:AddButtonRow(3, {
+		{Text="Start",  Style="success", Width=100, Callback=function() spinner:Start() end},
+		{Text="Stop",   Style="danger",  Width=100, Callback=function() spinner:Stop() end},
+	})
+
+	self:AddDivider(3, "Color Picker")
+	self:AddColorPicker(3, "Accent Color", "4488ff", function(color, hex)
+		self:ShowNotification("Color selected: #"..hex, "info", 2)
+	end)
+
+	self:AddDivider(3, "Table")
 	self:AddTable(3,
-		{"Componente",      "Método",          "Retorno"},
+		{"Component",    "Method",            "Returns"},
 		{
-			{"Slider",      "AddSlider()",      "obj"},
-			{"Toggle",      "AddToggle()",      "obj"},
-			{"Button",      "AddButton()",      "button"},
-			{"Input",       "AddInput()",       "textbox"},
-			{"Dropdown",    "AddDropdown()",    "obj"},
-			{"Progress Bar","AddProgressBar()", "obj"},
-			{"Log Console", "AddLogConsole()",  "console"},
-			{"Table",       "AddTable()",       "obj"},
-			{"Keybind",     "AddKeybind()",     "obj"},
-			{"Badge",       "AddBadge()",       "obj"},
+			{"Toggle",       "AddToggle()",       "obj"},
+			{"Checkbox",     "AddCheckbox()",     "obj"},
+			{"Slider",       "AddSlider()",       "obj"},
+			{"Stepper",      "AddStepper()",      "obj"},
+			{"Button",       "AddButton()",       "TextButton"},
+			{"Input",        "AddInput()",        "TextBox"},
+			{"SearchInput",  "AddSearchInput()",  "TextBox"},
+			{"Dropdown",     "AddDropdown()",     "obj"},
+			{"RadioGroup",   "AddRadioGroup()",   "obj"},
+			{"ColorPicker",  "AddColorPicker()",  "obj"},
+			{"ProgressBar",  "AddProgressBar()",  "obj"},
+			{"LogConsole",   "AddLogConsole()",   "console"},
+			{"Spinner",      "AddSpinner()",      "obj"},
+			{"Keybind",      "AddKeybind()",      "obj"},
 		}
 	)
 
-	self:AddDivider(3, "Notificações")
+	self:AddDivider(3, "Notifications")
 	self:AddButtonRow(3, {
-		{Text="Info",    Style="ghost",   Width=100, Callback=function()
-			self:ShowNotification("Mensagem informativa.", "info",    3, "Info") end},
-		{Text="Success", Style="success", Width=100, Callback=function()
-			self:ShowNotification("Operação concluída!",   "success", 3, "Sucesso") end},
-		{Text="Warning", Style="warning", Width=100, Callback=function()
-			self:ShowNotification("Atenção necessária.",   "warning", 3, "Aviso") end},
-		{Text="Error",   Style="danger",  Width=100, Callback=function()
-			self:ShowNotification("Algo deu errado.",      "error",   3, "Erro") end},
+		{Text="Info",    Style="ghost",   Width=100, Callback=function() self:ShowNotification("Informational message.", "info",    3, "Info")    end},
+		{Text="Success", Style="success", Width=100, Callback=function() self:ShowNotification("Operation completed!",   "success", 3, "Success") end},
+		{Text="Warning", Style="warning", Width=100, Callback=function() self:ShowNotification("Attention required.",    "warning", 3, "Warning") end},
+		{Text="Error",   Style="danger",  Width=100, Callback=function() self:ShowNotification("Something went wrong.",  "error",   3, "Error")   end},
+	})
+	self:AddButtonRow(3, {
+		{Text="Shake Window", Style="ghost", Width=140, Callback=function() self:Shake(8) end},
 	})
 
-	-- ──────────────────────────── PAGE 4 · LOGS ─────────────────────────────────
-	self:AddSectionHeader(4, "Logs", "Console de logging em tempo real")
+	self:AddSectionHeader(4, "Inputs", "All interactive input components")
 
-	local console = self:AddLogConsole(4, 300)
+	self:AddDivider(4, "Text Input")
+	self:AddInput(4, "Standard Input", "Type and press Enter...", function(text, enter)
+		if enter and text~="" then
+			self:ShowNotification('Input: "'..text..'"', "info", 3, "Input")
+		end
+	end)
 
-	console:Log("SlaoqUILib iniciado com sucesso", "SUCCESS")
-	console:Log("Modo showcase ativo — execute Lib.new({...}) para usar", "INFO")
-	console:Log("Todos os " .. #self.cfg.Pages .. " módulos carregados", "INFO")
-	console:Log("Jogador: " .. lp.Name, "INFO")
-	console:Log("UserID: " .. lp.UserId, "DEBUG")
-	console:Log("Aguardando eventos...", "DEBUG")
+	self:AddDivider(4, "Search Input")
+	self:AddSearchInput(4, "Search anything...", function(text)
+		if text~="" then end
+	end)
 
-	self:AddButtonRow(4, {
-		{Text="Log Info",    Style="ghost",   Width=110, Callback=function()
-			console:Log("Evento informativo registrado", "INFO") end},
-		{Text="Log Success", Style="success", Width=110, Callback=function()
-			console:Log("Operação concluída com êxito", "SUCCESS") end},
-		{Text="Log Warn",    Style="warning", Width=110, Callback=function()
-			console:Log("Aviso detectado pelo sistema", "WARN") end},
-		{Text="Log Error",   Style="danger",  Width=110, Callback=function()
-			console:Log("Erro crítico encontrado", "ERROR") end},
+	self:AddDivider(4, "Stepper")
+	self:AddStepper(4, "Quantity", 0, 99, 1, 1, function(v)
+		self:ShowNotification("Stepper value: "..v, "info", 1.5)
+	end)
+	self:AddStepper(4, "Precision (step 0.5)", 0, 10, 2, 1, function(v)
+		self:ShowNotification("Value: "..v, "info", 1.5)
+	end)
+
+	self:AddDivider(4, "Dropdown")
+	self:AddDropdown(4, "Select an option", {
+		"Option A","Option B","Option C","Option D","Option E",
+	}, function(v)
+		self:ShowNotification("Selected: "..v, "success", 2)
+	end)
+
+	self:AddDivider(4, "Radio Group")
+	self:AddRadioGroup(4, "Difficulty", {"Easy","Normal","Hard","Extreme"}, "Normal", function(v)
+		self:ShowNotification("Difficulty: "..v, "success", 2)
+	end)
+
+	self:AddDivider(4, "Checkbox")
+	self:AddCheckbox(4, "Enable notifications", true, function(v)
+		self:ShowNotification(v and "Notifications enabled" or "Notifications disabled", v and "success" or "info", 2)
+	end)
+	self:AddCheckbox(4, "Auto-save on exit", false, function(v)
+		self:ShowNotification(v and "Auto-save on" or "Auto-save off", v and "success" or "info", 2)
+	end)
+	self:AddCheckbox(4, "Show debug info", false, function(v)
+		self:ShowNotification(v and "Debug info visible" or "Debug info hidden", v and "success" or "info", 2)
+	end)
+
+	self:AddDivider(4, "Keybind")
+	self:AddKeybind(4, "Custom hotkey (click to rebind)", "F", function(key)
+		self:ShowNotification("Hotkey set to: "..key, "success", 2)
+	end)
+
+	self:AddSectionHeader(5, "Logs", "Real-time logging console")
+	local console = self:AddLogConsole(5, 300)
+	console:Log("SlaoqUILib v5.0 initialized", "SUCCESS")
+	console:Log("Demo mode active — use Lib.new({...}) to build your own UI", "INFO")
+	console:Log("Pages loaded: "..#self.cfg.Pages, "INFO")
+	console:Log("Player: "..lp.Name.."  |  UserID: "..lp.UserId, "INFO")
+	console:Log("New components: Checkbox, Stepper, SearchInput, RadioGroup, ColorPicker, Spinner", "DEBUG")
+	console:Log("Bug fixes: minimize/maximize, close animation, rounded corners", "DEBUG")
+	console:Log("Awaiting events...", "DEBUG")
+
+	self:AddButtonRow(5, {
+		{Text="Info",    Style="ghost",   Width=110, Callback=function() console:Log("Informational event logged",   "INFO")    end},
+		{Text="Success", Style="success", Width=110, Callback=function() console:Log("Operation succeeded",          "SUCCESS") end},
+		{Text="Warn",    Style="warning", Width=110, Callback=function() console:Log("Warning detected",             "WARN")    end},
+		{Text="Error",   Style="danger",  Width=110, Callback=function() console:Log("Critical error encountered",   "ERROR")   end},
 	})
-
-	self:AddButtonRow(4, {
-		{Text="Limpar Console", Style="outline", Width=150, Callback=function()
-			console:Clear()
-			console:Log("Console limpo.", "INFO")
+	self:AddButtonRow(5, {
+		{Text="Clear Console", Style="outline", Width=140, Callback=function()
+			console:Clear(); console:Log("Console cleared.", "INFO")
 		end},
-		{Text="Status: Ativo",  Style="success", Width=130, Callback=function()
-			console:SetActive(true)
-			console:Log("Status definido como ATIVO", "SUCCESS")
+		{Text="Set Online",    Style="success", Width=120, Callback=function()
+			console:SetActive(true); console:Log("Status set to ONLINE", "SUCCESS")
 		end},
-		{Text="Status: Inativo", Style="danger", Width=130, Callback=function()
-			console:SetActive(false)
-			console:Log("Status definido como INATIVO", "WARN")
+		{Text="Set Offline",   Style="danger",  Width=120, Callback=function()
+			console:SetActive(false); console:Log("Status set to OFFLINE", "WARN")
 		end},
 	})
-
-	self:AddParagraph(4,
-		"API do Console",
-		"console:Log(msg, nivel)  →  INFO | SUCCESS | WARN | ERROR | SNIPE | DEBUG\n"..
-		"console:Clear()          →  Limpa todas as linhas\n"..
-		"console:SetActive(bool)  →  Muda o indicador verde/vermelho"
+	self:AddParagraph(5, "Console API",
+		"console:Log(msg, level)    levels: INFO | SUCCESS | WARN | ERROR | SNIPE | DEBUG\n"..
+		"console:Clear()            clears all lines\n"..
+		"console:SetActive(bool)    toggles the green/red status dot"
 	)
 end
 
--- Auto-demo: intercept Lib.new para saber se o usuário chamou manualmente.
--- Se após um frame ninguém chamou Lib.new(), roda o showcase automático.
--- Assim loadstring(...)() dispara o demo, mas local L = loadstring(...)(); L.new({...}) funciona normal.
 local _newCalled = false
 local _origNew   = Lib.new
 Lib.new = function(cfg)
@@ -1659,7 +2105,7 @@ end
 
 task.defer(function()
 	if not _newCalled then
-		_origNew(nil) -- sem config = demo automático
+		_origNew(nil)
 	end
 end)
 

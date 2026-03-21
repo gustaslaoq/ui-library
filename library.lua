@@ -297,10 +297,17 @@ function Lib:_runSplash()
 		tw(card,.3,{BackgroundTransparency=1,Position=UDim2.new(.5,0,.48,0)},Enum.EasingStyle.Quint,Enum.EasingDirection.In)
 		task.wait(.32)
 		pcall(function() card:Destroy() end)
+		local tw2, th2
+		if self._computeScale then
+			tw2, th2 = self._computeScale()
+		else
+			tw2, th2 = self.cfg.WindowWidth, self.cfg.WindowHeight
+		end
 		self.Window.Visible = true
 		self.Window.BackgroundTransparency = 1
-		self.Window.Position = UDim2.new(.5,0,.52,0)
-		tw(self.Window,.45,{BackgroundTransparency=0,Position=UDim2.fromScale(.5,.5)},Enum.EasingStyle.Back,Enum.EasingDirection.Out)
+		self.Window.Size = UDim2.fromOffset(math.floor(tw2*0.9), math.floor(th2*0.9))
+		self.Window.Position = UDim2.fromScale(.5,.5)
+		tw(self.Window,.45,{BackgroundTransparency=0,Size=UDim2.fromOffset(tw2,th2)},Enum.EasingStyle.Back,Enum.EasingDirection.Out)
 		task.delay(.5, function()
 			if self._dragHandle then
 				self._dragHandle.Visible = true
@@ -333,39 +340,41 @@ function Lib:_buildWindow()
 	}, win)
 	self._clip = clip
 
-	local function doScale()
+	local function computeScale()
 		local cam = workspace.CurrentCamera
-		if not cam then return end
+		if not cam then return cfg.WindowWidth, cfg.WindowHeight, cfg.SidebarWidth, false end
 		local vp  = cam.ViewportSize
 		local vpW = vp.X
 		local vpH = vp.Y
-		local isTouch = UserInputService.TouchEnabled
-
 		local w, h, sw, collapsed
-		if vpW < 380 then
-			w = math.floor(vpW * 0.98)
+		if vpW < 560 then
+			w = math.floor(vpW * 0.96)
 			h = math.floor(vpH * 0.92)
-			sw = 44
+			sw = 56
 			collapsed = true
-		elseif vpW < 560 then
-			w = math.floor(vpW * 0.97)
-			h = math.floor(math.min(vpH * 0.90, cfg.WindowHeight))
-			sw = 52
+		elseif vpW < 750 then
+			w = math.floor(vpW * 0.93)
+			h = math.floor(math.min(vpH * 0.88, cfg.WindowHeight))
+			sw = 72
 			collapsed = true
-		elseif vpW < 800 then
-			local s = math.clamp(vpW / 900, 0.55, 0.85)
+		elseif vpW < 1000 then
+			local s = math.clamp(vpW / 1100, 0.6, 0.88)
 			w = math.floor(cfg.WindowWidth * s)
 			h = math.floor(cfg.WindowHeight * s)
-			sw = math.max(52, math.floor(cfg.SidebarWidth * s))
-			collapsed = sw < 90
+			sw = math.max(80, math.floor(cfg.SidebarWidth * s))
+			collapsed = sw < 100
 		else
-			local s = math.min(math.clamp(vpW/1920, 0.5, 1), math.clamp(vpH/1080, 0.5, 1))
+			local s = math.min(math.clamp(vpW/1920, 0.55, 1), math.clamp(vpH/1080, 0.55, 1))
 			w = math.floor(cfg.WindowWidth * s)
 			h = math.floor(cfg.WindowHeight * s)
 			sw = math.floor(cfg.SidebarWidth * s)
 			collapsed = false
 		end
+		return w, h, sw, collapsed
+	end
 
+	local function doScale()
+		local w, h, sw, collapsed = computeScale()
 		if not self._minimised then
 			win.Size = UDim2.fromOffset(w, h)
 		end
@@ -374,7 +383,8 @@ function Lib:_buildWindow()
 			self:_setCollapsed(collapsed)
 		end
 	end
-	self._doScale = doScale
+	self._doScale   = doScale
+	self._computeScale = computeScale
 
 	table.insert(self._conns,
 		workspace.CurrentCamera:GetPropertyChangedSignal("ViewportSize"):Connect(function()
@@ -987,10 +997,8 @@ function Lib:Maximise()
 		win.Position = UDim2.fromScale(.5,.5)
 		tw(win,.32,{BackgroundTransparency=0},Enum.EasingStyle.Quint)
 	else
-		local prev    = self._preMinSize
-		local cfg     = self.cfg
-		local targetW = prev and prev.W or cfg.WindowWidth
-		local targetH = prev and prev.H or cfg.WindowHeight
+		local cs = self._computeScale
+		local targetW, targetH, sw, collapsed = cs and cs() or (self.cfg.WindowWidth, self.cfg.WindowHeight, self.cfg.SidebarWidth, false)
 		if self._body then self._body.Visible = true end
 		win.BackgroundColor3 = C.Bg
 		if self._tbFiller then self._tbFiller.Visible = true end
@@ -998,6 +1006,10 @@ function Lib:Maximise()
 		win.Position = UDim2.fromScale(.5,.5)
 		self._dragTargetOX = 0
 		self._dragTargetOY = 0
+		if self._sidebar and sw then
+			self._sidebar.Size = UDim2.new(0, sw, 1, 0)
+			self:_setCollapsed(collapsed)
+		end
 		tw(win,.45,{Size=UDim2.fromOffset(targetW, targetH)},Enum.EasingStyle.Back,Enum.EasingDirection.Out)
 		if self._minBtn then self._minBtn.Text = "-" end
 	end
@@ -1077,21 +1089,24 @@ function Lib:Show()
 	if self._tbFiller then self._tbFiller.Visible = true end
 	if self._tbBorderLine then self._tbBorderLine.Visible = true end
 	win.Position = UDim2.fromScale(.5, .5)
+
+	local targetW, targetH, sw, collapsed = (self._computeScale or function()
+		return self.cfg.WindowWidth, self.cfg.WindowHeight, self.cfg.SidebarWidth, false
+	end)()
+
+	if self._sidebar then
+		self._sidebar.Size = UDim2.new(0, sw, 1, 0)
+		self:_setCollapsed(collapsed)
+	end
+
 	if wasHidden then
-		local prev = self._preMinSize
-		local cfg = self.cfg
-		local targetW = prev and prev.W or cfg.WindowWidth
-		local targetH = prev and prev.H or cfg.WindowHeight
-		win.Size = UDim2.fromOffset(targetW * 0.9, targetH * 0.9)
+		win.Size = UDim2.fromOffset(math.floor(targetW * 0.9), math.floor(targetH * 0.9))
 		win.Visible = true
 		win.BackgroundTransparency = 1
-		tw(win, .42, {BackgroundTransparency=0, Size=UDim2.fromOffset(targetW, targetH)}, Enum.EasingStyle.Back, Enum.EasingDirection.Out)
+		tw(win, .38, {BackgroundTransparency=0, Size=UDim2.fromOffset(targetW, targetH)}, Enum.EasingStyle.Back, Enum.EasingDirection.Out)
 	else
-		local prev = self._preMinSize
-		local cfg = self.cfg
-		local targetW = prev and prev.W or cfg.WindowWidth
-		local targetH = prev and prev.H or cfg.WindowHeight
-		tw(win, .42, {Size=UDim2.fromOffset(targetW, targetH)}, Enum.EasingStyle.Back, Enum.EasingDirection.Out)
+		win.Visible = true
+		tw(win, .38, {Size=UDim2.fromOffset(targetW, targetH)}, Enum.EasingStyle.Back, Enum.EasingDirection.Out)
 	end
 	if self._dragHandle then self._dragHandle.Visible = true end
 end

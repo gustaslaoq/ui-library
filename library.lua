@@ -378,7 +378,7 @@ function Lib:_buildTitleBar(win)
 		b.Activated:Connect(cb)
 		return b
 	end
-	self._minBtn = mkBtn("-",C.White,function() self:Minimise() end,1)
+	self._minBtn = mkBtn("-",C.White,function() self:ToggleVisibility() end,1)
 	mkBtn("x",C.Red,function() self:Destroy() end,2)
 
 	do

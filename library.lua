@@ -550,8 +550,10 @@ function Lib:_buildTitleBar(win)
 		return wrap, img, btn
 	end
 
-	local _, self._searchBtnImg = mkImgBtn("132302594577680", C.White, function() self:_toggleSearch() end, 0)
-	local _, self._gearImg      = mkImgBtn("101671992802622", C.TextDim, function() self:_openSettings() end, 1)
+	local _sb, sbImg = mkImgBtn("132302594577680", C.White, function() self:_toggleSearch() end, 0)
+	local _gb, gbImg = mkImgBtn("101671992802622", C.TextDim, function() self:_openSettings() end, 1)
+	self._searchBtnImg = sbImg
+	self._gearImg      = gbImg
 	self._minBtn = mkBtn("-", C.White, function()
 		if self._minimised then self:Maximise() else self:Minimise() end
 	end, 2)

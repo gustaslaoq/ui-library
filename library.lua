@@ -1414,41 +1414,28 @@ function Lib:_doSearch(query)
 	local count = 0
 	local highlights = {}
 
-	-- collect all TextLabel and TextButton descendants
 	local function scan(parent)
 		for _, child in ipairs(parent:GetChildren()) do
 			if child:IsA("TextLabel") or child:IsA("TextButton") then
 				local txt = child.Text or ""
 				if txt ~= "" and txt:lower():find(qLower, 1, true) then
 					local wasRich = child.RichText
-					local original = txt
-
-					-- escape any existing rich text markup from the original for display
 					local escaped = txt:gsub("&","&amp;"):gsub("<","&lt;"):gsub(">","&gt;")
-
-					-- build highlighted version (case-insensitive replace)
-					local esc_q = query:gsub("[%(%)%.%%%+%-%*%?%[%^%$]", "%%%1")
-					local highlighted = escaped:gsub("(?i)"..esc_q, function(m)
-						return '<font color="rgb(255,205,0)"><b>'..m..'</b></font>'
-					end)
-					-- lua doesn't support (?i) so do it manually:
-					highlighted = escaped
 					local result = ""
 					local i = 1
 					while i <= #escaped do
-						local s,e = escaped:lower():find(qLower, i, true)
+						local s, e = escaped:lower():find(qLower, i, true)
 						if s then
 							result = result .. escaped:sub(i, s-1)
 							result = result .. '<font color="rgb(255,210,0)"><b>' .. escaped:sub(s,e) .. '</b></font>'
-							i = e+1
+							i = e + 1
 							count = count + 1
 						else
 							result = result .. escaped:sub(i)
 							break
 						end
 					end
-
-					table.insert(highlights, {obj=child, original=original, wasRich=wasRich})
+					table.insert(highlights, {obj=child, original=txt, wasRich=wasRich})
 					pcall(function()
 						child.RichText = true
 						child.Text = result
@@ -1465,10 +1452,10 @@ function Lib:_doSearch(query)
 	if self._searchResultLbl then
 		if count == 0 then
 			self._searchResultLbl.Text = "no results"
-			tw(self._searchResultLbl,.1,{TextColor3=C.Red})
+			tw(self._searchResultLbl, .1, {TextColor3=C.Red})
 		else
-			self._searchResultLbl.Text = count.." found"
-			tw(self._searchResultLbl,.1,{TextColor3=C.Green})
+			self._searchResultLbl.Text = count .. " found"
+			tw(self._searchResultLbl, .1, {TextColor3=C.Green})
 		end
 	end
 end

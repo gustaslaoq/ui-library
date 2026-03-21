@@ -4,6 +4,7 @@ Lib.__index = Lib
 local Players          = game:GetService("Players")
 local TweenService     = game:GetService("TweenService")
 local UserInputService = game:GetService("UserInputService")
+local RunService       = game:GetService("RunService")
 local CoreGui          = game:GetService("CoreGui")
 local LocalPlayer      = Players.LocalPlayer
 
@@ -152,7 +153,7 @@ function Lib.new(userCfg)
 	self._minBtn     = nil
 	self._tbFiller   = nil
 	self._tbBorder   = nil
-	self._toggleKey      = "RightShift"
+	self._toggleKey      = "K"
 	self._toasts         = {}
 	self._toastCount     = 0
 	self._hidden         = false
@@ -286,6 +287,9 @@ function Lib:_runSplash()
 		self.Window.BackgroundTransparency = 1
 		self.Window.Position = UDim2.new(.5,0,.52,0)
 		tw(self.Window,.45,{BackgroundTransparency=0,Position=UDim2.fromScale(.5,.5)},Enum.EasingStyle.Back,Enum.EasingDirection.Out)
+		task.delay(.5, function()
+			if self._dragHandle then self._dragHandle.Visible = true end
+		end)
 	end)
 end
 
@@ -299,11 +303,19 @@ function Lib:_buildWindow()
 		Size=UDim2.fromOffset(cfg.WindowWidth,cfg.WindowHeight),
 		BackgroundColor3=C.Bg,
 		BorderSizePixel=0,
-		ClipsDescendants=true,
+		ClipsDescendants=false,
 	}, self._sg)
 	corner(win,12)
 	stroke(win,C.Border,1)
 	self.Window = win
+
+	-- clip mask so page content never leaks outside the rounded window
+	local clip = new("Frame",{
+		Size=UDim2.fromScale(1,1),
+		BackgroundTransparency=1,
+		ClipsDescendants=true,
+	}, win)
+	self._clip = clip
 
 	local function doScale()
 		local cam = workspace.CurrentCamera
@@ -329,62 +341,96 @@ function Lib:_buildWindow()
 			if not self._minimised then doScale() end
 		end))
 
-	self:_buildTitleBar(win)
-	self:_buildBody(win)
+	self:_buildTitleBar(clip)
+	self:_buildBody(clip)
 	self:_initPages()
 	self:SetPage(1)
 	task.defer(doScale)
 
-	-- bottom drag handle
+	-- drag handle — child of win, sits below the visible area
+	local dhPillW, dhPillH = 100, 5
+	local dhH = 22
 	local dh = new("Frame",{
-		AnchorPoint = Vector2.new(0.5, 0),
-		Size = UDim2.fromOffset(80, 24),
+		AnchorPoint = Vector2.new(.5, 0),
+		Position    = UDim2.new(.5, 0, 1, 8),
+		Size        = UDim2.fromOffset(dhPillW + 20, dhH),
 		BackgroundTransparency = 1,
-		ZIndex = 998,
-	}, self._sg)
+		ZIndex = 999,
+		Visible = false,
+	}, win)
 	local dhPill = new("Frame",{
-		AnchorPoint = Vector2.new(.5,.5), Position = UDim2.fromScale(.5,.5),
-		Size = UDim2.fromOffset(48,5),
-		BackgroundColor3 = C.White, BackgroundTransparency = 0.55,
+		AnchorPoint = Vector2.new(.5,.5),
+		Position    = UDim2.fromScale(.5,.5),
+		Size        = UDim2.fromOffset(dhPillW, dhPillH),
+		BackgroundColor3 = C.White,
+		BackgroundTransparency = 0.6,
 		BorderSizePixel = 0,
 	}, dh)
 	corner(dhPill, 3)
 	self._dragHandle = dh
 
-	local function updateHandlePos()
-		if not win or not win.Parent then return end
-		local ap = win.AbsolutePosition
-		local as = win.AbsoluteSize
-		dh.Position = UDim2.fromOffset(math.floor(ap.X + as.X * 0.5), math.floor(ap.Y + as.Y + 7))
-	end
-	self._updateHandle = updateHandlePos
+	-- ── shared lerp-drag state ──────────────────────────────────────────
+	-- Both titlebar and handle write to _dragTargetOX/OY.
+	-- A single Heartbeat connection lerps the window toward the target.
+	-- The handle follows the TARGET (snappy); the window follows with delay.
+	self._dragActive   = false
+	self._dragTargetOX = 0
+	self._dragTargetOY = 0
 
-	table.insert(self._conns, win:GetPropertyChangedSignal("AbsolutePosition"):Connect(updateHandlePos))
-	table.insert(self._conns, win:GetPropertyChangedSignal("AbsoluteSize"):Connect(updateHandlePos))
-	-- double-defer so layout settles before first position calc
-	task.defer(function() task.defer(updateHandlePos) end)
+	local lerpConn
+	lerpConn = RunService.Heartbeat:Connect(function()
+		if not self._dragActive then return end
+		local wx = win.Position.X.Offset
+		local wy = win.Position.Y.Offset
+		local tx = self._dragTargetOX
+		local ty = self._dragTargetOY
+		local sp = 0.22   -- window lag (lower = more lag)
+		local nx = wx + (tx - wx) * sp
+		local ny = wy + (ty - wy) * sp
+		if math.abs(nx - tx) < 0.4 and math.abs(ny - ty) < 0.4 then
+			nx = tx; ny = ty
+		end
+		win.Position = UDim2.new(win.Position.X.Scale, nx, win.Position.Y.Scale, ny)
+	end)
+	table.insert(self._conns, lerpConn)
 
+	-- handle drag
 	do
-		local dhDrag, dhDs, dhWs = false
+		local active = false
+		local ds, wsOX, wsOY
 		dh.InputBegan:Connect(function(i)
 			if i.UserInputType==Enum.UserInputType.MouseButton1 or i.UserInputType==Enum.UserInputType.Touch then
-				dhDrag=true; dhDs=i.Position; dhWs=win.Position
-				tw(dhPill,.12,{BackgroundTransparency=0.3, Size=UDim2.fromOffset(58,6)})
+				active = true
+				ds = i.Position
+				wsOX = win.Position.X.Offset
+				wsOY = win.Position.Y.Offset
+				self._dragTargetOX = wsOX
+				self._dragTargetOY = wsOY
+				self._dragActive = true
+				tw(dhPill,.1,{BackgroundTransparency=0.3, Size=UDim2.fromOffset(dhPillW+10, dhPillH+2)})
 			end
 		end)
 		dh.InputEnded:Connect(function(i)
 			if i.UserInputType==Enum.UserInputType.MouseButton1 or i.UserInputType==Enum.UserInputType.Touch then
-				dhDrag=false
-				tw(dhPill,.18,{BackgroundTransparency=0.55, Size=UDim2.fromOffset(48,5)})
+				active = false
+				self._dragActive = false
+				tw(dhPill,.18,{BackgroundTransparency=0.6, Size=UDim2.fromOffset(dhPillW, dhPillH)})
 			end
 		end)
-		dh.MouseEnter:Connect(function() tw(dhPill,.12,{BackgroundTransparency=0.4, Size=UDim2.fromOffset(56,6)}) end)
-		dh.MouseLeave:Connect(function() if not dhDrag then tw(dhPill,.18,{BackgroundTransparency=0.55, Size=UDim2.fromOffset(48,5)}) end end)
+		dh.MouseEnter:Connect(function()
+			tw(dhPill,.12,{BackgroundTransparency=0.45, Size=UDim2.fromOffset(dhPillW+6, dhPillH+1)})
+		end)
+		dh.MouseLeave:Connect(function()
+			if not active then
+				tw(dhPill,.18,{BackgroundTransparency=0.6, Size=UDim2.fromOffset(dhPillW, dhPillH)})
+			end
+		end)
 		table.insert(self._conns, UserInputService.InputChanged:Connect(function(i)
-			if not dhDrag then return end
+			if not active then return end
 			if i.UserInputType~=Enum.UserInputType.MouseMovement and i.UserInputType~=Enum.UserInputType.Touch then return end
-			local d = i.Position - dhDs
-			win.Position = UDim2.new(dhWs.X.Scale, dhWs.X.Offset+d.X, dhWs.Y.Scale, dhWs.Y.Offset+d.Y)
+			local d = i.Position - ds
+			self._dragTargetOX = wsOX + d.X
+			self._dragTargetOY = wsOY + d.Y
 		end))
 	end
 end
@@ -447,22 +493,31 @@ function Lib:_buildTitleBar(win)
 	mkBtn("x",C.Red,function() self:Destroy() end,2)
 
 	do
-		local drag,ds,ws = false
+		local drag = false
+		local ds, wsOX, wsOY
 		tb.InputBegan:Connect(function(i)
 			if i.UserInputType==Enum.UserInputType.MouseButton1 or i.UserInputType==Enum.UserInputType.Touch then
-				drag=true; ds=i.Position; ws=self.Window.Position
+				drag = true
+				ds = i.Position
+				wsOX = self.Window.Position.X.Offset
+				wsOY = self.Window.Position.Y.Offset
+				self._dragTargetOX = wsOX
+				self._dragTargetOY = wsOY
+				self._dragActive = true
 			end
 		end)
 		tb.InputEnded:Connect(function(i)
 			if i.UserInputType==Enum.UserInputType.MouseButton1 or i.UserInputType==Enum.UserInputType.Touch then
-				drag=false
+				drag = false
+				self._dragActive = false
 			end
 		end)
 		table.insert(self._conns, UserInputService.InputChanged:Connect(function(i)
 			if not drag then return end
 			if i.UserInputType~=Enum.UserInputType.MouseMovement and i.UserInputType~=Enum.UserInputType.Touch then return end
-			local d = i.Position-ds
-			self.Window.Position = UDim2.new(ws.X.Scale,ws.X.Offset+d.X,ws.Y.Scale,ws.Y.Offset+d.Y)
+			local d = i.Position - ds
+			self._dragTargetOX = wsOX + d.X
+			self._dragTargetOY = wsOY + d.Y
 		end))
 	end
 end
@@ -666,6 +721,7 @@ end
 function Lib:Minimise()
 	if self._minimised then return end
 	self._minimised = true
+	self._dragActive = false
 
 	local win  = self.Window
 	local mini = self:_useMiniMode()
@@ -699,6 +755,7 @@ end
 function Lib:Maximise()
 	if not self._minimised then return end
 	self._minimised = false
+	self._dragActive = false
 
 	local win  = self.Window
 	local mini = self._miniWasUsed
@@ -725,6 +782,8 @@ function Lib:Maximise()
 		if self._tbFiller then self._tbFiller.Visible = true end
 		if self._tbBorderLine then self._tbBorderLine.Visible = true end
 		win.Position = UDim2.fromScale(.5,.5)
+		self._dragTargetOX = 0
+		self._dragTargetOY = 0
 		tw(win,.45,{Size=UDim2.fromOffset(targetW, targetH)},Enum.EasingStyle.Back,Enum.EasingDirection.Out)
 		if self._minBtn then self._minBtn.Text = "-" end
 	end
@@ -769,6 +828,9 @@ function Lib:Show()
 	if not win then return end
 	local wasHidden = self._hidden
 	self._hidden = false
+	self._dragActive = false
+	self._dragTargetOX = 0
+	self._dragTargetOY = 0
 	if self._minimised then
 		self._minimised = false
 		if self._minBtn then self._minBtn.Text = "-" end
@@ -2523,7 +2585,7 @@ function Lib:_runDemo()
 	self:AddDivider(1, "Alerts")
 	self:AddAlert(1, "Welcome!", "Run Lib.new({...}) to use this library in your project.", "info")
 	self:AddAlert(1, "Tip", "All pages below contain live, interactive components.", "success")
-	self:AddAlert(1, "Keyboard shortcut", "Set ToggleKey='RightShift' in your config to bind a hide/show key.", "warning")
+	self:AddAlert(1, "Keyboard shortcut", "Press K (default) to hide/show the interface. Change the key via the ⚙ settings icon.", "warning")
 
 	self:AddSectionHeader(2, "Player Controls", "Modify your character in real time")
 	self:AddLabel(2, "All sliders and toggles apply immediately — no need to confirm.", "muted")
@@ -2587,7 +2649,7 @@ function Lib:_runDemo()
 
 	self:AddParagraph(2, "Usage example",
 		"local Lib = loadstring(game:HttpGet('URL'))()\n"..
-		"local ui = Lib.new({ AppName='My App', ToggleKey='RightShift', Pages={{Name='Home'}} })\n"..
+		"local ui = Lib.new({ AppName='My App', Pages={{Name='Home'}} })\n"..
 		"ui:AddSlider(1,'Walk Speed',0,100,16,function(v) hum.WalkSpeed=v end)"
 	)
 

@@ -330,7 +330,6 @@ function Lib:_buildWindow()
 		ClipsDescendants=false,
 	}, self._sg)
 	corner(win,12)
-	stroke(win,C.Border,1)
 	self.Window = win
 
 	local clip = new("Frame",{
@@ -338,6 +337,7 @@ function Lib:_buildWindow()
 		BackgroundTransparency=1,
 		ClipsDescendants=true,
 	}, win)
+	stroke(clip,C.Border,1)
 	self._clip = clip
 
 	local function computeScale()
@@ -346,30 +346,21 @@ function Lib:_buildWindow()
 		local vp  = cam.ViewportSize
 		local vpW = vp.X
 		local vpH = vp.Y
-		local w, h, sw, collapsed
-		if vpW < 560 then
-			w = math.floor(vpW * 0.96)
-			h = math.floor(vpH * 0.92)
-			sw = 56
-			collapsed = true
-		elseif vpW < 750 then
-			w = math.floor(vpW * 0.93)
-			h = math.floor(math.min(vpH * 0.88, cfg.WindowHeight))
-			sw = 72
-			collapsed = true
-		elseif vpW < 1000 then
-			local s = math.clamp(vpW / 1100, 0.6, 0.88)
-			w = math.floor(cfg.WindowWidth * s)
-			h = math.floor(cfg.WindowHeight * s)
-			sw = math.max(80, math.floor(cfg.SidebarWidth * s))
-			collapsed = sw < 100
-		else
-			local s = math.min(math.clamp(vpW/1920, 0.55, 1), math.clamp(vpH/1080, 0.55, 1))
-			w = math.floor(cfg.WindowWidth * s)
-			h = math.floor(cfg.WindowHeight * s)
-			sw = math.floor(cfg.SidebarWidth * s)
-			collapsed = false
-		end
+
+		local maxW = math.min(cfg.WindowWidth, vpW * 0.94)
+		local maxH = math.min(cfg.WindowHeight, vpH * 0.90)
+
+		local sx = maxW / cfg.WindowWidth
+		local sy = maxH / cfg.WindowHeight
+		local s  = math.min(sx, sy)
+		s = math.max(s, 0.38)
+
+		local w  = math.floor(cfg.WindowWidth  * s)
+		local h  = math.floor(cfg.WindowHeight * s)
+		local sw = math.max(48, math.floor(cfg.SidebarWidth * s))
+
+		local collapsed = sw < 100
+
 		return w, h, sw, collapsed
 	end
 
@@ -2453,28 +2444,58 @@ function Lib:AddLogConsole(pi,height)
 	new("TextLabel",{Text="CONSOLE",Font=Enum.Font.GothamBold,TextSize=10,TextColor3=C.TextDim,
 		BackgroundTransparency=1,Size=UDim2.new(1,0,1,0),TextXAlignment=Enum.TextXAlignment.Left,LayoutOrder=1},hdr)
 
-	local textBox=new("TextBox",{Text="",Font=Enum.Font.Code,TextSize=11,TextColor3=C.TextDim,
-		BackgroundTransparency=1,Position=UDim2.fromOffset(0,35),Size=UDim2.new(1,0,1,-35),
-		MultiLine=true,TextEditable=false,TextXAlignment=Enum.TextXAlignment.Left,
-		TextYAlignment=Enum.TextYAlignment.Bottom,ClearTextOnFocus=false,TextWrapped=true,ZIndex=2},frame)
-	pad(textBox,8,8,12,12)
+	local scroll=new("ScrollingFrame",{
+		Position=UDim2.fromOffset(0,35),Size=UDim2.new(1,0,1,-35),
+		BackgroundTransparency=1,BorderSizePixel=0,
+		ScrollBarThickness=3,ScrollBarImageColor3=C.Border3,ScrollBarImageTransparency=.4,
+		CanvasSize=UDim2.new(0,0,0,0),AutomaticCanvasSize=Enum.AutomaticSize.Y,
+		ScrollingDirection=Enum.ScrollingDirection.Y,
+		ZIndex=2,
+	},frame)
+	pad(scroll,6,6,12,12)
+	local layout=new("UIListLayout",{SortOrder=Enum.SortOrder.LayoutOrder,Padding=UDim.new(0,1)},scroll)
 
 	self:_gap(s,pi,10)
-	local console={Frame=frame,TextBox=textBox,_dot=dot,_lines={}}
+	local lineCount=0
+	local console={Frame=frame,_dot=dot,_lines={},_scroll=scroll,_layout=layout}
 	local pfx={INFO="[INFO]  ",SUCCESS="[OK]    ",WARN="[WARN]  ",ERROR="[ERR]   ",SNIPE="[SNIPE] ",DEBUG="[DBG]   "}
+	local colMap={INFO=C.TextDim,SUCCESS=C.Green,WARN=C.Yellow,ERROR=C.Red,SNIPE=C.Purple,DEBUG=C.Blue}
+
 	function console:Log(msg,level)
 		local lv=string.upper(level or "INFO")
 		local ts=os.date("%H:%M:%S")
-		table.insert(self._lines,("%s  %s  %s"):format(ts,pfx[lv] or "[INFO]  ",tostring(msg)))
-		if #self._lines>80 then table.remove(self._lines,1) end
-		local shown = {}
-		local start = math.max(1, #self._lines - 60)
-		for i = start, #self._lines do
-			table.insert(shown, self._lines[i])
+		local line=("%s  %s  %s"):format(ts,pfx[lv] or "[INFO]  ",tostring(msg))
+		lineCount=lineCount+1
+		local lbl=new("TextLabel",{
+			Text=line,Font=Enum.Font.Code,TextSize=11,
+			TextColor3=colMap[lv] or C.TextDim,
+			BackgroundTransparency=1,
+			Size=UDim2.new(1,0,0,0),AutomaticSize=Enum.AutomaticSize.Y,
+			TextXAlignment=Enum.TextXAlignment.Left,TextWrapped=true,
+			LayoutOrder=lineCount,ZIndex=3,
+		},self._scroll)
+		local children=self._scroll:GetChildren()
+		local labelCount=0
+		for _,c in ipairs(children) do
+			if c:IsA("TextLabel") then labelCount=labelCount+1 end
 		end
-		self.TextBox.Text = table.concat(shown,"\n")
+		if labelCount>60 then
+			for _,c in ipairs(self._scroll:GetChildren()) do
+				if c:IsA("TextLabel") then c:Destroy(); break end
+			end
+		end
+		task.defer(function()
+			if self._scroll and self._scroll.Parent then
+				self._scroll.CanvasPosition=Vector2.new(0,math.huge)
+			end
+		end)
 	end
-	function console:Clear() self._lines={}; self.TextBox.Text="" end
+	function console:Clear()
+		for _,c in ipairs(self._scroll:GetChildren()) do
+			if c:IsA("TextLabel") then c:Destroy() end
+		end
+		lineCount=0
+	end
 	function console:SetActive(v) tw(self._dot,.2,{BackgroundColor3=v and C.Green or C.Red}) end
 	return console
 end
@@ -2952,303 +2973,18 @@ function Lib:_runDemo()
 	local lp = LocalPlayer
 
 	local function getHum()
-		local char = lp.Character
+		local char = lp and lp.Character
 		return char and char:FindFirstChildOfClass("Humanoid")
 	end
 
-	self:AddSectionHeader(1, "Dashboard", "Live overview of SlaoqUILib v5.0")
+	self:AddSectionHeader(1, "Dashboard", "Live stats and controls")
 
 	local metrics = self:AddMetricRow(1, {
-		{Label="Walk Speed",  Value=getHum() and getHum().WalkSpeed  or 16,  Unit="studs/s"},
-		{Label="Health",      Value=getHum() and math.floor(getHum().Health) or 100, Unit="HP"},
-		{Label="Jump Power",  Value=getHum() and getHum().JumpPower  or 50,  Unit="power"},
+		{Label="Walk Speed", Value=16,  Unit="studs/s"},
+		{Label="Health",     Value=100, Unit="HP"},
+		{Label="Jump Power", Value=50,  Unit="power"},
 	})
 
-	task.spawn(function()
-		while self._sg and self._sg.Parent do
-			task.wait(1)
-			local hum = getHum()
-			if hum and metrics then
-				self:SetMetricValue(metrics[1], math.floor(hum.WalkSpeed))
-				self:SetMetricValue(metrics[2], math.floor(hum.Health))
-				self:SetMetricValue(metrics[3], math.floor(hum.JumpPower))
-			end
-		end
-	end)
-
-	self:AddDivider(1, "Status")
-	local hpBar = self:AddProgressBar(1, "Health", 100, 100)
-	self:AddProgressBar(1, "Experience (demo)", 34, 100)
-
-	task.spawn(function()
-		while self._sg and self._sg.Parent do
-			task.wait(0.5)
-			local hum = getHum()
-			if hum and hpBar then
-				hpBar:SetValue(math.floor(hum.Health / math.max(hum.MaxHealth,1) * 100))
-			end
-		end
-	end)
-
-	self:AddDivider(1, "Alerts")
-	self:AddAlert(1, "Welcome!", "Run Lib.new({...}) to use this library in your project.", "info")
-	self:AddAlert(1, "Tip", "All pages below contain live, interactive components.", "success")
-	self:AddAlert(1, "Keyboard shortcut", "Press K (default) to hide/show the interface. Change the key via the  settings icon.", "warning")
-
-	self:AddSectionHeader(2, "Player Controls", "Modify your character in real time")
-	self:AddLabel(2, "All sliders and toggles apply immediately  -  no need to confirm.", "muted")
-	self:AddDivider(2, "Movement")
-
-	local speedSlider = self:AddSlider(2, "Walk Speed", 0, 100, 16, function(v)
-		local hum = getHum(); if hum then hum.WalkSpeed = v end
-	end)
-	local jumpSlider = self:AddSlider(2, "Jump Power", 0, 200, 50, function(v)
-		local hum = getHum(); if hum then hum.JumpPower = v end
-	end)
-
-	self:AddDivider(2, "Health")
-	local healthSlider = self:AddSlider(2, "Health", 0, 100, 100, function(v)
-		local hum = getHum(); if hum then hum.Health = v end
-	end)
-
-	self:AddDivider(2, "Toggles")
-	self:AddToggle(2, "God Mode", false, function(v)
-		local hum = getHum()
-		if hum then hum.MaxHealth = v and math.huge or 100; if v then hum.Health = math.huge end end
-		self:ShowNotification(v and "God Mode enabled" or "God Mode disabled", v and "success" or "warning", 2.5)
-	end)
-
-	local _jumpConn
-	self:AddToggle(2, "Infinite Jump", false, function(v)
-		if _jumpConn then _jumpConn:Disconnect(); _jumpConn = nil end
-		if v then
-			_jumpConn = UserInputService.JumpRequest:Connect(function()
-				local hum = getHum()
-				if hum then hum:ChangeState(Enum.HumanoidStateType.Jumping) end
-			end)
-		end
-		self:ShowNotification(v and "Infinite Jump enabled" or "Infinite Jump disabled", v and "success" or "info", 2.5)
-	end)
-
-	self:AddToggle(2, "Turbo Speed (x3)", false, function(v)
-		local hum = getHum()
-		if hum then hum.WalkSpeed = v and 48 or 16; speedSlider:SetValue(hum.WalkSpeed) end
-		self:ShowNotification(v and "Turbo enabled  -  48 studs/s" or "Speed restored", v and "success" or "info", 2)
-	end)
-
-	self:AddDivider(2, "Actions")
-	self:AddButtonRow(2, {
-		{Text="Full Health",  Style="success", Width=120, Callback=function()
-			local hum = getHum(); if hum then hum.Health = hum.MaxHealth end
-			healthSlider:SetValue(100)
-			self:ShowNotification("Health fully restored!", "success", 2)
-		end},
-		{Text="Reset Stats",  Style="ghost",   Width=120, Callback=function()
-			local hum = getHum()
-			if hum then hum.WalkSpeed=16; hum.JumpPower=50 end
-			speedSlider:SetValue(16); jumpSlider:SetValue(50)
-			self:ShowNotification("Stats reset to default", "info", 2)
-		end},
-		{Text="Respawn",      Style="warning", Width=120, Callback=function()
-			lp:LoadCharacter()
-			self:ShowNotification("Character respawned!", "info", 2)
-		end},
-	})
-
-	self:AddParagraph(2, "Usage example",
-		"local Lib = loadstring(game:HttpGet('URL'))()\n"..
-		"local ui = Lib.new({ AppName='My App', Pages={{Name='Home'}} })\n"..
-		"ui:AddSlider(1,'Walk Speed',0,100,16,function(v) hum.WalkSpeed=v end)"
-	)
-
-	self:AddSectionHeader(3, "Components", "Visual component catalogue")
-	self:AddDivider(3, "Labels")
-	self:AddLabel(3, "Title  -  GothamBold 19px", "title")
-	self:AddLabel(3, "Subtitle  -  GothamBold 14px", "subtitle")
-	self:AddLabel(3, "Body  -  Gotham 13px. Default text for content and long descriptions.", "body")
-	self:AddLabel(3, "Muted  -  Gotham 12px. Secondary information.", "muted")
-	self:AddLabel(3, "Caption  -  Gotham 10px. Metadata and footers.", "caption")
-
-	self:AddDivider(3, "Rich Text & Inline")
-	self:AddRichLabel(3,
-		'Use <b>bold</b>, <i>italic</i>, <u>underline</u>, '..
-		'<font color="rgb(0,232,122)">colors</font>, '..
-		'<font size="16">big text</font>, '..
-		'<font face="GothamBold">font faces</font> via AddRichLabel().')
-	self:AddColorSwatch(3, "Accent", "4488ff")
-	self:AddColorSwatch(3, "Success", "00e87a")
-	self:AddColorSwatch(3, "Warning", "f0c030")
-
-	self:AddDivider(3, "Badges")
-	self:AddBadge(3, "DEFAULT","default")
-	self:AddBadge(3, "SUCCESS","success")
-	self:AddBadge(3, "ERROR",  "error")
-	self:AddBadge(3, "WARNING","warning")
-	self:AddBadge(3, "INFO",   "info")
-	self:AddBadge(3, "WHITE",  "white")
-	self:AddBadge(3, "PURPLE", "purple")
-
-	self:AddDivider(3, "Alerts")
-	self:AddAlert(3, "Info",    "Informational message.",         "info")
-	self:AddAlert(3, "Success", "Operation completed!",           "success")
-	self:AddAlert(3, "Warning", "Attention required.",            "warning")
-	self:AddAlert(3, "Error",   "Something went wrong.",          "error")
-	self:AddAlert(3, "Purple",  "Custom purple style available.", "purple")
-
-	self:AddDivider(3, "Progress Bars")
-	local pb1 = self:AddProgressBar(3, "Progress A", 72, 100)
-	local pb2 = self:AddProgressBar(3, "Progress B", 30, 100)
-	self:AddButtonRow(3, {
-		{Text="Randomize", Style="primary", Width=120, Callback=function()
-			pb1:SetValue(math.random(10,100))
-			pb2:SetValue(math.random(10,100))
-		end},
-	})
-
-	self:AddDivider(3, "Spinner")
-	local spinner = self:AddSpinner(3, "Processing request...")
-	self:AddButtonRow(3, {
-		{Text="Start",  Style="success", Width=100, Callback=function() spinner:Start() end},
-		{Text="Stop",   Style="danger",  Width=100, Callback=function() spinner:Stop() end},
-	})
-
-	self:AddDivider(3, "Color Picker")
-	self:AddColorPicker(3, "Accent Color", "4488ff", function(color, hex)
-		self:ShowNotification("Color selected: #"..hex, "info", 2)
-	end)
-
-	self:AddDivider(3, "Table")
-	self:AddTable(3,
-		{"Component",    "Method",            "Returns"},
-		{
-			{"Toggle",       "AddToggle()",       "obj"},
-			{"Checkbox",     "AddCheckbox()",     "obj"},
-			{"Slider",       "AddSlider()",       "obj"},
-			{"Stepper",      "AddStepper()",      "obj"},
-			{"Button",       "AddButton()",       "TextButton"},
-			{"Input",        "AddInput()",        "TextBox"},
-			{"ColorSwatch",  "AddColorSwatch()",  "obj"},
-			{"InlineImage",  "AddInlineImage()",  "obj"},
-			{"Dropdown",     "AddDropdown()",     "obj"},
-			{"RadioGroup",   "AddRadioGroup()",   "obj"},
-			{"ColorPicker",  "AddColorPicker()",  "obj"},
-			{"ProgressBar",  "AddProgressBar()",  "obj"},
-			{"LogConsole",   "AddLogConsole()",   "console"},
-			{"Spinner",      "AddSpinner()",      "obj"},
-			{"Keybind",      "AddKeybind()",      "obj"},
-		}
-	)
-
-	self:AddDivider(3, "Notifications")
-	self:AddLabel(3, "ShowNotification  =  external bottom-right toast (default). ShowInlineNotification  =  inside the UI at bottom.", "muted")
-	self:AddLabel(3, "External toast (bottom-right corner):", "body")
-	self:AddButtonRow(3, {
-		{Text="Info",    Style="ghost",   Width=100, Callback=function() self:ShowNotification("Informational message.", "info",    3.5, "Info")    end},
-		{Text="Success", Style="success", Width=100, Callback=function() self:ShowNotification("Operation completed!",   "success", 3.5, "Success") end},
-		{Text="Warning", Style="warning", Width=100, Callback=function() self:ShowNotification("Attention required.",    "warning", 3.5, "Warning") end},
-		{Text="Error",   Style="danger",  Width=100, Callback=function() self:ShowNotification("Something went wrong.",  "error",   3.5, "Error")   end},
-	})
-	self:AddLabel(3, "Inline notification (inside UI, bottom of page):", "body")
-	self:AddButtonRow(3, {
-		{Text="Inline Info",    Style="ghost",   Width=110, Callback=function() self:ShowInlineNotification("Inline info message.",    "info",    2.5, "Info")    end},
-		{Text="Inline Success", Style="success", Width=110, Callback=function() self:ShowInlineNotification("Inline success message.", "success", 2.5, "Success") end},
-		{Text="Inline Error",   Style="danger",  Width=110, Callback=function() self:ShowInlineNotification("Inline error message.",   "error",   2.5, "Error")   end},
-	})
-	self:AddButtonRow(3, {
-		{Text="Stack 3 Toasts", Style="primary", Width=150, Callback=function()
-			task.spawn(function()
-				self:ShowNotification("First notification  -  oldest", "info", 4, "Stack Test")
-				task.wait(0.4)
-				self:ShowNotification("Second notification appears above", "success", 4, "Stack Test")
-				task.wait(0.4)
-				self:ShowNotification("Third notification  -  newest (bottom)", "warning", 4, "Stack Test")
-			end)
-		end},
-		{Text="Shake Window", Style="ghost", Width=130, Callback=function() self:Shake(8) end},
-	})
-
-	self:AddSectionHeader(4, "Inputs", "All interactive input components")
-
-	self:AddDivider(4, "Text Input")
-	self:AddInput(4, "Standard Input", "Type and press Enter...", function(text, enter)
-		if enter and text~="" then
-			self:ShowNotification('Input: "'..text..'"', "info", 3, "Input")
-		end
-	end)
-
-	self:AddDivider(4, "Search Input")
-	self:AddSearchInput(4, "Search anything...", function(text)
-		if text~="" then end
-	end)
-
-	self:AddDivider(4, "Stepper")
-	self:AddStepper(4, "Quantity", 0, 99, 1, 1, function(v)
-		self:ShowNotification("Stepper value: "..v, "info", 1.5)
-	end)
-	self:AddStepper(4, "Precision (step 0.5)", 0, 10, 2, 1, function(v)
-		self:ShowNotification("Value: "..v, "info", 1.5)
-	end)
-
-	self:AddDivider(4, "Dropdown")
-	self:AddDropdown(4, "Select an option", {
-		"Option A","Option B","Option C","Option D","Option E",
-	}, function(v)
-		self:ShowNotification("Selected: "..v, "success", 2)
-	end)
-
-	self:AddDivider(4, "Radio Group")
-	self:AddRadioGroup(4, "Difficulty", {"Easy","Normal","Hard","Extreme"}, "Normal", function(v)
-		self:ShowNotification("Difficulty: "..v, "success", 2)
-	end)
-
-	self:AddDivider(4, "Checkbox")
-	self:AddCheckbox(4, "Enable notifications", true, function(v)
-		self:ShowNotification(v and "Notifications enabled" or "Notifications disabled", v and "success" or "info", 2)
-	end)
-	self:AddCheckbox(4, "Auto-save on exit", false, function(v)
-		self:ShowNotification(v and "Auto-save on" or "Auto-save off", v and "success" or "info", 2)
-	end)
-	self:AddCheckbox(4, "Show debug info", false, function(v)
-		self:ShowNotification(v and "Debug info visible" or "Debug info hidden", v and "success" or "info", 2)
-	end)
-
-	self:AddDivider(4, "Keybind")
-	self:AddKeybind(4, "Custom hotkey (click to rebind)", "F", function(key)
-		self:ShowNotification("Hotkey set to: "..key, "success", 2)
-	end)
-
-	self:AddSectionHeader(5, "Logs", "Real-time logging console")
-	local console = self:AddLogConsole(5, 300)
-	console:Log("SlaoqUILib v5.0 initialized", "SUCCESS")
-	console:Log("Demo mode active  -  use Lib.new({...}) to build your own UI", "INFO")
-	console:Log("Pages loaded: "..#self.cfg.Pages, "INFO")
-	console:Log("Player: "..lp.Name.."  |  UserID: "..lp.UserId, "INFO")
-	console:Log("New components: Checkbox, Stepper, SearchInput, RadioGroup, ColorPicker, Spinner", "DEBUG")
-	console:Log("Bug fixes: minimize/maximize, close animation, rounded corners", "DEBUG")
-	console:Log("Awaiting events...", "DEBUG")
-
-	self:AddButtonRow(5, {
-		{Text="Info",    Style="ghost",   Width=110, Callback=function() console:Log("Informational event logged",   "INFO")    end},
-		{Text="Success", Style="success", Width=110, Callback=function() console:Log("Operation succeeded",          "SUCCESS") end},
-		{Text="Warn",    Style="warning", Width=110, Callback=function() console:Log("Warning detected",             "WARN")    end},
-		{Text="Error",   Style="danger",  Width=110, Callback=function() console:Log("Critical error encountered",   "ERROR")   end},
-	})
-	self:AddButtonRow(5, {
-		{Text="Clear Console", Style="outline", Width=140, Callback=function()
-			console:Clear(); console:Log("Console cleared.", "INFO")
-		end},
-		{Text="Set Online",    Style="success", Width=120, Callback=function()
-			console:SetActive(true); console:Log("Status set to ONLINE", "SUCCESS")
-		end},
-		{Text="Set Offline",   Style="danger",  Width=120, Callback=function()
-			console:SetActive(false); console:Log("Status set to OFFLINE", "WARN")
-		end},
-	})
-	self:AddParagraph(5, "Console API",
-		"console:Log(msg, level)    levels: INFO | SUCCESS | WARN | ERROR | SNIPE | DEBUG\n"..
-		"console:Clear()            clears all lines\n"..
-		"console:SetActive(bool)    toggles the green/red status dot"
-	)
 end
 
 local function processHexColors(text)

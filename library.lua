@@ -532,28 +532,32 @@ function Lib:_buildTitleBar(win)
 		return b
 	end
 
-	local function mkImgBtn(assetId, hc, cb, lo)
-		local wrap = new("Frame",{
-			Size=UDim2.fromOffset(44,44),BackgroundTransparency=1,ZIndex=12,LayoutOrder=lo,
-		}, right)
-		local img = new("ImageLabel",{
-			AnchorPoint=Vector2.new(.5,.5),Position=UDim2.fromScale(.5,.5),
+	-- search image button
+	do
+		local w = new("Frame",{Size=UDim2.fromOffset(44,44),BackgroundTransparency=1,ZIndex=12,LayoutOrder=0},right)
+		local img = new("ImageLabel",{AnchorPoint=Vector2.new(.5,.5),Position=UDim2.fromScale(.5,.5),
 			Size=UDim2.fromOffset(18,18),BackgroundTransparency=1,
-			Image="rbxassetid://"..assetId,ImageColor3=C.TextDim,ZIndex=13,
-		}, wrap)
-		local btn = new("TextButton",{
-			Text="",BackgroundTransparency=1,Size=UDim2.fromScale(1,1),ZIndex=14,AutoButtonColor=false,
-		}, wrap)
-		btn.MouseEnter:Connect(function() tw(img,.12,{ImageColor3=hc}); tw(wrap,.12,{BackgroundTransparency=.93}) end)
-		btn.MouseLeave:Connect(function() tw(img,.15,{ImageColor3=C.TextDim}); tw(wrap,.15,{BackgroundTransparency=1}) end)
-		btn.Activated:Connect(cb)
-		return wrap, img, btn
+			Image="rbxassetid://132302594577680",ImageColor3=C.TextDim,ZIndex=13},w)
+		local btn = new("TextButton",{Text="",BackgroundTransparency=1,Size=UDim2.fromScale(1,1),ZIndex=14,AutoButtonColor=false},w)
+		btn.MouseEnter:Connect(function() tw(img,.12,{ImageColor3=C.White}); tw(w,.12,{BackgroundTransparency=.93}) end)
+		btn.MouseLeave:Connect(function() tw(img,.15,{ImageColor3=C.TextDim}); tw(w,.15,{BackgroundTransparency=1}) end)
+		btn.Activated:Connect(function() self:_toggleSearch() end)
+		self._searchBtnImg = img
 	end
 
-	local _sb, sbImg = mkImgBtn("132302594577680", C.White, function() self:_toggleSearch() end, 0)
-	local _gb, gbImg = mkImgBtn("101671992802622", C.TextDim, function() self:_openSettings() end, 1)
-	self._searchBtnImg = sbImg
-	self._gearImg      = gbImg
+	-- gear image button
+	do
+		local w = new("Frame",{Size=UDim2.fromOffset(44,44),BackgroundTransparency=1,ZIndex=12,LayoutOrder=1},right)
+		local img = new("ImageLabel",{AnchorPoint=Vector2.new(.5,.5),Position=UDim2.fromScale(.5,.5),
+			Size=UDim2.fromOffset(18,18),BackgroundTransparency=1,
+			Image="rbxassetid://101671992802622",ImageColor3=C.TextDim,ZIndex=13},w)
+		local btn = new("TextButton",{Text="",BackgroundTransparency=1,Size=UDim2.fromScale(1,1),ZIndex=14,AutoButtonColor=false},w)
+		btn.MouseEnter:Connect(function() tw(img,.12,{ImageColor3=C.TextDim}); tw(w,.12,{BackgroundTransparency=.93}) end)
+		btn.MouseLeave:Connect(function() tw(img,.15,{ImageColor3=C.TextDim}); tw(w,.15,{BackgroundTransparency=1}) end)
+		btn.Activated:Connect(function() self:_openSettings() end)
+		self._gearImg = img
+	end
+
 	self._minBtn = mkBtn("-", C.White, function()
 		if self._minimised then self:Maximise() else self:Minimise() end
 	end, 2)

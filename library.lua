@@ -37,12 +37,16 @@ end
 local function corner(obj, r)
 	new("UICorner",{CornerRadius=UDim.new(0,r or 8)},obj)
 end
+
 local function stroke(obj, c, th, tr)
 	return new("UIStroke",{Color=c or fromHex("1a1a1a"),Thickness=th or 1,Transparency=tr or 0},obj)
 end
+
+-- MOVER FUNÇÕES HELPER PARA AQUI (CORREÇÃO DO ERRO)
 local function pad(obj, t, b, l, r)
 	new("UIPadding",{PaddingTop=UDim.new(0,t or 0),PaddingBottom=UDim.new(0,b or 0),PaddingLeft=UDim.new(0,l or 0),PaddingRight=UDim.new(0,r or 0)},obj)
 end
+
 local function hlist(obj, spacing, valign)
 	new("UIListLayout",{
 		FillDirection=Enum.FillDirection.Horizontal,
@@ -51,6 +55,7 @@ local function hlist(obj, spacing, valign)
 		Padding=UDim.new(0,spacing or 0)
 	},obj)
 end
+
 local function vlist(obj, spacing, halign)
 	new("UIListLayout",{
 		FillDirection=Enum.FillDirection.Vertical,
@@ -59,6 +64,7 @@ local function vlist(obj, spacing, halign)
 		Padding=UDim.new(0,spacing or 0)
 	},obj)
 end
+-- FIM DA CORREÇÃO
 
 local C = {
 	Bg       = fromHex("060606"),

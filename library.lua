@@ -152,9 +152,14 @@ function Lib.new(userCfg)
 	self._minBtn     = nil
 	self._tbFiller   = nil
 	self._tbBorder   = nil
-	self._toggleKey  = "RightShift"
-	self._toasts     = {}
-	self._toastCount = 0
+	self._toggleKey      = "RightShift"
+	self._toasts         = {}
+	self._toastCount     = 0
+	self._hidden         = false
+	self._settingsVisible= false
+	self._settingsFrame  = nil
+	self._settingsScroll = nil
+	self._gearBtn        = nil
 
 	local guiParent = self.cfg.GuiParent == "PlayerGui"
 		and LocalPlayer:WaitForChild("PlayerGui") or CoreGui
@@ -330,49 +335,51 @@ function Lib:_buildWindow()
 	self:SetPage(1)
 	task.defer(doScale)
 
-	-- bottom drag handle (pill below window, sibling in ScreenGui)
+	-- bottom drag handle
 	local dh = new("Frame",{
-		Size=UDim2.fromOffset(80,24),
-		BackgroundTransparency=1,
-		ZIndex=998,
+		AnchorPoint = Vector2.new(0.5, 0),
+		Size = UDim2.fromOffset(80, 24),
+		BackgroundTransparency = 1,
+		ZIndex = 998,
 	}, self._sg)
 	local dhPill = new("Frame",{
-		AnchorPoint=Vector2.new(.5,.5),Position=UDim2.fromScale(.5,.5),
-		Size=UDim2.fromOffset(48,5),
-		BackgroundColor3=C.White,BackgroundTransparency=0.55,
-		BorderSizePixel=0,
+		AnchorPoint = Vector2.new(.5,.5), Position = UDim2.fromScale(.5,.5),
+		Size = UDim2.fromOffset(48,5),
+		BackgroundColor3 = C.White, BackgroundTransparency = 0.55,
+		BorderSizePixel = 0,
 	}, dh)
-	corner(dhPill,3)
+	corner(dhPill, 3)
 	self._dragHandle = dh
 
 	local function updateHandlePos()
 		if not win or not win.Parent then return end
 		local ap = win.AbsolutePosition
 		local as = win.AbsoluteSize
-		dh.Position = UDim2.fromOffset(ap.X + as.X/2 - 40, ap.Y + as.Y + 6)
+		dh.Position = UDim2.fromOffset(math.floor(ap.X + as.X * 0.5), math.floor(ap.Y + as.Y + 7))
 	end
 	self._updateHandle = updateHandlePos
 
 	table.insert(self._conns, win:GetPropertyChangedSignal("AbsolutePosition"):Connect(updateHandlePos))
 	table.insert(self._conns, win:GetPropertyChangedSignal("AbsoluteSize"):Connect(updateHandlePos))
-	task.defer(updateHandlePos)
+	-- double-defer so layout settles before first position calc
+	task.defer(function() task.defer(updateHandlePos) end)
 
 	do
 		local dhDrag, dhDs, dhWs = false
 		dh.InputBegan:Connect(function(i)
 			if i.UserInputType==Enum.UserInputType.MouseButton1 or i.UserInputType==Enum.UserInputType.Touch then
 				dhDrag=true; dhDs=i.Position; dhWs=win.Position
-				tw(dhPill,.12,{BackgroundTransparency=0.35,Size=UDim2.fromOffset(56,6)})
+				tw(dhPill,.12,{BackgroundTransparency=0.3, Size=UDim2.fromOffset(58,6)})
 			end
 		end)
 		dh.InputEnded:Connect(function(i)
 			if i.UserInputType==Enum.UserInputType.MouseButton1 or i.UserInputType==Enum.UserInputType.Touch then
 				dhDrag=false
-				tw(dhPill,.18,{BackgroundTransparency=0.55,Size=UDim2.fromOffset(48,5)})
+				tw(dhPill,.18,{BackgroundTransparency=0.55, Size=UDim2.fromOffset(48,5)})
 			end
 		end)
-		dh.MouseEnter:Connect(function() tw(dhPill,.12,{BackgroundTransparency=0.4,Size=UDim2.fromOffset(54,6)}) end)
-		dh.MouseLeave:Connect(function() if not dhDrag then tw(dhPill,.18,{BackgroundTransparency=0.55,Size=UDim2.fromOffset(48,5)}) end end)
+		dh.MouseEnter:Connect(function() tw(dhPill,.12,{BackgroundTransparency=0.4, Size=UDim2.fromOffset(56,6)}) end)
+		dh.MouseLeave:Connect(function() if not dhDrag then tw(dhPill,.18,{BackgroundTransparency=0.55, Size=UDim2.fromOffset(48,5)}) end end)
 		table.insert(self._conns, UserInputService.InputChanged:Connect(function(i)
 			if not dhDrag then return end
 			if i.UserInputType~=Enum.UserInputType.MouseMovement and i.UserInputType~=Enum.UserInputType.Touch then return end
@@ -433,8 +440,10 @@ function Lib:_buildTitleBar(win)
 		b.Activated:Connect(cb)
 		return b
 	end
-	mkBtn("⚙",C.TextDim,function() self:_openSettings() end,0)
-	self._minBtn = mkBtn("-",C.White,function() self:ToggleVisibility() end,1)
+	self._gearBtn = mkBtn("⚙",C.TextDim,function() self:_openSettings() end,0)
+	self._minBtn = mkBtn("-",C.White,function()
+		if self._minimised then self:Maximise() else self:Minimise() end
+	end,1)
 	mkBtn("x",C.Red,function() self:Destroy() end,2)
 
 	do
@@ -575,6 +584,13 @@ end
 
 function Lib:SetPage(index)
 	local cfg = self.cfg
+	-- close settings if open
+	if self._settingsVisible then
+		self._settingsVisible = false
+		if self._settingsFrame then self._settingsFrame.Visible = false end
+		if self._gearBtn then tw(self._gearBtn,.15,{TextColor3=C.TextDim,BackgroundTransparency=1}) end
+		if self._bar then self._bar.Visible = true end
+	end
 	if self._pages[self._pageIdx] then
 		self._pages[self._pageIdx].Frame.Visible = false
 	end
@@ -643,7 +659,7 @@ function Lib:_ensurePill()
 	stroke(pill,C.Border2,1)
 	pill.MouseEnter:Connect(function() tw(pill,.15,{BackgroundColor3=C.Card3}) end)
 	pill.MouseLeave:Connect(function() tw(pill,.18,{BackgroundColor3=C.Card2}) end)
-	pill.Activated:Connect(function() self:Maximise() end)
+	pill.Activated:Connect(function() self:Show() end)
 	self._mobilePill = pill
 end
 
@@ -716,16 +732,73 @@ function Lib:Maximise()
 end
 
 function Lib:ToggleVisibility()
-	if self._minimised then self:Maximise() else self:Minimise() end
+	if self._hidden or self._minimised then
+		self:Show()
+	else
+		self:Hide()
+	end
+end
+
+function Lib:Hide()
+	if self._hidden then return end
+	self._hidden = true
+	local win = self.Window
+	if not win then return end
+	if self._minimised then
+		self._minimised = false
+		if self._minBtn then self._minBtn.Text = "-" end
+		if self._body then self._body.Visible = true end
+		win.BackgroundColor3 = C.Bg
+		if self._tbFiller then self._tbFiller.Visible = true end
+		if self._tbBorderLine then self._tbBorderLine.Visible = true end
+	end
+	local ws = win.AbsoluteSize
+	tw(win, .25, {
+		BackgroundTransparency = 1,
+		Size = UDim2.fromOffset(ws.X * 0.93, ws.Y * 0.93),
+	}, Enum.EasingStyle.Quint, Enum.EasingDirection.In)
+	task.delay(.28, function()
+		if win and win.Parent then win.Visible = false end
+	end)
+	if self._dragHandle then self._dragHandle.Visible = false end
+	if self._mobilePill then self._mobilePill.Visible = false end
+end
+
+function Lib:Show()
+	local win = self.Window
+	if not win then return end
+	local wasHidden = self._hidden
+	self._hidden = false
+	if self._minimised then
+		self._minimised = false
+		if self._minBtn then self._minBtn.Text = "-" end
+	end
+	if self._body then self._body.Visible = true end
+	win.BackgroundColor3 = C.Bg
+	if self._tbFiller then self._tbFiller.Visible = true end
+	if self._tbBorderLine then self._tbBorderLine.Visible = true end
+	win.Position = UDim2.fromScale(.5, .5)
+	if wasHidden then
+		local prev = self._preMinSize
+		local cfg = self.cfg
+		local targetW = prev and prev.W or cfg.WindowWidth
+		local targetH = prev and prev.H or cfg.WindowHeight
+		win.Size = UDim2.fromOffset(targetW * 0.9, targetH * 0.9)
+		win.Visible = true
+		win.BackgroundTransparency = 1
+		tw(win, .42, {BackgroundTransparency=0, Size=UDim2.fromOffset(targetW, targetH)}, Enum.EasingStyle.Back, Enum.EasingDirection.Out)
+	else
+		local prev = self._preMinSize
+		local cfg = self.cfg
+		local targetW = prev and prev.W or cfg.WindowWidth
+		local targetH = prev and prev.H or cfg.WindowHeight
+		tw(win, .42, {Size=UDim2.fromOffset(targetW, targetH)}, Enum.EasingStyle.Back, Enum.EasingDirection.Out)
+	end
+	if self._dragHandle then self._dragHandle.Visible = true end
 end
 
 function Lib:SetVisible(v)
-	if v then
-		if self._minimised then self:Maximise()
-		elseif self.Window then self.Window.Visible=true; self.Window.BackgroundTransparency=0 end
-	else
-		if not self._minimised then self:Minimise() end
-	end
+	if v then self:Show() else self:Hide() end
 end
 
 function Lib:Shake(intensity)
@@ -763,8 +836,8 @@ function Lib:Destroy()
 
 		local toastW = 300
 		local toast = new("Frame",{
-			AnchorPoint = Vector2.new(1,0),
-			Position    = UDim2.new(1,320,0,16),
+			AnchorPoint = Vector2.new(1,1),
+			Position    = UDim2.new(1,320,1,-16),
 			Size        = UDim2.fromOffset(toastW,0),
 			AutomaticSize = Enum.AutomaticSize.Y,
 			BackgroundColor3 = C.Card2,
@@ -780,16 +853,16 @@ function Lib:Destroy()
 		hlist(topRow,8)
 		local dot=new("Frame",{Size=UDim2.fromOffset(8,8),BackgroundColor3=C.TextDim,BorderSizePixel=0,LayoutOrder=0},topRow)
 		corner(dot,4)
-		new("TextLabel",{Text="INTERFACE CLOSED",Font=Enum.Font.GothamBold,TextSize=11,TextColor3=C.TextDim,
+		new("TextLabel",{Text="INTERFACE CLOSED",Font=Enum.Font.GothamBold,TextSize=12,TextColor3=C.TextDim,
 			BackgroundTransparency=1,Size=UDim2.new(0,0,1,0),AutomaticSize=Enum.AutomaticSize.X,
 			TextXAlignment=Enum.TextXAlignment.Left,ZIndex=1002,LayoutOrder=1},topRow)
 		new("TextLabel",{Text=keyInfo,Font=Enum.Font.Gotham,TextSize=12,TextColor3=C.TextDim,
 			BackgroundTransparency=1,Size=UDim2.new(1,0,0,0),AutomaticSize=Enum.AutomaticSize.Y,
 			TextXAlignment=Enum.TextXAlignment.Left,TextWrapped=true,ZIndex=1002,LayoutOrder=1},toast)
 
-		tw(toast,.38,{Position=UDim2.new(1,-16,0,16)},Enum.EasingStyle.Back,Enum.EasingDirection.Out)
+		tw(toast,.38,{Position=UDim2.new(1,-16,1,-16)},Enum.EasingStyle.Back,Enum.EasingDirection.Out)
 		task.delay(5,function()
-			tw(toast,.22,{Position=UDim2.new(1,320,0,16),BackgroundTransparency=1},Enum.EasingStyle.Quint,Enum.EasingDirection.In)
+			tw(toast,.22,{Position=UDim2.new(1,320,1,-16),BackgroundTransparency=1},Enum.EasingStyle.Quint,Enum.EasingDirection.In)
 			task.delay(.25,function() pcall(function() tmpSg:Destroy() end) end)
 		end)
 	end)
@@ -809,14 +882,20 @@ end
 
 function Lib:_buildToastSystem()
 	local holder = new("Frame",{
-		AnchorPoint = Vector2.new(1,0),
-		Position    = UDim2.new(1,-16,0,16),
-		Size        = UDim2.fromOffset(300,0),
+		AnchorPoint   = Vector2.new(1, 1),
+		Position      = UDim2.new(1, -16, 1, -16),
+		Size          = UDim2.fromOffset(300, 0),
 		AutomaticSize = Enum.AutomaticSize.Y,
 		BackgroundTransparency = 1,
 		ZIndex = 1000,
 	}, self._sg)
-	vlist(holder, 8)
+	new("UIListLayout",{
+		FillDirection      = Enum.FillDirection.Vertical,
+		SortOrder          = Enum.SortOrder.LayoutOrder,
+		VerticalAlignment  = Enum.VerticalAlignment.Bottom,
+		HorizontalAlignment= Enum.HorizontalAlignment.Right,
+		Padding            = UDim.new(0, 8),
+	}, holder)
 	self._toastHolder = holder
 end
 
@@ -830,20 +909,27 @@ function Lib:ShowNotification(msg, style, duration, title)
 		purple  = {dot=C.Purple, bg=C.PurpleBg, tc=C.Purple},
 	}
 	local st = styleMap[style or "info"] or styleMap.info
-
 	self._toastCount = (self._toastCount or 0) + 1
 	local lo = self._toastCount
 
+	-- wrapper is layout-managed; inner toast slides inside it
+	local wrapper = new("Frame",{
+		Size          = UDim2.new(1, 0, 0, 0),
+		AutomaticSize = Enum.AutomaticSize.Y,
+		BackgroundTransparency = 1,
+		ClipsDescendants = true,
+		LayoutOrder = lo,
+		ZIndex = 1001,
+	}, self._toastHolder)
+
 	local toast = new("Frame",{
-		Size = UDim2.new(1,0,0,0),
+		Size          = UDim2.new(1, 0, 0, 0),
 		AutomaticSize = Enum.AutomaticSize.Y,
 		BackgroundColor3 = C.Card2,
-		BackgroundTransparency = 1,
-		BorderSizePixel = 0,
-		ZIndex = 1001,
-		LayoutOrder = lo,
-		ClipsDescendants = false,
-	}, self._toastHolder)
+		BorderSizePixel  = 0,
+		ZIndex = 1002,
+		Position = UDim2.fromOffset(320, 0),
+	}, wrapper)
 	corner(toast, 10)
 	stroke(toast, C.Border2, 1)
 
@@ -852,39 +938,34 @@ function Lib:ShowNotification(msg, style, duration, title)
 		AutomaticSize = Enum.AutomaticSize.Y,
 		BackgroundTransparency = 1,
 	}, toast)
-	pad(inner, 12, 12, 14, 14)
-	vlist(inner, 4)
+	pad(inner, 11, 11, 14, 14)
+	vlist(inner, 5)
 
+	-- title row
 	local topRow = new("Frame",{
-		Size = UDim2.new(1,0,0,0),
-		AutomaticSize = Enum.AutomaticSize.Y,
+		Size = UDim2.new(1,0,0,16),
 		BackgroundTransparency = 1,
 		LayoutOrder = 0,
 	}, inner)
 	hlist(topRow, 8)
-
 	local dot = new("Frame",{
-		Size = UDim2.fromOffset(8,8),
-		BackgroundColor3 = st.dot,
-		BorderSizePixel = 0,
-		LayoutOrder = 0,
+		Size=UDim2.fromOffset(8,8),BackgroundColor3=st.dot,BorderSizePixel=0,LayoutOrder=0,
 	}, topRow)
 	corner(dot, 4)
-
-	local titleTxt = title or style or "info"
 	new("TextLabel",{
-		Text = string.upper(titleTxt),
+		Text = string.upper(title or style or "info"),
 		Font = Enum.Font.GothamBold,
-		TextSize = 11,
+		TextSize = 12,
 		TextColor3 = st.tc,
 		BackgroundTransparency = 1,
-		Size = UDim2.new(1,0,0,16),
+		Size = UDim2.new(1, 0, 1, 0),
 		AutomaticSize = Enum.AutomaticSize.X,
 		TextXAlignment = Enum.TextXAlignment.Left,
-		ZIndex = 1002,
+		ZIndex = 1003,
 		LayoutOrder = 1,
 	}, topRow)
 
+	-- message
 	new("TextLabel",{
 		Text = msg or "",
 		Font = Enum.Font.Gotham,
@@ -895,177 +976,176 @@ function Lib:ShowNotification(msg, style, duration, title)
 		AutomaticSize = Enum.AutomaticSize.Y,
 		TextXAlignment = Enum.TextXAlignment.Left,
 		TextWrapped = true,
-		ZIndex = 1002,
+		ZIndex = 1003,
 		LayoutOrder = 1,
 	}, inner)
 
 	-- progress bar
-	local pbg = new("Frame",{
-		Size = UDim2.new(1,0,0,2),
-		BackgroundColor3 = C.Card3,
-		BorderSizePixel = 0,
-		LayoutOrder = 2,
-	}, inner)
+	local pbg = new("Frame",{Size=UDim2.new(1,0,0,2),BackgroundColor3=C.Card3,BorderSizePixel=0,LayoutOrder=2},inner)
 	corner(pbg,1)
 	local pf = new("Frame",{Size=UDim2.fromScale(1,1),BackgroundColor3=st.dot,BorderSizePixel=0},pbg)
 	corner(pf,1)
 
-	-- slide in from right
-	toast.Position = UDim2.fromOffset(320, 0)
-	toast.BackgroundTransparency = 0
+	-- animate in (slide from right inside the clipping wrapper)
 	tw(toast, .38, {Position=UDim2.fromOffset(0,0)}, Enum.EasingStyle.Back, Enum.EasingDirection.Out)
 	tw(pf, duration or 3.5, {Size=UDim2.fromScale(0,1)}, Enum.EasingStyle.Linear)
 
 	local alive = true
-	table.insert(self._toasts, toast)
-
 	local function dismiss()
 		if not alive then return end
 		alive = false
-		for i,t in ipairs(self._toasts) do
-			if t == toast then table.remove(self._toasts, i) break end
-		end
-		tw(toast, .22, {Position=UDim2.fromOffset(320,0), BackgroundTransparency=1}, Enum.EasingStyle.Quint, Enum.EasingDirection.In)
-		task.delay(.25, function() if toast and toast.Parent then toast:Destroy() end end)
-	end
-
-	-- click to dismiss
-	local clickOverlay = new("TextButton",{Text="",BackgroundTransparency=1,Size=UDim2.fromScale(1,1),ZIndex=1003,AutoButtonColor=false},toast)
-	clickOverlay.Activated:Connect(dismiss)
-
-	task.delay(duration or 3.5, dismiss)
-end
-
-function Lib:_openSettings()
-	if self._settingsOpen then return end
-	self._settingsOpen = true
-
-	local isMobile = UserInputService.TouchEnabled
-
-	local overlay = new("TextButton",{
-		Text="",BackgroundColor3=Color3.new(0,0,0),BackgroundTransparency=0.55,
-		Size=UDim2.fromScale(1,1),ZIndex=900,AutoButtonColor=false,
-	}, self._sg)
-
-	local panel = new("Frame",{
-		AnchorPoint = Vector2.new(.5,.5),
-		Position    = UDim2.fromScale(.5,.52),
-		Size        = UDim2.fromOffset(360, isMobile and 160 or 260),
-		BackgroundColor3 = C.Card,
-		BorderSizePixel = 0,
-		ZIndex = 901,
-		BackgroundTransparency = 1,
-	}, self._sg)
-	corner(panel, 14)
-	stroke(panel, C.Border2, 1)
-
-	tw(overlay, .22, {BackgroundTransparency=0.55})
-	tw(panel, .32, {BackgroundTransparency=0, Position=UDim2.fromScale(.5,.5)}, Enum.EasingStyle.Back, Enum.EasingDirection.Out)
-
-	pad(panel, 20, 20, 20, 20)
-	vlist(panel, 14)
-
-	-- header
-	local hdr = new("Frame",{Size=UDim2.new(1,0,0,22),BackgroundTransparency=1,LayoutOrder=0},panel)
-	hlist(hdr, 0)
-	new("TextLabel",{Text="Settings",Font=Enum.Font.GothamBold,TextSize=16,TextColor3=C.White,
-		BackgroundTransparency=1,Size=UDim2.new(1,-28,1,0),TextXAlignment=Enum.TextXAlignment.Left,LayoutOrder=0},hdr)
-	local closeBtn = new("TextButton",{Text="×",Font=Enum.Font.GothamBold,TextSize=18,TextColor3=C.TextDim,
-		BackgroundTransparency=1,Size=UDim2.fromOffset(28,22),TextXAlignment=Enum.TextXAlignment.Center,
-		AutoButtonColor=false,LayoutOrder=1},hdr)
-	closeBtn.MouseEnter:Connect(function() tw(closeBtn,.1,{TextColor3=C.Red}) end)
-	closeBtn.MouseLeave:Connect(function() tw(closeBtn,.12,{TextColor3=C.TextDim}) end)
-
-	-- separator
-	new("Frame",{Size=UDim2.new(1,0,0,1),BackgroundColor3=C.Border,BorderSizePixel=0,LayoutOrder=1},panel)
-
-	local function closePanel()
-		self._settingsOpen = false
-		tw(panel,.2,{BackgroundTransparency=1,Position=UDim2.fromScale(.5,.52)},Enum.EasingStyle.Quint,Enum.EasingDirection.In)
-		tw(overlay,.2,{BackgroundTransparency=1})
-		task.delay(.22,function()
-			if panel and panel.Parent then panel:Destroy() end
-			if overlay and overlay.Parent then overlay:Destroy() end
+		tw(toast, .22, {Position=UDim2.fromOffset(320,0)}, Enum.EasingStyle.Quint, Enum.EasingDirection.In)
+		task.delay(.25, function()
+			if wrapper and wrapper.Parent then wrapper:Destroy() end
 		end)
 	end
 
-	closeBtn.Activated:Connect(closePanel)
-	overlay.Activated:Connect(closePanel)
+	local clickOverlay = new("TextButton",{Text="",BackgroundTransparency=1,
+		Size=UDim2.fromScale(1,1),ZIndex=1004,AutoButtonColor=false},toast)
+	clickOverlay.Activated:Connect(dismiss)
+	task.delay(duration or 3.5, dismiss)
+end
 
-	if isMobile then
-		new("TextLabel",{
-			Text="Keybind settings are not available on mobile.\nUse the floating button to show/hide the interface.",
-			Font=Enum.Font.Gotham,TextSize=12,TextColor3=C.TextDim,
-			BackgroundTransparency=1,Size=UDim2.new(1,0,0,0),AutomaticSize=Enum.AutomaticSize.Y,
-			TextXAlignment=Enum.TextXAlignment.Left,TextWrapped=true,LayoutOrder=2,
-		},panel)
+function Lib:_buildSettingsPanel()
+	local frame = new("Frame",{
+		Size=UDim2.fromScale(1,1),BackgroundTransparency=1,Visible=false,ZIndex=5,
+	}, self._content)
+	local scroll = new("ScrollingFrame",{
+		Size=UDim2.fromScale(1,1),BackgroundTransparency=1,
+		ScrollBarThickness=3,ScrollBarImageColor3=C.Border3,ScrollBarImageTransparency=.5,
+		CanvasSize=UDim2.new(0,0,0,0),AutomaticCanvasSize=Enum.AutomaticSize.Y,
+		ElasticBehavior=Enum.ElasticBehavior.Never,
+	},frame)
+	new("UIListLayout",{SortOrder=Enum.SortOrder.LayoutOrder,Padding=UDim.new(0,0)},scroll)
+	pad(scroll,24,24,24,24)
+	self._settingsFrame = frame
+	self._settingsScroll = scroll
+
+	local lo = 0
+	local function nextLo() lo=lo+1; return lo end
+
+	new("Frame",{Size=UDim2.new(1,0,0,4),BackgroundTransparency=1,LayoutOrder=nextLo()},scroll)
+	new("TextLabel",{Text="Settings",Font=Enum.Font.GothamBold,TextSize=20,TextColor3=C.White,
+		BackgroundTransparency=1,Size=UDim2.new(1,0,0,28),
+		TextXAlignment=Enum.TextXAlignment.Left,LayoutOrder=nextLo()},scroll)
+	new("TextLabel",{Text="Interface preferences",Font=Enum.Font.Gotham,TextSize=12,TextColor3=C.TextDim,
+		BackgroundTransparency=1,Size=UDim2.new(1,0,0,20),
+		TextXAlignment=Enum.TextXAlignment.Left,LayoutOrder=nextLo()},scroll)
+	new("Frame",{Size=UDim2.new(1,0,0,1),BackgroundColor3=C.Border,BorderSizePixel=0,LayoutOrder=nextLo()},scroll)
+	new("Frame",{Size=UDim2.new(1,0,0,18),BackgroundTransparency=1,LayoutOrder=nextLo()},scroll)
+
+	if UserInputService.TouchEnabled then
+		local card = new("Frame",{Size=UDim2.new(1,0,0,0),AutomaticSize=Enum.AutomaticSize.Y,
+			BackgroundColor3=C.Card,BorderSizePixel=0,LayoutOrder=nextLo()},scroll)
+		corner(card,10); stroke(card,C.Border,1); pad(card,16,16,16,16)
+		new("TextLabel",{Text="Mobile device detected.\nKeybind configuration is unavailable.\nUse the floating button to show or hide the interface.",
+			Font=Enum.Font.Gotham,TextSize=13,TextColor3=C.TextDim,BackgroundTransparency=1,
+			Size=UDim2.new(1,0,0,0),AutomaticSize=Enum.AutomaticSize.Y,
+			TextXAlignment=Enum.TextXAlignment.Left,TextWrapped=true},card)
 		return
 	end
 
-	-- keybind section
-	new("TextLabel",{Text="Toggle Interface Keybind",Font=Enum.Font.GothamBold,TextSize=11,TextColor3=C.TextDim,
-		BackgroundTransparency=1,Size=UDim2.new(1,0,0,16),TextXAlignment=Enum.TextXAlignment.Left,LayoutOrder=2},panel)
+	new("TextLabel",{Text="SHOW / HIDE KEYBIND",Font=Enum.Font.GothamBold,TextSize=9,TextColor3=C.TextOff,
+		BackgroundTransparency=1,Size=UDim2.new(1,0,0,14),
+		TextXAlignment=Enum.TextXAlignment.Left,LayoutOrder=nextLo()},scroll)
+	new("Frame",{Size=UDim2.new(1,0,0,6),BackgroundTransparency=1,LayoutOrder=nextLo()},scroll)
 
-	local kbRow = new("Frame",{Size=UDim2.new(1,0,0,44),BackgroundColor3=C.Card2,BorderSizePixel=0,LayoutOrder=3},panel)
-	corner(kbRow, 10)
-	stroke(kbRow, C.Border, 1)
-	pad(kbRow, 0, 0, 14, 14)
-
-	new("TextLabel",{Text="Show / Hide",Font=Enum.Font.Gotham,TextSize=13,TextColor3=C.Text,
+	local kbRow=new("Frame",{Size=UDim2.new(1,0,0,48),BackgroundColor3=C.Card,BorderSizePixel=0,LayoutOrder=nextLo()},scroll)
+	corner(kbRow,10); stroke(kbRow,C.Border,1); pad(kbRow,0,0,16,16)
+	new("TextLabel",{Text="Toggle Interface",Font=Enum.Font.Gotham,TextSize=13,TextColor3=C.Text,
 		BackgroundTransparency=1,Size=UDim2.new(1,-104,1,0),TextXAlignment=Enum.TextXAlignment.Left},kbRow)
 
-	local kbBtn = new("TextButton",{
-		Text=self._toggleKey,Font=Enum.Font.GothamBold,TextSize=11,TextColor3=C.White,
-		BackgroundColor3=C.Card3,BorderSizePixel=0,
+	local kbBtn=new("TextButton",{Text=self._toggleKey,Font=Enum.Font.GothamBold,TextSize=11,
+		TextColor3=C.White,BackgroundColor3=C.Card3,BorderSizePixel=0,
 		AnchorPoint=Vector2.new(1,.5),Position=UDim2.new(1,0,.5,0),
-		Size=UDim2.fromOffset(90,32),AutoButtonColor=false,
-	},kbRow)
-	corner(kbBtn, 8)
-	stroke(kbBtn, C.Border2, 1)
+		Size=UDim2.fromOffset(90,32),AutoButtonColor=false},kbRow)
+	corner(kbBtn,8); stroke(kbBtn,C.Border2,1)
 	pcall(function() kbBtn.CursorIcon="rbxasset://SystemCursors/PointingHand" end)
+	kbRow.MouseEnter:Connect(function() tw(kbRow,.15,{BackgroundColor3=C.Card2}) end)
+	kbRow.MouseLeave:Connect(function() tw(kbRow,.18,{BackgroundColor3=C.Card}) end)
 
-	local kbListening = false
+	local kbListening=false
 	kbBtn.Activated:Connect(function()
 		if kbListening then return end
-		kbListening = true
-		kbBtn.Text = "..."
-		tw(kbBtn, .15, {BackgroundColor3=C.Card2})
+		kbListening=true; kbBtn.Text="..."
+		tw(kbBtn,.15,{BackgroundColor3=C.Card2})
 	end)
-
-	local kbConn
-	kbConn = UserInputService.InputBegan:Connect(function(inp, gp)
+	table.insert(self._conns, UserInputService.InputBegan:Connect(function(inp,gp)
 		if not kbListening then return end
-		if inp.UserInputType ~= Enum.UserInputType.Keyboard then return end
-		local name = tostring(inp.KeyCode):gsub("Enum%.KeyCode%.","")
-		if name == "Escape" then
-			kbListening = false
-			kbBtn.Text = self._toggleKey
-			tw(kbBtn, .15, {BackgroundColor3=C.Card3})
-			return
+		if inp.UserInputType~=Enum.UserInputType.Keyboard then return end
+		local name=tostring(inp.KeyCode):gsub("Enum%.KeyCode%.","")
+		if name=="Escape" then
+			kbListening=false; kbBtn.Text=self._toggleKey
+			tw(kbBtn,.15,{BackgroundColor3=C.Card3}); return
 		end
-		self._toggleKey = name
-		kbBtn.Text = name
-		kbListening = false
-		tw(kbBtn, .15, {BackgroundColor3=C.Card3})
-		self:ShowNotification("Keybind set to: "..name, "success", 3, "Settings")
-	end)
+		self._toggleKey=name; kbBtn.Text=name; kbListening=false
+		tw(kbBtn,.15,{BackgroundColor3=C.Card3})
+		self:ShowNotification("Keybind updated to: "..name,"success",3,"Settings")
+	end))
 
-	-- info label
+	new("Frame",{Size=UDim2.new(1,0,0,10),BackgroundTransparency=1,LayoutOrder=nextLo()},scroll)
 	new("TextLabel",{
-		Text="Press the key above to rebind. Press Escape to cancel.",
-		Font=Enum.Font.Gotham,TextSize=11,TextColor3=C.TextDim,
-		BackgroundTransparency=1,Size=UDim2.new(1,0,0,0),AutomaticSize=Enum.AutomaticSize.Y,
-		TextXAlignment=Enum.TextXAlignment.Left,TextWrapped=true,LayoutOrder=4,
-	},panel)
+		Text="Click the button, then press any key to rebind. Press Escape to cancel.",
+		Font=Enum.Font.Gotham,TextSize=11,TextColor3=C.TextDim,BackgroundTransparency=1,
+		Size=UDim2.new(1,0,0,0),AutomaticSize=Enum.AutomaticSize.Y,
+		TextXAlignment=Enum.TextXAlignment.Left,TextWrapped=true,LayoutOrder=nextLo()},scroll)
 
-	-- disconnect keybind listener when panel closes
-	local origClose = closePanel
-	closePanel = function()
-		if kbConn then kbConn:Disconnect() end
-		origClose()
+	new("Frame",{Size=UDim2.new(1,0,0,24),BackgroundTransparency=1,LayoutOrder=nextLo()},scroll)
+	new("Frame",{Size=UDim2.new(1,0,0,1),BackgroundColor3=C.Border,BorderSizePixel=0,LayoutOrder=nextLo()},scroll)
+	new("Frame",{Size=UDim2.new(1,0,0,18),BackgroundTransparency=1,LayoutOrder=nextLo()},scroll)
+
+	new("TextLabel",{Text="ABOUT",Font=Enum.Font.GothamBold,TextSize=9,TextColor3=C.TextOff,
+		BackgroundTransparency=1,Size=UDim2.new(1,0,0,14),
+		TextXAlignment=Enum.TextXAlignment.Left,LayoutOrder=nextLo()},scroll)
+	new("Frame",{Size=UDim2.new(1,0,0,6),BackgroundTransparency=1,LayoutOrder=nextLo()},scroll)
+
+	local aboutCard=new("Frame",{Size=UDim2.new(1,0,0,0),AutomaticSize=Enum.AutomaticSize.Y,
+		BackgroundColor3=C.Card,BorderSizePixel=0,LayoutOrder=nextLo()},scroll)
+	corner(aboutCard,10); stroke(aboutCard,C.Border,1); pad(aboutCard,14,14,16,16); vlist(aboutCard,6)
+	local function aboutRow(label, value)
+		local r=new("Frame",{Size=UDim2.new(1,0,0,18),BackgroundTransparency=1,LayoutOrder=nextLo()},aboutCard)
+		hlist(r,0)
+		new("TextLabel",{Text=label,Font=Enum.Font.Gotham,TextSize=12,TextColor3=C.TextDim,
+			BackgroundTransparency=1,Size=UDim2.fromOffset(100,18),TextXAlignment=Enum.TextXAlignment.Left,LayoutOrder=0},r)
+		new("TextLabel",{Text=value,Font=Enum.Font.GothamBold,TextSize=12,TextColor3=C.Text,
+			BackgroundTransparency=1,Size=UDim2.new(1,-100,0,18),TextXAlignment=Enum.TextXAlignment.Left,LayoutOrder=1},r)
 	end
-	closeBtn.Activated:Connect(function() if kbConn then kbConn:Disconnect() end end)
-	overlay.Activated:Connect(function() if kbConn then kbConn:Disconnect() end end)
+	aboutRow("Library","SlaoqUILib")
+	aboutRow("Version","v"..self.cfg.AppVersion)
+	aboutRow("App","  "..self.cfg.AppName)
+end
+
+function Lib:_openSettings()
+	if not self._settingsFrame then self:_buildSettingsPanel() end
+
+	if self._settingsVisible then
+		self._settingsVisible = false
+		self._settingsFrame.Visible = false
+		if self._gearBtn then tw(self._gearBtn,.15,{TextColor3=C.TextDim,BackgroundTransparency=1}) end
+		if self._pages[self._pageIdx] then self._pages[self._pageIdx].Frame.Visible = true end
+		local nb = self._navBtns[self._pageIdx]
+		if nb then
+			tw(nb.Lbl,self.cfg.TweenSpeed,{TextColor3=C.White})
+			tw(nb.Bg,self.cfg.TweenSpeed,{BackgroundTransparency=.88})
+			tw(nb.Dot,self.cfg.TweenSpeed,{BackgroundColor3=C.White,Size=UDim2.fromOffset(7,7)})
+			self:_animBar(nb.Frame)
+		end
+		return
+	end
+
+	self._settingsVisible = true
+	for _,p in ipairs(self._pages) do
+		if p.Frame then p.Frame.Visible = false end
+	end
+	local old = self._navBtns[self._pageIdx]
+	if old then
+		tw(old.Lbl,self.cfg.TweenSpeed,{TextColor3=C.TextDim})
+		tw(old.Bg,self.cfg.TweenSpeed,{BackgroundTransparency=1})
+		tw(old.Dot,self.cfg.TweenSpeed,{BackgroundColor3=C.TextOff,Size=UDim2.fromOffset(6,6)})
+	end
+	if self._bar then self._bar.Visible = false end
+	if self._gearBtn then tw(self._gearBtn,.15,{TextColor3=C.White,BackgroundTransparency=.93}) end
+	self._settingsFrame.Visible = true
 end
 
 function Lib:_o(pi)
@@ -2585,14 +2665,24 @@ function Lib:_runDemo()
 	)
 
 	self:AddDivider(3, "Notifications")
+	self:AddLabel(3, "These appear bottom-right, slide from the side, and stack upward. Click to dismiss early.", "muted")
 	self:AddButtonRow(3, {
-		{Text="Info",    Style="ghost",   Width=100, Callback=function() self:ShowNotification("Informational message.", "info",    3, "Info")    end},
-		{Text="Success", Style="success", Width=100, Callback=function() self:ShowNotification("Operation completed!",   "success", 3, "Success") end},
-		{Text="Warning", Style="warning", Width=100, Callback=function() self:ShowNotification("Attention required.",    "warning", 3, "Warning") end},
-		{Text="Error",   Style="danger",  Width=100, Callback=function() self:ShowNotification("Something went wrong.",  "error",   3, "Error")   end},
+		{Text="Info",    Style="ghost",   Width=100, Callback=function() self:ShowNotification("Informational message.", "info",    3.5, "Info")    end},
+		{Text="Success", Style="success", Width=100, Callback=function() self:ShowNotification("Operation completed!",   "success", 3.5, "Success") end},
+		{Text="Warning", Style="warning", Width=100, Callback=function() self:ShowNotification("Attention required.",    "warning", 3.5, "Warning") end},
+		{Text="Error",   Style="danger",  Width=100, Callback=function() self:ShowNotification("Something went wrong.",  "error",   3.5, "Error")   end},
 	})
 	self:AddButtonRow(3, {
-		{Text="Shake Window", Style="ghost", Width=140, Callback=function() self:Shake(8) end},
+		{Text="Stack 3 Toasts", Style="primary", Width=150, Callback=function()
+			task.spawn(function()
+				self:ShowNotification("First notification — oldest", "info", 4, "Stack Test")
+				task.wait(0.4)
+				self:ShowNotification("Second notification appears above", "success", 4, "Stack Test")
+				task.wait(0.4)
+				self:ShowNotification("Third notification — newest (bottom)", "warning", 4, "Stack Test")
+			end)
+		end},
+		{Text="Shake Window", Style="ghost", Width=130, Callback=function() self:Shake(8) end},
 	})
 
 	self:AddSectionHeader(4, "Inputs", "All interactive input components")

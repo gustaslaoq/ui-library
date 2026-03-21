@@ -612,14 +612,13 @@ function Lib:Minimise()
 		tw(pill,.38,{Position=UDim2.new(.5,0,0,20),BackgroundTransparency=0},Enum.EasingStyle.Back,Enum.EasingDirection.Out)
 	else
 		self._preMinSize = {W=win.AbsoluteSize.X, H=win.AbsoluteSize.Y}
-		self._body.Visible = false
-
 		if self._tbFiller then self._tbFiller.Visible = false end
 		if self._tbBorderLine then self._tbBorderLine.Visible = false end
 		win.BackgroundColor3 = C.Bg2
-
-		local miniW = math.max(380, math.floor(win.AbsoluteSize.X*.68))
-		tw(win,.38,{Size=UDim2.fromOffset(miniW,44)},Enum.EasingStyle.Back,Enum.EasingDirection.Out)
+		tw(win,.35,{Size=UDim2.fromOffset(self._preMinSize.W, 44)},Enum.EasingStyle.Quint)
+		task.delay(.37,function()
+			if self._body then self._body.Visible = false end
+		end)
 		if self._minBtn then self._minBtn.Text = "+" end
 	end
 end
@@ -647,18 +646,12 @@ function Lib:Maximise()
 		local cfg     = self.cfg
 		local targetW = prev and prev.W or cfg.WindowWidth
 		local targetH = prev and prev.H or cfg.WindowHeight
-		local t = tw(win,.45,{Size=UDim2.fromOffset(targetW,targetH)},Enum.EasingStyle.Back,Enum.EasingDirection.Out)
-		local function onExpanded()
-			if self._body then self._body.Visible = true end
-			win.BackgroundColor3 = C.Bg
-			if self._tbFiller then self._tbFiller.Visible = true end
-			if self._tbBorderLine then self._tbBorderLine.Visible = true end
-		end
-		if t then
-			t.Completed:Connect(onExpanded)
-		else
-			task.delay(.5, onExpanded)
-		end
+		-- show body BEFORE tween — ClipsDescendants on win clips it while window is still small
+		if self._body then self._body.Visible = true end
+		win.BackgroundColor3 = C.Bg
+		if self._tbFiller then self._tbFiller.Visible = true end
+		if self._tbBorderLine then self._tbBorderLine.Visible = true end
+		tw(win,.45,{Size=UDim2.fromOffset(targetW, targetH)},Enum.EasingStyle.Back,Enum.EasingDirection.Out)
 		if self._minBtn then self._minBtn.Text = "-" end
 	end
 end
@@ -1263,63 +1256,278 @@ end
 
 function Lib:AddColorPicker(pi,label,default,callback)
 	local s=self:GetPage(pi); if not s then return end
-	local palette={
-		"ffffff","d8d8d8","aaaaaa","666666","333333","000000",
-		"e84040","f07020","f0c030","00e87a","4488ff","aa44ff",
-		"ff6699","ff9966","ffee66","66ffaa","66aaff","cc88ff",
-		"ffcccc","ffddb0","fff0b0","b0ffe0","b0d0ff","e0b0ff",
-	}
-	local selected=default or palette[1]
-	local previewRef
 
-	local wrap=new("Frame",{Size=UDim2.new(1,0,0,0),AutomaticSize=Enum.AutomaticSize.Y,
-		BackgroundColor3=C.Card,BorderSizePixel=0,LayoutOrder=self:_o(pi)},s)
-	corner(wrap,10)
-	stroke(wrap,C.Border,1)
-
-	if label then
-		local hdr=new("Frame",{Size=UDim2.new(1,0,0,42),BackgroundColor3=C.Card2,BorderSizePixel=0},wrap)
-		corner(hdr,10)
-		new("Frame",{Position=UDim2.new(0,0,1,-10),Size=UDim2.new(1,0,0,10),BackgroundColor3=C.Card2,BorderSizePixel=0},hdr)
-		new("Frame",{Position=UDim2.new(0,0,1,0),Size=UDim2.new(1,0,0,1),BackgroundColor3=C.Border,BorderSizePixel=0},hdr)
-		pad(hdr,0,0,14,14)
-		hlist(hdr,10)
-		new("TextLabel",{Text=label,Font=Enum.Font.GothamBold,TextSize=12,TextColor3=C.White,
-			BackgroundTransparency=1,Size=UDim2.new(1,-40,1,0),TextXAlignment=Enum.TextXAlignment.Left,LayoutOrder=0},hdr)
-		previewRef=new("Frame",{Size=UDim2.fromOffset(24,24),BackgroundColor3=fromHex(selected),BorderSizePixel=0,LayoutOrder=1},hdr)
-		corner(previewRef,6)
-		stroke(previewRef,C.Border2,1)
+	local function hsvToRgb(h,sv,v)
+		h=h%360; local c=v*sv; local x=c*(1-math.abs((h/60)%2-1)); local m=v-c
+		local r,g,b
+		if h<60 then r,g,b=c,x,0 elseif h<120 then r,g,b=x,c,0
+		elseif h<180 then r,g,b=0,c,x elseif h<240 then r,g,b=0,x,c
+		elseif h<300 then r,g,b=x,0,c else r,g,b=c,0,x end
+		return Color3.new(r+m,g+m,b+m)
+	end
+	local function rgbToHsv(col)
+		local r,g,b=col.R,col.G,col.B
+		local mx=math.max(r,g,b); local mn=math.min(r,g,b); local d=mx-mn
+		local h,sv,v=0,mx==0 and 0 or d/mx,mx
+		if mx~=mn then
+			if mx==r then h=(g-b)/d+(g<b and 6 or 0)
+			elseif mx==g then h=(b-r)/d+2 else h=(r-g)/d+4 end
+			h=h*60
+		end
+		return h,sv,v
+	end
+	local function toHex(col)
+		return string.format("%02x%02x%02x",math.floor(col.R*255+.5),math.floor(col.G*255+.5),math.floor(col.B*255+.5))
 	end
 
-	local grid=new("Frame",{Size=UDim2.new(1,0,0,0),AutomaticSize=Enum.AutomaticSize.Y,BackgroundTransparency=1},wrap)
-	pad(grid,12,12,14,14)
-	new("UIGridLayout",{CellSize=UDim2.fromOffset(28,28),CellPadding=UDim2.fromOffset(6,6),SortOrder=Enum.SortOrder.LayoutOrder},grid)
+	local initColor = type(default)=="string" and fromHex(default) or default or fromHex("4488ff")
+	local hue,sat,val = rgbToHsv(initColor)
+	local currentColor = initColor
+	local popupOpen = false
+	local activePopup = nil
 
-	local swatches={}
-	for i,hex in ipairs(palette) do
-		local sw=new("TextButton",{Text="",BackgroundColor3=fromHex(hex),BorderSizePixel=0,
-			Size=UDim2.fromOffset(28,28),AutoButtonColor=false,LayoutOrder=i},grid)
-		corner(sw,6)
-		if hex==selected then stroke(sw,C.White,2) end
-		pcall(function() sw.CursorIcon="rbxasset://SystemCursors/PointingHand" end)
-		sw.MouseEnter:Connect(function() tw(sw,.1,{Size=UDim2.fromOffset(26,26)}) end)
-		sw.MouseLeave:Connect(function() tw(sw,.12,{Size=UDim2.fromOffset(28,28)}) end)
-		swatches[hex]=sw
-		sw.Activated:Connect(function()
-			for _,s2 in pairs(swatches) do
-				local st2=s2:FindFirstChildOfClass("UIStroke")
-				if st2 then st2:Destroy() end
+	local row=new("Frame",{Size=UDim2.new(1,0,0,48),BackgroundColor3=C.Card,BorderSizePixel=0,LayoutOrder=self:_o(pi)},s)
+	corner(row,10)
+	stroke(row,C.Border,1)
+	pad(row,0,0,16,16)
+
+	new("TextLabel",{Text=label or "Color",Font=Enum.Font.Gotham,TextSize=13,TextColor3=C.Text,
+		BackgroundTransparency=1,Size=UDim2.new(1,-72,1,0),TextXAlignment=Enum.TextXAlignment.Left},row)
+
+	local preview=new("TextButton",{Text="",BackgroundColor3=currentColor,BorderSizePixel=0,
+		AnchorPoint=Vector2.new(1,.5),Position=UDim2.new(1,0,.5,0),
+		Size=UDim2.fromOffset(52,32),AutoButtonColor=false},row)
+	corner(preview,8)
+	stroke(preview,C.Border2,1)
+	pcall(function() preview.CursorIcon="rbxasset://SystemCursors/PointingHand" end)
+
+	local function closePopup()
+		if not activePopup then return end
+		popupOpen=false
+		local p=activePopup; activePopup=nil
+		tw(p,.18,{BackgroundTransparency=1,Size=UDim2.fromOffset(p.AbsoluteSize.X*0.95,p.AbsoluteSize.Y*0.95)},Enum.EasingStyle.Quint,Enum.EasingDirection.In)
+		task.delay(.2,function() if p and p.Parent then p:Destroy() end end)
+	end
+
+	local function openPopup()
+		if popupOpen then closePopup(); return end
+		popupOpen=true
+
+		local SV_W,SV_H=228,148
+		local PW,PH=SV_W+32,SV_H+132
+
+		local popup=new("Frame",{
+			AnchorPoint=Vector2.new(.5,.5),
+			Position=UDim2.fromScale(.5,.5),
+			Size=UDim2.fromOffset(PW*0.9,PH*0.9),
+			BackgroundColor3=C.Card,
+			BorderSizePixel=0,ZIndex=500,
+			BackgroundTransparency=1,
+		},self._sg)
+		corner(popup,12)
+		stroke(popup,C.Border2,1)
+		tw(popup,.3,{BackgroundTransparency=0,Size=UDim2.fromOffset(PW,PH)},Enum.EasingStyle.Back,Enum.EasingDirection.Out)
+		activePopup=popup
+
+		local hexBox
+
+		local function applyColor()
+			preview.BackgroundColor3=currentColor
+			if hexBox then hexBox.Text=toHex(currentColor) end
+			if callback then callback(currentColor,toHex(currentColor)) end
+		end
+
+		-- SV box
+		local svBox=new("Frame",{
+			AnchorPoint=Vector2.new(.5,0),
+			Position=UDim2.new(.5,0,0,16),
+			Size=UDim2.fromOffset(SV_W,SV_H),
+			BackgroundColor3=hsvToRgb(hue,1,1),
+			BorderSizePixel=0,ZIndex=501,
+			ClipsDescendants=true,
+		},popup)
+		corner(svBox,8)
+
+		-- white-to-transparent (left=white, right=hue)
+		local wOverlay=new("Frame",{Size=UDim2.fromScale(1,1),BackgroundColor3=Color3.new(1,1,1),BorderSizePixel=0,ZIndex=502},svBox)
+		new("UIGradient",{
+			Transparency=NumberSequence.new({NumberSequenceKeypoint.new(0,0),NumberSequenceKeypoint.new(1,1)}),
+			Rotation=0,
+		},wOverlay)
+
+		-- transparent-to-black (top=transparent, bottom=black)
+		local bOverlay=new("Frame",{Size=UDim2.fromScale(1,1),BackgroundColor3=Color3.new(0,0,0),BorderSizePixel=0,ZIndex=503},svBox)
+		new("UIGradient",{
+			Transparency=NumberSequence.new({NumberSequenceKeypoint.new(0,1),NumberSequenceKeypoint.new(1,0)}),
+			Rotation=90,
+		},bOverlay)
+
+		-- cursor
+		local svCursor=new("Frame",{
+			AnchorPoint=Vector2.new(.5,.5),
+			Position=UDim2.new(sat,0,1-val,0),
+			Size=UDim2.fromOffset(14,14),
+			BackgroundColor3=Color3.new(1,1,1),
+			BorderSizePixel=0,ZIndex=505,
+		},svBox)
+		corner(svCursor,7)
+		stroke(svCursor,C.Bg,2)
+
+		local svDragging=false
+		local svInteract=new("TextButton",{Text="",BackgroundTransparency=1,Size=UDim2.fromScale(1,1),ZIndex=506,AutoButtonColor=false},bOverlay)
+
+		local function updateSV(ax,ay)
+			local rx=math.clamp((ax-svBox.AbsolutePosition.X)/svBox.AbsoluteSize.X,0,1)
+			local ry=math.clamp((ay-svBox.AbsolutePosition.Y)/svBox.AbsoluteSize.Y,0,1)
+			sat=rx; val=1-ry
+			svCursor.Position=UDim2.new(rx,0,ry,0)
+			currentColor=hsvToRgb(hue,sat,val)
+			applyColor()
+		end
+
+		svInteract.MouseButton1Down:Connect(function(x,y) svDragging=true; updateSV(x,y) end)
+		local c1=UserInputService.InputEnded:Connect(function(i)
+			if i.UserInputType==Enum.UserInputType.MouseButton1 then svDragging=false end
+		end)
+		local c2=UserInputService.InputChanged:Connect(function(i)
+			if svDragging and i.UserInputType==Enum.UserInputType.MouseMovement then
+				updateSV(i.Position.X,i.Position.Y)
 			end
-			stroke(sw,C.White,2)
-			selected=hex
-			if previewRef then previewRef.BackgroundColor3=fromHex(hex) end
-			if callback then callback(fromHex(hex),hex) end
+		end)
+
+		-- Hue slider
+		local hueBar=new("Frame",{
+			AnchorPoint=Vector2.new(.5,0),
+			Position=UDim2.new(.5,0,0,16+SV_H+10),
+			Size=UDim2.fromOffset(SV_W,16),
+			BackgroundColor3=C.Card3,
+			BorderSizePixel=0,ZIndex=501,
+		},popup)
+		corner(hueBar,8)
+		new("UIGradient",{
+			Color=ColorSequence.new({
+				ColorSequenceKeypoint.new(0/6,  Color3.fromHSV(0/6,1,1)),
+				ColorSequenceKeypoint.new(1/6,  Color3.fromHSV(1/6,1,1)),
+				ColorSequenceKeypoint.new(2/6,  Color3.fromHSV(2/6,1,1)),
+				ColorSequenceKeypoint.new(3/6,  Color3.fromHSV(3/6,1,1)),
+				ColorSequenceKeypoint.new(4/6,  Color3.fromHSV(4/6,1,1)),
+				ColorSequenceKeypoint.new(5/6,  Color3.fromHSV(5/6,1,1)),
+				ColorSequenceKeypoint.new(1,    Color3.fromHSV(1,1,1)),
+			}),
+		},hueBar)
+
+		local hueKnob=new("Frame",{
+			AnchorPoint=Vector2.new(.5,.5),
+			Position=UDim2.new(hue/360,0,.5,0),
+			Size=UDim2.fromOffset(8,22),
+			BackgroundColor3=Color3.new(1,1,1),
+			BorderSizePixel=0,ZIndex=503,
+		},hueBar)
+		corner(hueKnob,3)
+		stroke(hueKnob,C.Bg,1)
+
+		local hueDragging=false
+		local hueInteract=new("TextButton",{Text="",BackgroundTransparency=1,
+			Size=UDim2.new(1,0,1,10),Position=UDim2.fromOffset(0,-5),ZIndex=504,AutoButtonColor=false},hueBar)
+
+		local function updateHue(ax)
+			local rel=math.clamp((ax-hueBar.AbsolutePosition.X)/hueBar.AbsoluteSize.X,0,1)
+			hue=rel*360
+			hueKnob.Position=UDim2.new(rel,0,.5,0)
+			svBox.BackgroundColor3=hsvToRgb(hue,1,1)
+			currentColor=hsvToRgb(hue,sat,val)
+			applyColor()
+		end
+
+		hueInteract.MouseButton1Down:Connect(function(x) hueDragging=true; updateHue(x) end)
+		local c3=UserInputService.InputEnded:Connect(function(i)
+			if i.UserInputType==Enum.UserInputType.MouseButton1 then hueDragging=false end
+		end)
+		local c4=UserInputService.InputChanged:Connect(function(i)
+			if hueDragging and i.UserInputType==Enum.UserInputType.MouseMovement then
+				updateHue(i.Position.X)
+			end
+		end)
+
+		-- Hex input + Apply row
+		local hexRow=new("Frame",{
+			AnchorPoint=Vector2.new(.5,0),
+			Position=UDim2.new(.5,0,0,16+SV_H+10+16+12),
+			Size=UDim2.fromOffset(SV_W,38),
+			BackgroundTransparency=1,ZIndex=501,
+		},popup)
+		hlist(hexRow,8)
+
+		new("TextLabel",{Text="#",Font=Enum.Font.GothamBold,TextSize=14,TextColor3=C.TextDim,
+			BackgroundTransparency=1,Size=UDim2.fromOffset(14,38),
+			TextXAlignment=Enum.TextXAlignment.Center,ZIndex=502,LayoutOrder=0},hexRow)
+
+		local hexWrap=new("Frame",{Size=UDim2.new(1,-90,1,0),BackgroundColor3=C.Card3,
+			BorderSizePixel=0,ZIndex=502,LayoutOrder=1},hexRow)
+		corner(hexWrap,8)
+		local hexStroke=stroke(hexWrap,C.Border2,1)
+		pad(hexWrap,0,0,10,10)
+		hexBox=new("TextBox",{Text=toHex(currentColor),Font=Enum.Font.Code,TextSize=13,
+			TextColor3=C.Text,BackgroundTransparency=1,Size=UDim2.fromScale(1,1),
+			ClearTextOnFocus=false,TextXAlignment=Enum.TextXAlignment.Left,ZIndex=503},hexWrap)
+		hexBox.Focused:Connect(function() tw(hexWrap,.14,{BackgroundColor3=C.Card2}); tw(hexStroke,.14,{Color=C.Border3}) end)
+		hexBox.FocusLost:Connect(function()
+			tw(hexWrap,.16,{BackgroundColor3=C.Card3}); tw(hexStroke,.16,{Color=C.Border2})
+			local h=hexBox.Text:gsub("[^%x]","")
+			if #h==3 then h=h:sub(1,1):rep(2)..h:sub(2,2):rep(2)..h:sub(3,3):rep(2) end
+			if #h==6 then
+				local ok,col=pcall(fromHex,h)
+				if ok and col then
+					currentColor=col
+					hue,sat,val=rgbToHsv(col)
+					svBox.BackgroundColor3=hsvToRgb(hue,1,1)
+					hueKnob.Position=UDim2.new(hue/360,0,.5,0)
+					svCursor.Position=UDim2.new(sat,0,1-val,0)
+					hexBox.Text=h
+					preview.BackgroundColor3=col
+					if callback then callback(col,h) end
+				end
+			else
+				hexBox.Text=toHex(currentColor)
+			end
+		end)
+
+		local applyBtn=new("TextButton",{Text="Apply",Font=Enum.Font.GothamBold,TextSize=12,
+			TextColor3=C.Bg,BackgroundColor3=C.White,BorderSizePixel=0,
+			Size=UDim2.fromOffset(64,38),AutoButtonColor=false,ZIndex=502,LayoutOrder=2},hexRow)
+		corner(applyBtn,8)
+		applyBtn.MouseEnter:Connect(function() tw(applyBtn,.12,{BackgroundColor3=fromHex("e0e0e0")}) end)
+		applyBtn.MouseLeave:Connect(function() tw(applyBtn,.15,{BackgroundColor3=C.White}) end)
+		applyBtn.Activated:Connect(function()
+			local cc1,cc2=c1,c2; local cc3,cc4=c3,c4
+			cc1:Disconnect(); cc2:Disconnect(); cc3:Disconnect(); cc4:Disconnect()
+			closePopup()
+		end)
+
+		-- click-outside overlay
+		local overlay=new("TextButton",{Text="",BackgroundTransparency=1,
+			Size=UDim2.fromScale(1,1),ZIndex=499,AutoButtonColor=false},self._sg)
+		overlay.Activated:Connect(function()
+			overlay:Destroy()
+			c1:Disconnect(); c2:Disconnect(); c3:Disconnect(); c4:Disconnect()
+			closePopup()
 		end)
 	end
 
+	preview.MouseEnter:Connect(function() tw(preview,.12,{Size=UDim2.fromOffset(54,34)}) end)
+	preview.MouseLeave:Connect(function() tw(preview,.15,{Size=UDim2.fromOffset(52,32)}) end)
+	preview.Activated:Connect(openPopup)
+	row.MouseEnter:Connect(function() tw(row,.15,{BackgroundColor3=C.Card2}) end)
+	row.MouseLeave:Connect(function() tw(row,.18,{BackgroundColor3=C.Card}) end)
+
 	self:_gap(s,pi,6)
-	local obj={Frame=wrap}
-	function obj:GetColor() return fromHex(selected),selected end
+	local obj={Frame=row,Preview=preview}
+	function obj:GetColor() return currentColor,toHex(currentColor) end
+	function obj:SetColor(c)
+		if type(c)=="string" then c=fromHex(c) end
+		currentColor=c; preview.BackgroundColor3=c
+		hue,sat,val=rgbToHsv(c)
+	end
 	return obj
 end
 
@@ -1401,15 +1609,25 @@ function Lib:AddSpinner(pi,label)
 	pad(row,0,0,16,16)
 	hlist(row,12)
 
-	local spinWrap=new("Frame",{Size=UDim2.fromOffset(24,24),BackgroundTransparency=1,LayoutOrder=0},row)
-	local arc=new("Frame",{Size=UDim2.fromOffset(24,24),BackgroundColor3=C.Card3,BorderSizePixel=0},spinWrap)
-	corner(arc,12)
-	local arcStroke=stroke(arc,C.White,2)
-	local innerMask=new("Frame",{Size=UDim2.fromOffset(16,16),AnchorPoint=Vector2.new(.5,.5),
-		Position=UDim2.fromScale(.5,.5),BackgroundColor3=C.Card,BorderSizePixel=0},arc)
-	corner(innerMask,8)
-	new("Frame",{Size=UDim2.fromOffset(12,12),AnchorPoint=Vector2.new(0,.5),Position=UDim2.new(0,0,.5,0),
-		BackgroundColor3=C.Card3,BorderSizePixel=0},arc)
+	local spinWrap=new("Frame",{Size=UDim2.fromOffset(22,22),BackgroundTransparency=1,LayoutOrder=0},row)
+
+	local track=new("Frame",{
+		Size=UDim2.fromOffset(22,22),BackgroundTransparency=1,BorderSizePixel=0,
+		AnchorPoint=Vector2.new(.5,.5),Position=UDim2.fromScale(.5,.5),
+	},spinWrap)
+	corner(track,11)
+	stroke(track,C.Border3,2)
+
+	local ballHolder=new("Frame",{
+		Size=UDim2.fromOffset(22,22),BackgroundTransparency=1,
+		AnchorPoint=Vector2.new(.5,.5),Position=UDim2.fromScale(.5,.5),
+	},spinWrap)
+
+	local ball=new("Frame",{
+		Size=UDim2.fromOffset(7,7),BackgroundColor3=C.White,BorderSizePixel=0,
+		AnchorPoint=Vector2.new(.5,.5),Position=UDim2.new(.5,0,0,3.5),
+	},ballHolder)
+	corner(ball,4)
 
 	new("TextLabel",{Text=label or "Loading...",Font=Enum.Font.Gotham,TextSize=13,TextColor3=C.TextDim,
 		BackgroundTransparency=1,Size=UDim2.new(1,-36,1,0),TextXAlignment=Enum.TextXAlignment.Left,LayoutOrder=1},row)
@@ -1418,26 +1636,26 @@ function Lib:AddSpinner(pi,label)
 	local angle=0
 	task.spawn(function()
 		while spinning and row and row.Parent do
-			angle=(angle+7)%360
-			arc.Rotation=angle
+			angle=(angle+8)%360
+			ballHolder.Rotation=angle
 			task.wait(0.033)
 		end
 	end)
 
 	self:_gap(s,pi,6)
-	local obj={Frame=row,_spinning=spinning,_arc=arc}
+	local obj={Frame=row,_spinning=true}
 	function obj:Stop()
 		spinning=false; obj._spinning=false
-		tw(arcStroke,.3,{Color=C.Border2})
+		tw(ball,.3,{BackgroundColor3=C.Border3})
 	end
 	function obj:Start()
 		if obj._spinning then return end
 		obj._spinning=true; spinning=true
-		tw(arcStroke,.3,{Color=C.White})
+		tw(ball,.3,{BackgroundColor3=C.White})
 		task.spawn(function()
 			while spinning and row and row.Parent do
-				angle=(angle+7)%360
-				arc.Rotation=angle
+				angle=(angle+8)%360
+				ballHolder.Rotation=angle
 				task.wait(0.033)
 			end
 		end)

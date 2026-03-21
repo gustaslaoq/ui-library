@@ -206,7 +206,7 @@ end
 function Lib:_useMiniMode()
 	local cam = workspace.CurrentCamera
 	local vp  = cam and cam.ViewportSize or Vector2.new(1920,1080)
-	return UserInputService.TouchEnabled or vp.X < self.cfg.MiniModeBreakpoint
+	return UserInputService.TouchEnabled or vp.X < 500
 end
 
 function Lib:_runSplash()
@@ -337,17 +337,41 @@ function Lib:_buildWindow()
 		local cam = workspace.CurrentCamera
 		if not cam then return end
 		local vp  = cam.ViewportSize
-		local mini = self:_useMiniMode()
-		local s = math.min(math.clamp(vp.X/1920,.35,1),math.clamp(vp.Y/1080,.35,1))
-		local w = mini and math.floor(vp.X*.97) or math.floor(cfg.WindowWidth*s)
-		local h = mini and math.floor(vp.Y*.93) or math.floor(cfg.WindowHeight*s)
+		local vpW = vp.X
+		local vpH = vp.Y
+		local isTouch = UserInputService.TouchEnabled
+
+		local w, h, sw, collapsed
+		if vpW < 380 then
+			w = math.floor(vpW * 0.98)
+			h = math.floor(vpH * 0.92)
+			sw = 44
+			collapsed = true
+		elseif vpW < 560 then
+			w = math.floor(vpW * 0.97)
+			h = math.floor(math.min(vpH * 0.90, cfg.WindowHeight))
+			sw = 52
+			collapsed = true
+		elseif vpW < 800 then
+			local s = math.clamp(vpW / 900, 0.55, 0.85)
+			w = math.floor(cfg.WindowWidth * s)
+			h = math.floor(cfg.WindowHeight * s)
+			sw = math.max(52, math.floor(cfg.SidebarWidth * s))
+			collapsed = sw < 90
+		else
+			local s = math.min(math.clamp(vpW/1920, 0.5, 1), math.clamp(vpH/1080, 0.5, 1))
+			w = math.floor(cfg.WindowWidth * s)
+			h = math.floor(cfg.WindowHeight * s)
+			sw = math.floor(cfg.SidebarWidth * s)
+			collapsed = false
+		end
+
 		if not self._minimised then
-			win.Size = UDim2.fromOffset(w,h)
+			win.Size = UDim2.fromOffset(w, h)
 		end
 		if self._sidebar then
-			local sw = mini and 48 or math.floor(cfg.SidebarWidth*s)
-			self._sidebar.Size = UDim2.new(0,sw,1,0)
-			self:_setCollapsed(sw < 90)
+			self._sidebar.Size = UDim2.new(0, sw, 1, 0)
+			self:_setCollapsed(collapsed)
 		end
 	end
 	self._doScale = doScale
@@ -591,6 +615,7 @@ function Lib:_buildBody(win)
 	pad(ss,18,18,8,8)
 
 	local logoArea = new("Frame",{Size=UDim2.new(1,0,0,104),BackgroundTransparency=1,LayoutOrder=0},ss)
+	self._logoArea = logoArea
 	local logoWrap = new("Frame",{AnchorPoint=Vector2.new(.5,0),Position=UDim2.new(.5,0,0,0),
 		Size=UDim2.fromOffset(52,52),BackgroundColor3=C.Card3,BorderSizePixel=0},logoArea)
 	corner(logoWrap,14)
@@ -804,20 +829,31 @@ function Lib:SetPage(index)
 	end
 	self._pageIdx = index
 	if oldFrame and oldFrame.Visible then
-		tw(oldFrame, .18, {BackgroundTransparency=1, Position=UDim2.new(0,0,0,14)}, Enum.EasingStyle.Quint, Enum.EasingDirection.In)
+		local ofs = oldFrame:FindFirstChildWhichIsA("ScrollingFrame")
+		if ofs then
+			tw(ofs, .18, {Position=UDim2.new(0,0,0,12)}, Enum.EasingStyle.Quint, Enum.EasingDirection.In)
+			tw(ofs, .15, {Size=UDim2.new(1,0,1,-12)}, Enum.EasingStyle.Quint, Enum.EasingDirection.In)
+		end
 		task.delay(.2, function()
 			if oldFrame and oldFrame.Parent then
 				oldFrame.Visible=false
-				oldFrame.Position=UDim2.fromOffset(0,0)
-				oldFrame.BackgroundTransparency=1
+				if ofs and ofs.Parent then
+					ofs.Position=UDim2.fromOffset(0,0)
+					ofs.Size=UDim2.fromScale(1,1)
+				end
 			end
 		end)
 	end
 	if newFrame then
-		newFrame.Position = UDim2.new(0,0,0,-18)
-		newFrame.BackgroundTransparency = 1
+		local nfs = newFrame:FindFirstChildWhichIsA("ScrollingFrame")
+		if nfs then
+			nfs.Position = UDim2.new(0,0,0,-16)
+			nfs.Size = UDim2.new(1,0,1,16)
+		end
 		newFrame.Visible = true
-		tw(newFrame, .25, {BackgroundTransparency=0, Position=UDim2.fromOffset(0,0)}, Enum.EasingStyle.Quint)
+		if nfs then
+			tw(nfs, .28, {Position=UDim2.fromOffset(0,0), Size=UDim2.fromScale(1,1)}, Enum.EasingStyle.Quint)
+		end
 	end
 	local nb = self._navBtns[index]
 	if nb then
@@ -846,11 +882,29 @@ function Lib:_animBar(target)
 	end
 end
 
-function Lib:_setCollapsed(c)
-	if self._sideNameLbl then self._sideNameLbl.Visible = not c end
-	if self._sideSubLbl  then self._sideSubLbl.Visible  = not c end
+function Lib:_setCollapsed(collapsed)
+	if self._sideNameLbl then self._sideNameLbl.Visible = not collapsed end
+	if self._sideSubLbl  then self._sideSubLbl.Visible  = not collapsed end
 	for _,nb in ipairs(self._navBtns) do
-		if nb and nb.Lbl then nb.Lbl.Visible = not c end
+		if nb then
+			if nb.Lbl then nb.Lbl.Visible = not collapsed end
+			if nb.Frame then
+				local fw = collapsed and 44 or nil
+				if fw then
+					nb.Frame.Size = UDim2.new(1,0,0,40)
+				end
+			end
+			if nb.Dot then
+				if collapsed then
+					tw(nb.Dot,.15,{Size=UDim2.fromOffset(8,8)})
+				else
+					tw(nb.Dot,.15,{Size=UDim2.fromOffset(6,6)})
+				end
+			end
+		end
+	end
+	if self._logoArea then
+		self._logoArea.Visible = not collapsed
 	end
 end
 
@@ -981,10 +1035,18 @@ function Lib:Hide()
 		if win and win.Parent then win.Visible = false end
 	end)
 	if self._dragHandle then self._dragHandle.Visible = false end
-	if self._mobilePill then self._mobilePill.Visible = false end
 
 	local isMobile = UserInputService.TouchEnabled
-	if not isMobile then
+	if isMobile then
+		self:_ensurePill()
+		local pill = self._mobilePill
+		if pill then
+			pill.Visible = true
+			pill.Position = UDim2.new(.5,0,0,-60)
+			pill.BackgroundTransparency = 1
+			tw(pill,.38,{Position=UDim2.new(.5,0,0,20),BackgroundTransparency=0},Enum.EasingStyle.Back,Enum.EasingDirection.Out)
+		end
+	else
 		self:ShowNotification(
 			"Press "..self._toggleKey.." to reopen the interface.",
 			"info", 5, "Interface Hidden"
@@ -997,6 +1059,12 @@ function Lib:Show()
 	if not win then return end
 	local wasHidden = self._hidden
 	self._hidden = false
+	if self._mobilePill then
+		tw(self._mobilePill,.2,{Position=UDim2.new(.5,0,0,-60),BackgroundTransparency=1},Enum.EasingStyle.Quint,Enum.EasingDirection.In)
+		task.delay(.22,function()
+			if self._mobilePill and self._mobilePill.Parent then self._mobilePill.Visible=false end
+		end)
+	end
 	self._dragActive = false
 	self._dragTargetOX = 0
 	self._dragTargetOY = 0

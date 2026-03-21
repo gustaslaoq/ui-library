@@ -838,32 +838,35 @@ function Lib:SetPage(index)
 		tw(old.Dot,cfg.TweenSpeed,{BackgroundColor3=C.TextOff,Size=UDim2.fromOffset(6,6)})
 	end
 	self._pageIdx = index
+	local fadeDelay = 0
 	if oldFrame and oldFrame.Visible then
+		fadeDelay = 0.2
 		local ofs = oldFrame:FindFirstChildWhichIsA("ScrollingFrame")
 		if ofs then
-			tw(ofs, .18, {Position=UDim2.new(0,0,0,12)}, Enum.EasingStyle.Quint, Enum.EasingDirection.In)
-			tw(ofs, .15, {Size=UDim2.new(1,0,1,-12)}, Enum.EasingStyle.Quint, Enum.EasingDirection.In)
+			tw(ofs, .18, {Position=UDim2.new(0,0,0,10), GroupTransparency=nil}, Enum.EasingStyle.Quint, Enum.EasingDirection.In)
 		end
 		task.delay(.2, function()
 			if oldFrame and oldFrame.Parent then
-				oldFrame.Visible=false
+				oldFrame.Visible = false
 				if ofs and ofs.Parent then
-					ofs.Position=UDim2.fromOffset(0,0)
-					ofs.Size=UDim2.fromScale(1,1)
+					ofs.Position = UDim2.fromOffset(0,0)
 				end
 			end
 		end)
 	end
 	if newFrame then
 		local nfs = newFrame:FindFirstChildWhichIsA("ScrollingFrame")
-		if nfs then
-			nfs.Position = UDim2.new(0,0,0,-16)
-			nfs.Size = UDim2.new(1,0,1,16)
-		end
-		newFrame.Visible = true
-		if nfs then
-			tw(nfs, .28, {Position=UDim2.fromOffset(0,0), Size=UDim2.fromScale(1,1)}, Enum.EasingStyle.Quint)
-		end
+		newFrame.Visible = false
+		task.delay(fadeDelay, function()
+			if not newFrame or not newFrame.Parent then return end
+			if nfs and nfs.Parent then
+				nfs.Position = UDim2.new(0,0,0,20)
+			end
+			newFrame.Visible = true
+			if nfs then
+				tw(nfs, .3, {Position=UDim2.fromOffset(0,0)}, Enum.EasingStyle.Quint)
+			end
+		end)
 	end
 	local nb = self._navBtns[index]
 	if nb then
@@ -997,8 +1000,12 @@ function Lib:Maximise()
 		win.Position = UDim2.fromScale(.5,.5)
 		tw(win,.32,{BackgroundTransparency=0},Enum.EasingStyle.Quint)
 	else
-		local cs = self._computeScale
-		local targetW, targetH, sw, collapsed = cs and cs() or (self.cfg.WindowWidth, self.cfg.WindowHeight, self.cfg.SidebarWidth, false)
+		local targetW, targetH, sw, collapsed
+		if self._computeScale then
+			targetW, targetH, sw, collapsed = self._computeScale()
+		else
+			targetW, targetH, sw, collapsed = self.cfg.WindowWidth, self.cfg.WindowHeight, self.cfg.SidebarWidth, false
+		end
 		if self._body then self._body.Visible = true end
 		win.BackgroundColor3 = C.Bg
 		if self._tbFiller then self._tbFiller.Visible = true end
@@ -1090,9 +1097,12 @@ function Lib:Show()
 	if self._tbBorderLine then self._tbBorderLine.Visible = true end
 	win.Position = UDim2.fromScale(.5, .5)
 
-	local targetW, targetH, sw, collapsed = (self._computeScale or function()
-		return self.cfg.WindowWidth, self.cfg.WindowHeight, self.cfg.SidebarWidth, false
-	end)()
+	local targetW, targetH, sw, collapsed
+	if self._computeScale then
+		targetW, targetH, sw, collapsed = self._computeScale()
+	else
+		targetW, targetH, sw, collapsed = self.cfg.WindowWidth, self.cfg.WindowHeight, self.cfg.SidebarWidth, false
+	end
 
 	if self._sidebar then
 		self._sidebar.Size = UDim2.new(0, sw, 1, 0)

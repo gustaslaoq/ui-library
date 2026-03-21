@@ -42,7 +42,6 @@ local function stroke(obj, c, th, tr)
 	return new("UIStroke",{Color=c or fromHex("1a1a1a"),Thickness=th or 1,Transparency=tr or 0},obj)
 end
 
--- MOVER FUNCOES HELPER PARA AQUI (CORRECAO DO ERRO)
 local function pad(obj, t, b, l, r)
 	new("UIPadding",{PaddingTop=UDim.new(0,t or 0),PaddingBottom=UDim.new(0,b or 0),PaddingLeft=UDim.new(0,l or 0),PaddingRight=UDim.new(0,r or 0)},obj)
 end
@@ -64,7 +63,6 @@ local function vlist(obj, spacing, halign)
 		Padding=UDim.new(0,spacing or 0)
 	},obj)
 end
--- FIM DA CORRECAO
 
 local C = {
 	Bg       = fromHex("060606"),
@@ -185,17 +183,14 @@ function Lib.new(userCfg)
 	if isDemo then self:_runDemo() end
 	self:_runSplash()
 
-	-- key listener lives outside _conns so Destroy() doesn't kill it
 	if not UserInputService.TouchEnabled then
 		self._keyConn = UserInputService.InputBegan:Connect(function(inp, gp)
 			if gp then return end
 			local kc = tostring(inp.KeyCode):gsub("Enum%.KeyCode%.","")
 			if kc == self._toggleKey then self:ToggleVisibility() end
-			-- Ctrl+F opens search
 			if kc == "F" and (UserInputService:IsKeyDown(Enum.KeyCode.LeftControl) or UserInputService:IsKeyDown(Enum.KeyCode.RightControl)) then
 				if not self._hidden then self:_openSearch() end
 			end
-			-- Escape closes search
 			if kc == "Escape" and self._searchOpen then
 				self:_closeSearch()
 			end
@@ -306,7 +301,6 @@ function Lib:_runSplash()
 		task.delay(.5, function()
 			if self._dragHandle then
 				self._dragHandle.Visible = true
-				-- set initial position
 				local ap = self.Window.AbsolutePosition
 				local as = self.Window.AbsoluteSize
 				self._dragHandle.Position = UDim2.fromOffset(
@@ -334,7 +328,6 @@ function Lib:_buildWindow()
 	stroke(win,C.Border,1)
 	self.Window = win
 
-	-- clip mask so page content never leaks outside the rounded window
 	local clip = new("Frame",{
 		Size=UDim2.fromScale(1,1),
 		BackgroundTransparency=1,
@@ -372,16 +365,14 @@ function Lib:_buildWindow()
 	self:SetPage(1)
 	task.defer(doScale)
 
-	-- -- shared lerp-drag state ------------------------------------------
 	self._dragActive   = false
 	self._dragTargetOX = 0
 	self._dragTargetOY = 0
 
-	-- drag handle  -  sibling in _sg so it's independent from the window
 	local dhPillW, dhPillH = 110, 5
 	local dh = new("Frame",{
 		AnchorPoint = Vector2.new(.5, 0),
-		Position    = UDim2.fromScale(.5, .5),  -- will be updated each frame
+		Position    = UDim2.fromScale(.5, .5),
 		Size        = UDim2.fromOffset(dhPillW + 20, 22),
 		BackgroundTransparency = 1,
 		ZIndex = 998,
@@ -398,10 +389,15 @@ function Lib:_buildWindow()
 	corner(dhPill, 3)
 	self._dragHandle = dh
 
-	-- Heartbeat: window lerps to target (lagged); handle snaps to target (leads)
+	local function syncHandle()
+		local ap = win.AbsolutePosition
+		local as = win.AbsoluteSize
+		dh.Position = UDim2.fromOffset(math.floor(ap.X + as.X * 0.5), math.floor(ap.Y + as.Y + 9))
+	end
+	self._syncHandle = syncHandle
+
 	local lerpConn = RunService.Heartbeat:Connect(function()
 		if not self._dragActive then return end
-		-- window lag
 		local wx = win.Position.X.Offset
 		local wy = win.Position.Y.Offset
 		local tx = self._dragTargetOX
@@ -412,8 +408,6 @@ function Lib:_buildWindow()
 		if math.abs(nx - tx) < 0.3 then nx = tx end
 		if math.abs(ny - ty) < 0.3 then ny = ty end
 		win.Position = UDim2.new(0.5, nx, 0.5, ny)
-
-		-- handle tracks target (not current win pos) so it leads
 		local cam = workspace.CurrentCamera
 		local vp  = cam and cam.ViewportSize or Vector2.new(1920, 1080)
 		local winH = win.AbsoluteSize.Y
@@ -423,23 +417,15 @@ function Lib:_buildWindow()
 	end)
 	table.insert(self._conns, lerpConn)
 
-	-- also keep handle in sync when NOT dragging (window may animate via tween)
-	local idleConn = win:GetPropertyChangedSignal("AbsolutePosition"):Connect(function()
+	table.insert(self._conns, win:GetPropertyChangedSignal("AbsolutePosition"):Connect(function()
 		if self._dragActive then return end
-		local ap = win.AbsolutePosition
-		local as = win.AbsoluteSize
-		dh.Position = UDim2.fromOffset(math.floor(ap.X + as.X * 0.5), math.floor(ap.Y + as.Y + 9))
-	end)
-	table.insert(self._conns, idleConn)
-	local idleConn2 = win:GetPropertyChangedSignal("AbsoluteSize"):Connect(function()
+		syncHandle()
+	end))
+	table.insert(self._conns, win:GetPropertyChangedSignal("AbsoluteSize"):Connect(function()
 		if self._dragActive then return end
-		local ap = win.AbsolutePosition
-		local as = win.AbsoluteSize
-		dh.Position = UDim2.fromOffset(math.floor(ap.X + as.X * 0.5), math.floor(ap.Y + as.Y + 9))
-	end)
-	table.insert(self._conns, idleConn2)
+		syncHandle()
+	end))
 
-	-- handle drag interaction
 	do
 		local active = false
 		local ds, wsOX, wsOY
@@ -459,6 +445,8 @@ function Lib:_buildWindow()
 			if i.UserInputType==Enum.UserInputType.MouseButton1 or i.UserInputType==Enum.UserInputType.Touch then
 				active = false
 				self._dragActive = false
+				win.Position = UDim2.new(0.5, self._dragTargetOX, 0.5, self._dragTargetOY)
+				syncHandle()
 				tw(dhPill, .18, {BackgroundTransparency=0.6, Size=UDim2.fromOffset(dhPillW, dhPillH)})
 			end
 		end)
@@ -532,28 +520,27 @@ function Lib:_buildTitleBar(win)
 		return b
 	end
 
-	-- search image button
 	do
 		local w = new("Frame",{Size=UDim2.fromOffset(44,44),BackgroundTransparency=1,ZIndex=12,LayoutOrder=0},right)
 		local img = new("ImageLabel",{AnchorPoint=Vector2.new(.5,.5),Position=UDim2.fromScale(.5,.5),
 			Size=UDim2.fromOffset(18,18),BackgroundTransparency=1,
-			Image="rbxassetid://132302594577680",ImageColor3=C.TextDim,ZIndex=13},w)
+			Image="rbxassetid://132302594577680",ImageColor3=C.Text,ZIndex=13},w)
 		local btn = new("TextButton",{Text="",BackgroundTransparency=1,Size=UDim2.fromScale(1,1),ZIndex=14,AutoButtonColor=false},w)
 		btn.MouseEnter:Connect(function() tw(img,.12,{ImageColor3=C.White}); tw(w,.12,{BackgroundTransparency=.93}) end)
-		btn.MouseLeave:Connect(function() tw(img,.15,{ImageColor3=C.TextDim}); tw(w,.15,{BackgroundTransparency=1}) end)
+		btn.MouseLeave:Connect(function() tw(img,.15,{ImageColor3=C.Text}); tw(w,.15,{BackgroundTransparency=1}) end)
+		btn.MouseEnter:Connect(function() tw(img,.12,{ImageColor3=C.White}); tw(w,.12,{BackgroundTransparency=.93}) end)
 		btn.Activated:Connect(function() self:_toggleSearch() end)
 		self._searchBtnImg = img
 	end
 
-	-- gear image button
 	do
 		local w = new("Frame",{Size=UDim2.fromOffset(44,44),BackgroundTransparency=1,ZIndex=12,LayoutOrder=1},right)
 		local img = new("ImageLabel",{AnchorPoint=Vector2.new(.5,.5),Position=UDim2.fromScale(.5,.5),
 			Size=UDim2.fromOffset(18,18),BackgroundTransparency=1,
-			Image="rbxassetid://101671992802622",ImageColor3=C.TextDim,ZIndex=13},w)
+			Image="rbxassetid://101671992802622",ImageColor3=C.Text,ZIndex=13},w)
 		local btn = new("TextButton",{Text="",BackgroundTransparency=1,Size=UDim2.fromScale(1,1),ZIndex=14,AutoButtonColor=false},w)
-		btn.MouseEnter:Connect(function() tw(img,.12,{ImageColor3=C.TextDim}); tw(w,.12,{BackgroundTransparency=.93}) end)
-		btn.MouseLeave:Connect(function() tw(img,.15,{ImageColor3=C.TextDim}); tw(w,.15,{BackgroundTransparency=1}) end)
+		btn.MouseEnter:Connect(function() tw(img,.12,{ImageColor3=C.White}); tw(w,.12,{BackgroundTransparency=.93}) end)
+		btn.MouseLeave:Connect(function() tw(img,.15,{ImageColor3=C.Text}); tw(w,.15,{BackgroundTransparency=1}) end)
 		btn.Activated:Connect(function() self:_openSettings() end)
 		self._gearImg = img
 	end
@@ -565,30 +552,30 @@ function Lib:_buildTitleBar(win)
 
 	do
 		local drag = false
-		local ds, wsOX, wsOY
+		local ds, wsX, wsY
 		tb.InputBegan:Connect(function(i)
 			if i.UserInputType==Enum.UserInputType.MouseButton1 or i.UserInputType==Enum.UserInputType.Touch then
 				drag = true
 				ds = i.Position
-				wsOX = self.Window.Position.X.Offset
-				wsOY = self.Window.Position.Y.Offset
-				self._dragTargetOX = wsOX
-				self._dragTargetOY = wsOY
-				self._dragActive = true
+				wsX = self.Window.Position.X.Offset
+				wsY = self.Window.Position.Y.Offset
 			end
 		end)
 		tb.InputEnded:Connect(function(i)
 			if i.UserInputType==Enum.UserInputType.MouseButton1 or i.UserInputType==Enum.UserInputType.Touch then
 				drag = false
-				self._dragActive = false
+				if self._syncHandle then self._syncHandle() end
 			end
 		end)
 		table.insert(self._conns, UserInputService.InputChanged:Connect(function(i)
 			if not drag then return end
 			if i.UserInputType~=Enum.UserInputType.MouseMovement and i.UserInputType~=Enum.UserInputType.Touch then return end
 			local d = i.Position - ds
-			self._dragTargetOX = wsOX + d.X
-			self._dragTargetOY = wsOY + d.Y
+			local nx = wsX + d.X
+			local ny = wsY + d.Y
+			self.Window.Position = UDim2.new(0.5, nx, 0.5, ny)
+			self._dragTargetOX = nx
+			self._dragTargetOY = ny
 		end))
 	end
 end
@@ -646,7 +633,6 @@ function Lib:_buildBody(win)
 		Size=UDim2.new(1,-cfg.SidebarWidth,1,0),BackgroundColor3=C.Bg2,BorderSizePixel=0,ClipsDescendants=true},body)
 	self._content = content
 
-	-- search bar (hidden until toggled)
 	local sbH = 48
 	local searchBar = new("Frame",{
 		Size=UDim2.new(1,0,0,0),BackgroundColor3=C.Card,
@@ -654,37 +640,39 @@ function Lib:_buildBody(win)
 	}, content)
 	new("Frame",{Position=UDim2.new(0,0,1,-1),Size=UDim2.new(1,0,0,1),
 		BackgroundColor3=C.Border,BorderSizePixel=0,ZIndex=21},searchBar)
-	pad(searchBar,0,0,14,14)
-	hlist(searchBar,10)
 
-	local searchIcon = new("ImageLabel",{
+	local searchIconImg = new("ImageLabel",{
+		AnchorPoint=Vector2.new(0,.5),Position=UDim2.new(0,14,.5,0),
 		Size=UDim2.fromOffset(16,16),BackgroundTransparency=1,
-		Image="rbxassetid://132302594577680",ImageColor3=C.TextDim,
-		LayoutOrder=0,ZIndex=22,
-	}, searchBar)
-
-	local searchBox = new("TextBox",{
-		Text="",PlaceholderText="Search in page...   (Ctrl+F)",
-		Font=Enum.Font.Gotham,TextSize=13,
-		TextColor3=C.Text,PlaceholderColor3=C.TextOff,
-		BackgroundTransparency=1,Size=UDim2.new(1,-80,1,0),
-		ClearTextOnFocus=false,TextXAlignment=Enum.TextXAlignment.Left,
-		ZIndex=22,LayoutOrder=1,
+		Image="rbxassetid://132302594577680",
+		ImageColor3=C.Text,ZIndex=22,
 	}, searchBar)
 
 	local resultLbl = new("TextLabel",{
+		AnchorPoint=Vector2.new(1,.5),Position=UDim2.new(1,-40,.5,0),
+		Size=UDim2.fromOffset(60,30),
 		Text="",Font=Enum.Font.Gotham,TextSize=11,TextColor3=C.TextDim,
-		BackgroundTransparency=1,Size=UDim2.fromOffset(46,sbH),
-		TextXAlignment=Enum.TextXAlignment.Right,ZIndex=22,LayoutOrder=2,
+		BackgroundTransparency=1,TextXAlignment=Enum.TextXAlignment.Right,ZIndex=22,
 	}, searchBar)
 
 	local closeSearchBtn = new("TextButton",{
-		Text="x",Font=Enum.Font.GothamBold,TextSize=18,TextColor3=C.TextDim,
-		BackgroundTransparency=1,Size=UDim2.fromOffset(28,sbH),
-		TextXAlignment=Enum.TextXAlignment.Center,AutoButtonColor=false,ZIndex=22,LayoutOrder=3,
+		AnchorPoint=Vector2.new(1,.5),Position=UDim2.new(1,-8,.5,0),
+		Size=UDim2.fromOffset(28,28),
+		Text="x",Font=Enum.Font.GothamBold,TextSize=16,TextColor3=C.TextDim,
+		BackgroundTransparency=1,AutoButtonColor=false,ZIndex=22,
 	}, searchBar)
 	closeSearchBtn.MouseEnter:Connect(function() tw(closeSearchBtn,.1,{TextColor3=C.Red}) end)
 	closeSearchBtn.MouseLeave:Connect(function() tw(closeSearchBtn,.12,{TextColor3=C.TextDim}) end)
+
+	local searchBox = new("TextBox",{
+		AnchorPoint=Vector2.new(0,.5),Position=UDim2.new(0,38,.5,0),
+		Size=UDim2.new(1,-140,0,30),
+		Text="",PlaceholderText="Search in page... (Ctrl+F)",
+		Font=Enum.Font.Gotham,TextSize=13,
+		TextColor3=C.Text,PlaceholderColor3=C.TextOff,
+		BackgroundTransparency=1,ClearTextOnFocus=false,
+		TextXAlignment=Enum.TextXAlignment.Left,ZIndex=22,
+	}, searchBar)
 
 	self._searchBar    = searchBar
 	self._searchBox    = searchBox
@@ -692,7 +680,6 @@ function Lib:_buildBody(win)
 	self._searchOpen   = false
 	self._searchHighlights = {}
 
-	-- pages wrapper  -  shrinks down when search bar is open
 	local pagesWrap = new("Frame",{
 		Position=UDim2.fromOffset(0,0),Size=UDim2.fromScale(1,1),
 		BackgroundTransparency=1,ClipsDescendants=false,
@@ -710,10 +697,8 @@ function Lib:_buildBody(win)
 	vlist(nh,6)
 	self._notifHolder = nh
 
-	-- search close button
 	closeSearchBtn.Activated:Connect(function() self:_closeSearch() end)
 
-	-- live search as user types
 	searchBox:GetPropertyChangedSignal("Text"):Connect(function()
 		self:_doSearch(searchBox.Text)
 	end)
@@ -777,7 +762,7 @@ function Lib:SetPage(index)
 	if self._settingsVisible then
 		self._settingsVisible = false
 		if self._settingsFrame then self._settingsFrame.Visible = false end
-		if self._gearImg then tw(self._gearImg,.15,{ImageColor3=C.TextDim}) end
+		if self._gearImg then tw(self._gearImg,.15,{ImageColor3=C.Text}) end
 		if self._bar then self._bar.Visible = true end
 	end
 	self:_clearHighlights()
@@ -960,7 +945,6 @@ function Lib:Hide()
 	if self._dragHandle then self._dragHandle.Visible = false end
 	if self._mobilePill then self._mobilePill.Visible = false end
 
-	-- toast: tell user how to reopen
 	local isMobile = UserInputService.TouchEnabled
 	if not isMobile then
 		self:ShowNotification(
@@ -1034,8 +1018,6 @@ function Lib:Destroy()
 	local isMobile = UserInputService.TouchEnabled
 	local keyInfo = (not isMobile) and ("Press "..self._toggleKey.." to reopen.") or "Use the button to reopen."
 
-	-- send a standalone toast that survives the sg destruction
-	-- We build it in a temporary ScreenGui so it outlives the main one
 	pcall(function()
 		local tmpSg = new("ScreenGui",{
 			Name="SlaoqUIToast",ResetOnSpawn=false,
@@ -1122,7 +1104,6 @@ function Lib:ShowNotification(msg, style, duration, title)
 	self._toastCount = (self._toastCount or 0) + 1
 	local lo = self._toastCount
 
-	-- wrapper is layout-managed; inner toast slides inside it
 	local wrapper = new("Frame",{
 		Size          = UDim2.new(1, 0, 0, 0),
 		AutomaticSize = Enum.AutomaticSize.Y,
@@ -1151,7 +1132,6 @@ function Lib:ShowNotification(msg, style, duration, title)
 	pad(inner, 11, 11, 14, 14)
 	vlist(inner, 5)
 
-	-- title row
 	local topRow = new("Frame",{
 		Size = UDim2.new(1,0,0,16),
 		BackgroundTransparency = 1,
@@ -1175,7 +1155,6 @@ function Lib:ShowNotification(msg, style, duration, title)
 		LayoutOrder = 1,
 	}, topRow)
 
-	-- message
 	new("TextLabel",{
 		Text = msg or "",
 		Font = Enum.Font.Gotham,
@@ -1190,13 +1169,11 @@ function Lib:ShowNotification(msg, style, duration, title)
 		LayoutOrder = 1,
 	}, inner)
 
-	-- progress bar
 	local pbg = new("Frame",{Size=UDim2.new(1,0,0,2),BackgroundColor3=C.Card3,BorderSizePixel=0,LayoutOrder=2},inner)
 	corner(pbg,1)
 	local pf = new("Frame",{Size=UDim2.fromScale(1,1),BackgroundColor3=st.dot,BorderSizePixel=0},pbg)
 	corner(pf,1)
 
-	-- animate in (slide from right inside the clipping wrapper)
 	tw(toast, .38, {Position=UDim2.fromOffset(0,0)}, Enum.EasingStyle.Back, Enum.EasingDirection.Out)
 	tw(pf, duration or 3.5, {Size=UDim2.fromScale(0,1)}, Enum.EasingStyle.Linear)
 
@@ -1331,7 +1308,7 @@ function Lib:_openSettings()
 	if self._settingsVisible then
 		self._settingsVisible = false
 		self._settingsFrame.Visible = false
-		if self._gearImg then tw(self._gearImg,.15,{ImageColor3=C.TextDim}) end
+		if self._gearImg then tw(self._gearImg,.15,{ImageColor3=C.Text}) end
 		if self._pages[self._pageIdx] then self._pages[self._pageIdx].Frame.Visible = true end
 		local nb = self._navBtns[self._pageIdx]
 		if nb then
@@ -1391,7 +1368,7 @@ function Lib:_closeSearch()
 		Position = UDim2.fromOffset(0,0),
 		Size     = UDim2.fromScale(1,1),
 	}, Enum.EasingStyle.Quint)
-	if self._searchBtnImg then tw(self._searchBtnImg,.15,{ImageColor3=C.TextDim}) end
+	if self._searchBtnImg then tw(self._searchBtnImg,.15,{ImageColor3=C.Text}) end
 end
 
 function Lib:_clearHighlights()
@@ -1713,7 +1690,7 @@ function Lib:AddSearchInput(pi,placeholder,callback)
 	pad(wrap,0,0,14,14)
 	hlist(wrap,8)
 
-	new("ImageLabel",{Image="rbxassetid://132302594577680",ImageColor3=C.TextDim,
+	new("ImageLabel",{Image="rbxassetid://132302594577680",ImageColor3=C.Text,
 		BackgroundTransparency=1,Size=UDim2.fromOffset(16,16),
 		AnchorPoint=Vector2.new(0,.5),LayoutOrder=0},wrap)
 
@@ -2100,7 +2077,6 @@ function Lib:AddColorPicker(pi,label,default,callback)
 			if callback then callback(currentColor,toHex(currentColor)) end
 		end
 
-		-- SV box
 		local svBox=new("Frame",{
 			AnchorPoint=Vector2.new(.5,0),
 			Position=UDim2.new(.5,0,0,16),
@@ -2111,21 +2087,18 @@ function Lib:AddColorPicker(pi,label,default,callback)
 		},popup)
 		corner(svBox,8)
 
-		-- white-to-transparent (left=white, right=hue)
 		local wOverlay=new("Frame",{Size=UDim2.fromScale(1,1),BackgroundColor3=Color3.new(1,1,1),BorderSizePixel=0,ZIndex=502},svBox)
 		new("UIGradient",{
 			Transparency=NumberSequence.new({NumberSequenceKeypoint.new(0,0),NumberSequenceKeypoint.new(1,1)}),
 			Rotation=0,
 		},wOverlay)
 
-		-- transparent-to-black (top=transparent, bottom=black)
 		local bOverlay=new("Frame",{Size=UDim2.fromScale(1,1),BackgroundColor3=Color3.new(0,0,0),BorderSizePixel=0,ZIndex=503},svBox)
 		new("UIGradient",{
 			Transparency=NumberSequence.new({NumberSequenceKeypoint.new(0,1),NumberSequenceKeypoint.new(1,0)}),
 			Rotation=90,
 		},bOverlay)
 
-		-- cursor
 		local svCursor=new("Frame",{
 			AnchorPoint=Vector2.new(.5,.5),
 			Position=UDim2.new(sat,0,1-val,0),
@@ -2158,7 +2131,6 @@ function Lib:AddColorPicker(pi,label,default,callback)
 			end
 		end)
 
-		-- Hue slider
 		local hueBar=new("Frame",{
 			AnchorPoint=Vector2.new(.5,0),
 			Position=UDim2.new(.5,0,0,16+SV_H+10),
@@ -2212,7 +2184,6 @@ function Lib:AddColorPicker(pi,label,default,callback)
 			end
 		end)
 
-		-- Hex input + Apply row
 		local hexRow=new("Frame",{
 			AnchorPoint=Vector2.new(.5,0),
 			Position=UDim2.new(.5,0,0,16+SV_H+10+16+12),
@@ -2267,7 +2238,6 @@ function Lib:AddColorPicker(pi,label,default,callback)
 			closePopup()
 		end)
 
-		-- click-outside overlay
 		local overlay=new("TextButton",{Text="",BackgroundTransparency=1,
 			Size=UDim2.fromScale(1,1),ZIndex=499,AutoButtonColor=false},self._sg)
 		overlay.Activated:Connect(function()

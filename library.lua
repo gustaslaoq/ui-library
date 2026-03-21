@@ -113,7 +113,28 @@ function Lib.new(userCfg)
 	local self = setmetatable({}, Lib)
 	self.cfg = {}
 	for k,v in pairs(DefaultConfig) do self.cfg[k]=v end
-	if userCfg then
+
+	-- Auto-demo: if called with no config (e.g. just loadstring(...)()),
+	-- detect it and load a full feature showcase automatically.
+	local isDemo = (userCfg == nil)
+
+	if isDemo then
+		self.cfg.AppName     = "SlaoqUILib"
+		self.cfg.AppSubtitle = "Component Showcase"
+		self.cfg.AppVersion  = "4.0"
+		self.cfg.Pages = {
+			{Icon="", Name="Dashboard"},
+			{Icon="", Name="Player"},
+			{Icon="", Name="Components"},
+			{Icon="", Name="Logs"},
+		}
+		self.cfg.SplashTasks = {
+			"Carregando SlaoqUILib...",
+			"Preparando componentes...",
+			"Iniciando showcase...",
+			"Pronto!",
+		}
+	else
 		for k,v in pairs(userCfg) do self.cfg[k]=v end
 	end
 
@@ -140,6 +161,8 @@ function Lib.new(userCfg)
 	pcall(function() self._sg.IgnoreGuiInset = true end)
 
 	self:_buildWindow()
+	-- Populate demo content before the splash runs so pages are ready when window appears.
+	if isDemo then self:_runDemo() end
 	self:_runSplash()
 	return self
 end
@@ -446,7 +469,9 @@ end
 
 function Lib:_initPages()
 	for i=1,#self.cfg.Pages do
-		local frame = new("Frame",{Size=UDim2.fromScale(1,1),BackgroundColor3=C.Bg2,BackgroundTransparency=1,Visible=false},self._content)
+		-- BackgroundTransparency=1 always — the frame must never show its own color.
+		-- The _content frame behind it provides the background.
+		local frame = new("Frame",{Size=UDim2.fromScale(1,1),BackgroundTransparency=1,Visible=false},self._content)
 		local scroll = new("ScrollingFrame",{Size=UDim2.fromScale(1,1),BackgroundTransparency=1,ScrollBarThickness=3,ScrollBarImageColor3=C.Border3,ScrollBarImageTransparency=.5,CanvasSize=UDim2.new(0,0,0,0),AutomaticCanvasSize=Enum.AutomaticSize.Y,ElasticBehavior=Enum.ElasticBehavior.Never},frame)
 		new("UIListLayout",{SortOrder=Enum.SortOrder.LayoutOrder,Padding=UDim.new(0,0)},scroll)
 		pad(scroll,24,24,24,24)
@@ -457,10 +482,11 @@ end
 
 function Lib:SetPage(index)
 	local cfg = self.cfg
+	-- FIX: page frames must always stay transparent (BackgroundTransparency=1).
+	-- Tweening them to opaque was the cause of the gray/white background bug.
+	-- The _content frame already provides the correct dark background.
 	if self._pages[self._pageIdx] then
-		local oldFrame = self._pages[self._pageIdx].Frame
-		tw(oldFrame,.15,{BackgroundTransparency=1},Enum.EasingStyle.Quint,Enum.EasingDirection.In)
-		task.delay(.16,function() if oldFrame and oldFrame.Parent then oldFrame.Visible=false; oldFrame.BackgroundTransparency=1 end end)
+		self._pages[self._pageIdx].Frame.Visible = false
 	end
 	local old = self._navBtns[self._pageIdx]
 	if old then
@@ -469,11 +495,8 @@ function Lib:SetPage(index)
 		tw(old.Dot,cfg.TweenSpeed,{BackgroundColor3=C.TextOff,Size=UDim2.fromOffset(6,6)})
 	end
 	self._pageIdx = index
-	local newPage = self._pages[index]
-	if newPage then
-		newPage.Frame.BackgroundTransparency = 1
-		newPage.Frame.Visible = true
-		tw(newPage.Frame,.2,{BackgroundTransparency=0},Enum.EasingStyle.Quint)
+	if self._pages[index] then
+		self._pages[index].Frame.Visible = true
 	end
 	local nb = self._navBtns[index]
 	if nb then
@@ -1347,6 +1370,281 @@ function Lib:Destroy()
 		if self.Window then tw(self.Window,.2,{BackgroundTransparency=1}) end
 		task.delay(.24,function() pcall(function() self._sg:Destroy() end) end)
 	end
+end
+
+function Lib:_runDemo()
+	local lp = LocalPlayer
+
+	-- ──────────────────────────── PAGE 1 · DASHBOARD ────────────────────────────
+	self:AddSectionHeader(1, "Dashboard", "Status geral do SlaoqUILib demo")
+
+	-- Métricas ao vivo do personagem
+	local function getHum()
+		local char = lp.Character
+		return char and char:FindFirstChildOfClass("Humanoid")
+	end
+
+	local metrics = self:AddMetricRow(1, {
+		{Label="Walk Speed",  Value=getHum() and getHum().WalkSpeed  or 16,  Unit="studs/s"},
+		{Label="Health",      Value=getHum() and math.floor(getHum().Health) or 100, Unit="HP"},
+		{Label="Jump Power",  Value=getHum() and getHum().JumpPower  or 50,  Unit="power"},
+	})
+
+	-- Atualiza métricas a cada segundo
+	task.spawn(function()
+		while self._sg and self._sg.Parent do
+			task.wait(1)
+			local hum = getHum()
+			if hum and metrics then
+				self:SetMetricValue(metrics[1], hum.WalkSpeed)
+				self:SetMetricValue(metrics[2], math.floor(hum.Health))
+				self:SetMetricValue(metrics[3], hum.JumpPower)
+			end
+		end
+	end)
+
+	self:AddDivider(1, "Status")
+
+	local hpBar = self:AddProgressBar(1, "Health", 100, 100)
+	local xpBar = self:AddProgressBar(1, "Experience (exemplo)", 34, 100)
+
+	-- Atualiza barra de HP junto com o personagem
+	task.spawn(function()
+		while self._sg and self._sg.Parent do
+			task.wait(0.5)
+			local hum = getHum()
+			if hum and hpBar then
+				hpBar:SetValue(math.floor(hum.Health / hum.MaxHealth * 100))
+			end
+		end
+	end)
+
+	self:AddDivider(1, "Alertas")
+	self:AddAlert(1, "Bem-vindo!", "Execute Lib.new({...}) para usar a lib no seu projeto.", "info")
+	self:AddAlert(1, "Dica", "Todas as páginas abaixo mostram componentes funcionais interativos.", "success")
+	self:AddAlert(1, "Aviso de exemplo", "Use AddAlert() com estilos: info, success, warning, error.", "warning")
+
+	-- ──────────────────────────── PAGE 2 · PLAYER ───────────────────────────────
+	self:AddSectionHeader(2, "Player Controls", "Controle seu personagem em tempo real")
+	self:AddLabel(2, "Sliders, toggles e botões que modificam o personagem direto no jogo.", "muted")
+	self:AddDivider(2, "Sliders")
+
+	local speedSlider = self:AddSlider(2, "Walk Speed", 0, 100, 16, function(v)
+		local hum = getHum()
+		if hum then hum.WalkSpeed = v end
+	end)
+
+	local jumpSlider = self:AddSlider(2, "Jump Power", 0, 200, 50, function(v)
+		local hum = getHum()
+		if hum then hum.JumpPower = v end
+	end)
+
+	local healthSlider = self:AddSlider(2, "Health", 0, 100, 100, function(v)
+		local hum = getHum()
+		if hum then hum.Health = v end
+	end)
+
+	self:AddDivider(2, "Toggles")
+
+	self:AddToggle(2, "God Mode (vida infinita)", false, function(v)
+		local hum = getHum()
+		if hum then
+			hum.MaxHealth = v and math.huge or 100
+			if v then hum.Health = math.huge end
+		end
+		self:ShowNotification(
+			v and "God Mode ativado!" or "God Mode desativado",
+			v and "success" or "warning", 2.5
+		)
+	end)
+
+	local _jumpConn
+	self:AddToggle(2, "Infinite Jump", false, function(v)
+		if _jumpConn then _jumpConn:Disconnect(); _jumpConn = nil end
+		if v then
+			_jumpConn = UserInputService.JumpRequest:Connect(function()
+				local hum = getHum()
+				if hum then hum:ChangeState(Enum.HumanoidStateType.Jumping) end
+			end)
+		end
+		self:ShowNotification(
+			v and "Infinite Jump ativado!" or "Infinite Jump desativado",
+			v and "success" or "info", 2.5
+		)
+	end)
+
+	self:AddToggle(2, "Velocidade turbo (x3)", false, function(v)
+		local hum = getHum()
+		if hum then
+			hum.WalkSpeed = v and 48 or 16
+			speedSlider:SetValue(hum.WalkSpeed)
+		end
+		self:ShowNotification(
+			v and "Turbo ativado! (48 studs/s)" or "Velocidade normal restaurada",
+			v and "success" or "info", 2
+		)
+	end)
+
+	self:AddDivider(2, "Ações")
+
+	self:AddButtonRow(2, {
+		{Text="Full Health",   Style="success", Width=120, Callback=function()
+			local hum = getHum()
+			if hum then hum.Health = hum.MaxHealth end
+			healthSlider:SetValue(100)
+			self:ShowNotification("Vida totalmente restaurada!", "success", 2)
+		end},
+		{Text="Reset Speed",  Style="ghost",   Width=120, Callback=function()
+			local hum = getHum()
+			if hum then hum.WalkSpeed = 16 end
+			speedSlider:SetValue(16)
+			jumpSlider:SetValue(50)
+			self:ShowNotification("Stats resetados para o padrão", "info", 2)
+		end},
+		{Text="Respawn",      Style="warning", Width=120, Callback=function()
+			lp:LoadCharacter()
+			self:ShowNotification("Personagem respawnado!", "info", 2)
+		end},
+	})
+
+	self:AddParagraph(2,
+		"Como usar no seu script",
+		"local Lib = loadstring(game:HttpGet('URL'))() \nlocal ui = Lib.new({ AppName='Meu App', Pages={{Name='Home'}} })\nui:AddSlider(1,'Speed',0,100,16,function(v) end)"
+	)
+
+	-- ──────────────────────────── PAGE 3 · COMPONENTS ───────────────────────────
+	self:AddSectionHeader(3, "Components", "Catálogo completo de elementos")
+
+	self:AddDivider(3, "Labels")
+	self:AddLabel(3, "Title Label  —  GothamBold 19px", "title")
+	self:AddLabel(3, "Subtitle Label  —  GothamBold 14px", "subtitle")
+	self:AddLabel(3, "Body Label  —  Gotham 13px. Texto padrão para conteúdo e descrições longas.", "body")
+	self:AddLabel(3, "Muted Label  —  Gotham 12px. Informações secundárias.", "muted")
+	self:AddLabel(3, "Caption Label  —  Gotham 10px. Rodapés e metadados.", "caption")
+
+	self:AddDivider(3, "Rich Text")
+	self:AddRichLabel(3,
+		'Use <b>negrito</b>, <i>itálico</i>, <u>sublinhado</u> e '..
+		'<font color="rgb(0,232,122)">cores</font> com AddRichLabel().'
+	)
+
+	self:AddDivider(3, "Badges")
+	self:AddBadge(3, "DEFAULT", "default")
+	self:AddBadge(3, "SUCCESS", "success")
+	self:AddBadge(3, "ERROR",   "error")
+	self:AddBadge(3, "WARNING", "warning")
+	self:AddBadge(3, "INFO",    "info")
+	self:AddBadge(3, "WHITE",   "white")
+
+	self:AddDivider(3, "Alerts")
+	self:AddAlert(3, "Info",    "Mensagem informativa.",    "info")
+	self:AddAlert(3, "Success", "Operação bem-sucedida!",   "success")
+	self:AddAlert(3, "Warning", "Atenção necessária.",      "warning")
+	self:AddAlert(3, "Error",   "Algo deu errado.",         "error")
+
+	self:AddDivider(3, "Inputs & Dropdown")
+
+	self:AddInput(3, "Campo de texto", "Digite e pressione Enter...", function(text, enter)
+		if enter and text ~= "" then
+			self:ShowNotification('Input recebido: "' .. text .. '"', "info", 3, "Input")
+		end
+	end)
+
+	self:AddDropdown(3, "Escolha uma opção", {
+		"Opção 1", "Opção 2", "Opção 3", "Opção 4", "Opção 5"
+	}, function(v)
+		self:ShowNotification("Selecionado: " .. v, "success", 2)
+	end)
+
+	self:AddDivider(3, "Keybind")
+	self:AddKeybind(3, "Tecla de atalho (clique para redefinir)", "F", function(key)
+		self:ShowNotification("Tecla definida: " .. key, "success", 2)
+	end)
+
+	self:AddDivider(3, "Progress Bars")
+	local pb1 = self:AddProgressBar(3, "Progresso A", 72, 100)
+	local pb2 = self:AddProgressBar(3, "Progresso B", 30, 100)
+
+	self:AddButtonRow(3, {
+		{Text="Animar Barras", Style="primary", Width=140, Callback=function()
+			pb1:SetValue(math.random(10, 100))
+			pb2:SetValue(math.random(10, 100))
+		end},
+	})
+
+	self:AddDivider(3, "Tabela")
+	self:AddTable(3,
+		{"Componente",      "Método",          "Retorno"},
+		{
+			{"Slider",      "AddSlider()",      "obj"},
+			{"Toggle",      "AddToggle()",      "obj"},
+			{"Button",      "AddButton()",      "button"},
+			{"Input",       "AddInput()",       "textbox"},
+			{"Dropdown",    "AddDropdown()",    "obj"},
+			{"Progress Bar","AddProgressBar()", "obj"},
+			{"Log Console", "AddLogConsole()",  "console"},
+			{"Table",       "AddTable()",       "obj"},
+			{"Keybind",     "AddKeybind()",     "obj"},
+			{"Badge",       "AddBadge()",       "obj"},
+		}
+	)
+
+	self:AddDivider(3, "Notificações")
+	self:AddButtonRow(3, {
+		{Text="Info",    Style="ghost",   Width=100, Callback=function()
+			self:ShowNotification("Mensagem informativa.", "info",    3, "Info") end},
+		{Text="Success", Style="success", Width=100, Callback=function()
+			self:ShowNotification("Operação concluída!",   "success", 3, "Sucesso") end},
+		{Text="Warning", Style="warning", Width=100, Callback=function()
+			self:ShowNotification("Atenção necessária.",   "warning", 3, "Aviso") end},
+		{Text="Error",   Style="danger",  Width=100, Callback=function()
+			self:ShowNotification("Algo deu errado.",      "error",   3, "Erro") end},
+	})
+
+	-- ──────────────────────────── PAGE 4 · LOGS ─────────────────────────────────
+	self:AddSectionHeader(4, "Logs", "Console de logging em tempo real")
+
+	local console = self:AddLogConsole(4, 300)
+
+	console:Log("SlaoqUILib iniciado com sucesso", "SUCCESS")
+	console:Log("Modo showcase ativo — execute Lib.new({...}) para usar", "INFO")
+	console:Log("Todos os " .. #self.cfg.Pages .. " módulos carregados", "INFO")
+	console:Log("Jogador: " .. lp.Name, "INFO")
+	console:Log("UserID: " .. lp.UserId, "DEBUG")
+	console:Log("Aguardando eventos...", "DEBUG")
+
+	self:AddButtonRow(4, {
+		{Text="Log Info",    Style="ghost",   Width=110, Callback=function()
+			console:Log("Evento informativo registrado", "INFO") end},
+		{Text="Log Success", Style="success", Width=110, Callback=function()
+			console:Log("Operação concluída com êxito", "SUCCESS") end},
+		{Text="Log Warn",    Style="warning", Width=110, Callback=function()
+			console:Log("Aviso detectado pelo sistema", "WARN") end},
+		{Text="Log Error",   Style="danger",  Width=110, Callback=function()
+			console:Log("Erro crítico encontrado", "ERROR") end},
+	})
+
+	self:AddButtonRow(4, {
+		{Text="Limpar Console", Style="outline", Width=150, Callback=function()
+			console:Clear()
+			console:Log("Console limpo.", "INFO")
+		end},
+		{Text="Status: Ativo",  Style="success", Width=130, Callback=function()
+			console:SetActive(true)
+			console:Log("Status definido como ATIVO", "SUCCESS")
+		end},
+		{Text="Status: Inativo", Style="danger", Width=130, Callback=function()
+			console:SetActive(false)
+			console:Log("Status definido como INATIVO", "WARN")
+		end},
+	})
+
+	self:AddParagraph(4,
+		"API do Console",
+		"console:Log(msg, nivel)  →  INFO | SUCCESS | WARN | ERROR | SNIPE | DEBUG\n"..
+		"console:Clear()          →  Limpa todas as linhas\n"..
+		"console:SetActive(bool)  →  Muda o indicador verde/vermelho"
+	)
 end
 
 return Lib

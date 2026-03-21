@@ -388,7 +388,6 @@ function Lib:_buildWindow()
 	self._dragHandle = dh
 
 	local function syncHandle()
-		if not dh.Visible then return end
 		local ap = win.AbsolutePosition
 		local as = win.AbsoluteSize
 		dh.Position = UDim2.fromOffset(math.floor(ap.X + as.X * 0.5), math.floor(ap.Y + as.Y + 8))
@@ -521,32 +520,46 @@ function Lib:_buildTitleBar(win)
 
 	do
 		local w = new("Frame",{Size=UDim2.fromOffset(44,44),BackgroundTransparency=1,ZIndex=12,LayoutOrder=0},right)
+		local fallback = new("TextLabel",{Text="Q",Font=Enum.Font.GothamBold,TextSize=16,
+			TextColor3=C.Text,BackgroundTransparency=1,AnchorPoint=Vector2.new(.5,.5),
+			Position=UDim2.fromScale(.5,.5),Size=UDim2.fromOffset(22,22),
+			TextXAlignment=Enum.TextXAlignment.Center,ZIndex=13},w)
 		local img = new("ImageLabel",{AnchorPoint=Vector2.new(.5,.5),Position=UDim2.fromScale(.5,.5),
 			Size=UDim2.fromOffset(22,22),BackgroundTransparency=1,
 			Image="rbxassetid://132302594577680",
-			ImageColor3=C.Text,
-			ScaleType=Enum.ScaleType.Fit,
-			ZIndex=13},w)
-		local btn = new("TextButton",{Text="",BackgroundTransparency=1,Size=UDim2.fromScale(1,1),ZIndex=14,AutoButtonColor=false},w)
-		btn.MouseEnter:Connect(function() tw(img,.12,{ImageColor3=C.White}); tw(w,.12,{BackgroundTransparency=.93}) end)
-		btn.MouseLeave:Connect(function() tw(img,.15,{ImageColor3=C.Text}); tw(w,.15,{BackgroundTransparency=1}) end)
+			ImageColor3=C.Text,ScaleType=Enum.ScaleType.Fit,ZIndex=14},w)
+		img:GetPropertyChangedSignal("IsLoaded"):connect(function()
+			if img.IsLoaded then fallback.Visible=false end
+		end)
+		if img.IsLoaded then fallback.Visible=false end
+		local btn = new("TextButton",{Text="",BackgroundTransparency=1,Size=UDim2.fromScale(1,1),ZIndex=15,AutoButtonColor=false},w)
+		btn.MouseEnter:Connect(function() tw(img,.12,{ImageColor3=C.White}); tw(fallback,.12,{TextColor3=C.White}); tw(w,.12,{BackgroundTransparency=.93}) end)
+		btn.MouseLeave:Connect(function() tw(img,.15,{ImageColor3=C.Text}); tw(fallback,.15,{TextColor3=C.Text}); tw(w,.15,{BackgroundTransparency=1}) end)
 		btn.Activated:Connect(function() self:_toggleSearch() end)
 		self._searchBtnImg = img
+		self._searchBtnFb  = fallback
 	end
 
 	do
 		local w = new("Frame",{Size=UDim2.fromOffset(44,44),BackgroundTransparency=1,ZIndex=12,LayoutOrder=1},right)
+		local fallback = new("TextLabel",{Text="@",Font=Enum.Font.GothamBold,TextSize=16,
+			TextColor3=C.Text,BackgroundTransparency=1,AnchorPoint=Vector2.new(.5,.5),
+			Position=UDim2.fromScale(.5,.5),Size=UDim2.fromOffset(22,22),
+			TextXAlignment=Enum.TextXAlignment.Center,ZIndex=13},w)
 		local img = new("ImageLabel",{AnchorPoint=Vector2.new(.5,.5),Position=UDim2.fromScale(.5,.5),
 			Size=UDim2.fromOffset(22,22),BackgroundTransparency=1,
 			Image="rbxassetid://101671992802622",
-			ImageColor3=C.Text,
-			ScaleType=Enum.ScaleType.Fit,
-			ZIndex=13},w)
-		local btn = new("TextButton",{Text="",BackgroundTransparency=1,Size=UDim2.fromScale(1,1),ZIndex=14,AutoButtonColor=false},w)
-		btn.MouseEnter:Connect(function() tw(img,.12,{ImageColor3=C.White}); tw(w,.12,{BackgroundTransparency=.93}) end)
-		btn.MouseLeave:Connect(function() tw(img,.15,{ImageColor3=C.Text}); tw(w,.15,{BackgroundTransparency=1}) end)
+			ImageColor3=C.Text,ScaleType=Enum.ScaleType.Fit,ZIndex=14},w)
+		img:GetPropertyChangedSignal("IsLoaded"):connect(function()
+			if img.IsLoaded then fallback.Visible=false end
+		end)
+		if img.IsLoaded then fallback.Visible=false end
+		local btn = new("TextButton",{Text="",BackgroundTransparency=1,Size=UDim2.fromScale(1,1),ZIndex=15,AutoButtonColor=false},w)
+		btn.MouseEnter:Connect(function() tw(img,.12,{ImageColor3=C.White}); tw(fallback,.12,{TextColor3=C.White}); tw(w,.12,{BackgroundTransparency=.93}) end)
+		btn.MouseLeave:Connect(function() tw(img,.15,{ImageColor3=C.Text}); tw(fallback,.15,{TextColor3=C.Text}); tw(w,.15,{BackgroundTransparency=1}) end)
 		btn.Activated:Connect(function() self:_openSettings() end)
 		self._gearImg = img
+		self._gearFb  = fallback
 	end
 
 	self._minBtn = mkBtn("-", C.White, function()
@@ -797,14 +810,14 @@ function Lib:SetPage(index)
 		self._settingsVisible = false
 		if self._settingsFrame then self._settingsFrame.Visible = false end
 		if self._gearImg then tw(self._gearImg,.15,{ImageColor3=C.Text}) end
+		if self._gearFb  then tw(self._gearFb,.15,{TextColor3=C.Text}) end
 		if self._bar then self._bar.Visible = true end
 	end
 	self:_clearHighlights()
 	if self._searchBox and self._searchBox.Text ~= "" then self._searchBox.Text = "" end
 	if self._searchResultLbl then self._searchResultLbl.Text = "" end
-	if self._pages[self._pageIdx] then
-		self._pages[self._pageIdx].Frame.Visible = false
-	end
+	local oldFrame = self._pages[self._pageIdx] and self._pages[self._pageIdx].Frame
+	local newFrame = self._pages[index] and self._pages[index].Frame
 	local old = self._navBtns[self._pageIdx]
 	if old then
 		tw(old.Lbl,cfg.TweenSpeed,{TextColor3=C.TextDim})
@@ -812,8 +825,21 @@ function Lib:SetPage(index)
 		tw(old.Dot,cfg.TweenSpeed,{BackgroundColor3=C.TextOff,Size=UDim2.fromOffset(6,6)})
 	end
 	self._pageIdx = index
-	if self._pages[index] then
-		self._pages[index].Frame.Visible = true
+	if oldFrame and oldFrame.Visible then
+		tw(oldFrame, .18, {BackgroundTransparency=1, Position=UDim2.new(0,0,0,14)}, Enum.EasingStyle.Quint, Enum.EasingDirection.In)
+		task.delay(.2, function()
+			if oldFrame and oldFrame.Parent then
+				oldFrame.Visible=false
+				oldFrame.Position=UDim2.fromOffset(0,0)
+				oldFrame.BackgroundTransparency=1
+			end
+		end)
+	end
+	if newFrame then
+		newFrame.Position = UDim2.new(0,0,0,-18)
+		newFrame.BackgroundTransparency = 1
+		newFrame.Visible = true
+		tw(newFrame, .25, {BackgroundTransparency=0, Position=UDim2.fromOffset(0,0)}, Enum.EasingStyle.Quint)
 	end
 	local nb = self._navBtns[index]
 	if nb then
@@ -1366,6 +1392,7 @@ function Lib:_openSettings()
 	end
 	if self._bar then self._bar.Visible = false end
 	if self._gearImg then tw(self._gearImg,.15,{ImageColor3=C.White}) end
+	if self._gearFb  then tw(self._gearFb,.15,{TextColor3=C.White}) end
 	self._settingsFrame.Visible = true
 end
 
@@ -1389,6 +1416,7 @@ function Lib:_openSearch()
 		end
 	end)
 	if self._searchBtnImg then tw(self._searchBtnImg,.15,{ImageColor3=C.White}) end
+		if self._searchBtnFb  then tw(self._searchBtnFb,.15,{TextColor3=C.White}) end
 end
 
 function Lib:_closeSearch()
@@ -1403,6 +1431,7 @@ function Lib:_closeSearch()
 		Size     = UDim2.fromScale(1,1),
 	}, Enum.EasingStyle.Quint)
 	if self._searchBtnImg then tw(self._searchBtnImg,.15,{ImageColor3=C.Text}) end
+		if self._searchBtnFb  then tw(self._searchBtnFb,.15,{TextColor3=C.Text}) end
 end
 
 function Lib:_clearHighlights()
@@ -1754,44 +1783,9 @@ function Lib:AddInput(pi,labelTxt,placeholder,callback)
 end
 
 function Lib:AddSearchInput(pi,placeholder,callback)
-	local s=self:GetPage(pi); if not s then return end
-	local wrap=new("Frame",{Size=UDim2.new(1,0,0,44),BackgroundColor3=C.Card,BorderSizePixel=0,LayoutOrder=self:_o(pi)},s)
-	corner(wrap,10)
-	local ws=stroke(wrap,C.Border,1)
-	pad(wrap,0,0,14,14)
-	hlist(wrap,8)
-
-	new("ImageLabel",{Image="rbxassetid://132302594577680",ImageColor3=C.Text,
-		BackgroundTransparency=1,Size=UDim2.fromOffset(16,16),
-		AnchorPoint=Vector2.new(0,.5),LayoutOrder=0},wrap)
-
-	local box=new("TextBox",{Text="",PlaceholderText=placeholder or "Search...",Font=Enum.Font.Gotham,TextSize=13,
-		TextColor3=C.Text,PlaceholderColor3=C.TextOff,BackgroundTransparency=1,
-		Size=UDim2.new(1,-62,1,0),ClearTextOnFocus=false,
-		TextXAlignment=Enum.TextXAlignment.Left,LayoutOrder=1},wrap)
-
-	local clearBtn=new("TextButton",{Text="x",Font=Enum.Font.GothamBold,TextSize=18,TextColor3=C.TextDim,
-		BackgroundTransparency=1,Size=UDim2.fromOffset(26,44),
-		TextXAlignment=Enum.TextXAlignment.Center,AutoButtonColor=false,Visible=false,LayoutOrder=2},wrap)
-	clearBtn.MouseEnter:Connect(function() tw(clearBtn,.12,{TextColor3=C.White}) end)
-	clearBtn.MouseLeave:Connect(function() tw(clearBtn,.15,{TextColor3=C.TextDim}) end)
-	clearBtn.Activated:Connect(function()
-		box.Text=""; clearBtn.Visible=false
-		if callback then callback("") end
-	end)
-
-	box:GetPropertyChangedSignal("Text"):Connect(function()
-		clearBtn.Visible = box.Text ~= ""
-		if callback then callback(box.Text) end
-	end)
-	box.Focused:Connect(function() tw(wrap,.16,{BackgroundColor3=C.Card2}); tw(ws,.16,{Color=C.Border3}) end)
-	box.FocusLost:Connect(function() tw(wrap,.18,{BackgroundColor3=C.Card}); tw(ws,.18,{Color=C.Border}) end)
-	wrap.MouseEnter:Connect(function() if not box:IsFocused() then tw(wrap,.15,{BackgroundColor3=C.Card2}) end end)
-	wrap.MouseLeave:Connect(function() if not box:IsFocused() then tw(wrap,.18,{BackgroundColor3=C.Card}) end end)
-
-	self:_gap(s,pi,10)
-	return box
+	return self:AddInput(pi, nil, placeholder or "Search...", callback)
 end
+
 
 function Lib:AddStepper(pi,label,min,max,default,step,callback)
 	local s=self:GetPage(pi); if not s then return end
@@ -2124,8 +2118,8 @@ function Lib:AddColorPicker(pi,label,default,callback)
 		if popupOpen then closePopup(); return end
 		popupOpen=true
 
-		local SV_W,SV_H=228,148
-		local PW,PH=SV_W+32,SV_H+132
+		local SV_W,SV_H=190,120
+		local PW,PH=SV_W+32,SV_H+130
 
 		local popup=new("Frame",{
 			AnchorPoint=Vector2.new(.5,.5),
@@ -2142,6 +2136,10 @@ function Lib:AddColorPicker(pi,label,default,callback)
 
 		local hexBox
 
+		local function updatePreview()
+			preview.BackgroundColor3=currentColor
+			if hexBox then hexBox.Text=toHex(currentColor) end
+		end
 		local function applyColor()
 			preview.BackgroundColor3=currentColor
 			if hexBox then hexBox.Text=toHex(currentColor) end
@@ -2397,8 +2395,13 @@ function Lib:AddLogConsole(pi,height)
 		local lv=string.upper(level or "INFO")
 		local ts=os.date("%H:%M:%S")
 		table.insert(self._lines,("%s  %s  %s"):format(ts,pfx[lv] or "[INFO]  ",tostring(msg)))
-		if #self._lines>400 then table.remove(self._lines,1) end
-		self.TextBox.Text=table.concat(self._lines,"\n")
+		if #self._lines>80 then table.remove(self._lines,1) end
+		local shown = {}
+		local start = math.max(1, #self._lines - 60)
+		for i = start, #self._lines do
+			table.insert(shown, self._lines[i])
+		end
+		self.TextBox.Text = table.concat(shown,"\n")
 	end
 	function console:Clear() self._lines={}; self.TextBox.Text="" end
 	function console:SetActive(v) tw(self._dot,.2,{BackgroundColor3=v and C.Green or C.Red}) end
@@ -2548,6 +2551,43 @@ function Lib:AddRichLabel(pi,content)
 	function obj:Show() self.Label.Visible=true end
 	function obj:Hide() self.Label.Visible=false end
 	return obj
+end
+
+function Lib:AddInlineImage(pi,assetId,size,color)
+	local s=self:GetPage(pi); if not s then return end
+	local sz=size or 20
+	local img=new("ImageLabel",{
+		Image="rbxassetid://"..tostring(assetId),
+		ImageColor3=color or C.White,
+		BackgroundTransparency=1,
+		Size=UDim2.fromOffset(sz,sz),
+		ScaleType=Enum.ScaleType.Fit,
+		LayoutOrder=self:_o(pi),
+	},s)
+	self:_gap(s,pi,4)
+	local obj={Image=img}
+	function obj:SetColor(col) self.Image.ImageColor3=col end
+	function obj:SetImage(id) self.Image.Image="rbxassetid://"..tostring(id) end
+	return obj
+end
+
+function Lib:AddColorSwatch(pi,label,hexcolor)
+	local s=self:GetPage(pi); if not s then return end
+	local col=fromHex(hexcolor or "ffffff")
+	local wrap=new("Frame",{Size=UDim2.new(1,0,0,32),BackgroundTransparency=1,LayoutOrder=self:_o(pi)},s)
+	hlist(wrap,8)
+	local swatch=new("Frame",{Size=UDim2.fromOffset(18,18),BackgroundColor3=col,BorderSizePixel=0,LayoutOrder=0},wrap)
+	corner(swatch,4)
+	stroke(swatch,C.Border2,1)
+	local code="#"..string.upper(hexcolor or "ffffff")
+	new("TextLabel",{
+		Text=(label and (label.." ") or "")..code,
+		Font=Enum.Font.Code,TextSize=12,TextColor3=C.Text,
+		BackgroundTransparency=1,Size=UDim2.new(1,-30,1,0),
+		TextXAlignment=Enum.TextXAlignment.Left,LayoutOrder=1,
+	},wrap)
+	self:_gap(s,pi,4)
+	return {Frame=wrap,Swatch=swatch}
 end
 
 function Lib:AddAlert(pi,title,message,style)
@@ -2958,11 +2998,15 @@ function Lib:_runDemo()
 	self:AddLabel(3, "Muted  -  Gotham 12px. Secondary information.", "muted")
 	self:AddLabel(3, "Caption  -  Gotham 10px. Metadata and footers.", "caption")
 
-	self:AddDivider(3, "Rich Text")
+	self:AddDivider(3, "Rich Text & Inline")
 	self:AddRichLabel(3,
-		'Use <b>bold</b>, <i>italic</i>, <u>underline</u> and '..
-		'<font color="rgb(0,232,122)">color</font> via AddRichLabel().'
-	)
+		'Use <b>bold</b>, <i>italic</i>, <u>underline</u>, '..
+		'<font color="rgb(0,232,122)">colors</font>, '..
+		'<font size="16">big text</font>, '..
+		'<font face="GothamBold">font faces</font> via AddRichLabel().')
+	self:AddColorSwatch(3, "Accent", "4488ff")
+	self:AddColorSwatch(3, "Success", "00e87a")
+	self:AddColorSwatch(3, "Warning", "f0c030")
 
 	self:AddDivider(3, "Badges")
 	self:AddBadge(3, "DEFAULT","default")
@@ -3012,7 +3056,8 @@ function Lib:_runDemo()
 			{"Stepper",      "AddStepper()",      "obj"},
 			{"Button",       "AddButton()",       "TextButton"},
 			{"Input",        "AddInput()",        "TextBox"},
-			{"SearchInput",  "AddSearchInput()",  "TextBox"},
+			{"ColorSwatch",  "AddColorSwatch()",  "obj"},
+			{"InlineImage",  "AddInlineImage()",  "obj"},
 			{"Dropdown",     "AddDropdown()",     "obj"},
 			{"RadioGroup",   "AddRadioGroup()",   "obj"},
 			{"ColorPicker",  "AddColorPicker()",  "obj"},
@@ -3134,6 +3179,18 @@ function Lib:_runDemo()
 		"console:SetActive(bool)    toggles the green/red status dot"
 	)
 end
+
+local function processHexColors(text)
+	return (text:gsub("(#%x%x%x%x%x%x)", function(h)
+		local r=tonumber(h:sub(2,3),16)
+		local g=tonumber(h:sub(4,5),16)
+		local b=tonumber(h:sub(6,7),16)
+		if not r then return h end
+		return h..'<font color="rgb('..r..','..g..','..b..')">[  ]</font>'
+	end))
+end
+Lib.ProcessHexColors = processHexColors
+
 
 local _newCalled = false
 local _origNew   = Lib.new

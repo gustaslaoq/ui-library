@@ -160,7 +160,8 @@ function Lib.new(userCfg)
 	self._settingsVisible= false
 	self._settingsFrame  = nil
 	self._settingsScroll = nil
-	self._gearBtn        = nil
+	self._gearImg        = nil
+	self._searchBtnImg   = nil
 
 	local guiParent = self.cfg.GuiParent == "PlayerGui"
 		and LocalPlayer:WaitForChild("PlayerGui") or CoreGui
@@ -184,6 +185,14 @@ function Lib.new(userCfg)
 			if gp then return end
 			local kc = tostring(inp.KeyCode):gsub("Enum%.KeyCode%.","")
 			if kc == self._toggleKey then self:ToggleVisibility() end
+			-- Ctrl+F opens search
+			if kc == "F" and (UserInputService:IsKeyDown(Enum.KeyCode.LeftControl) or UserInputService:IsKeyDown(Enum.KeyCode.RightControl)) then
+				if not self._hidden then self:_openSearch() end
+			end
+			-- Escape closes search
+			if kc == "Escape" and self._searchOpen then
+				self:_closeSearch()
+			end
 		end)
 	end
 
@@ -479,7 +488,7 @@ function Lib:_buildTitleBar(win)
 	self._tbBorderLine = new("Frame",{Position=UDim2.new(0,0,1,-1),Size=UDim2.new(1,0,0,1),BackgroundColor3=C.Border,BorderSizePixel=0,ZIndex=10},tb)
 	self.TitleBar = tb
 
-	local left = new("Frame",{Size=UDim2.new(1,-90,1,0),BackgroundTransparency=1,ZIndex=11},tb)
+	local left = new("Frame",{Size=UDim2.new(1,-180,1,0),BackgroundTransparency=1,ZIndex=11},tb)
 	pad(left,0,0,14,0)
 	hlist(left,10)
 
@@ -505,7 +514,7 @@ function Lib:_buildTitleBar(win)
 		BackgroundTransparency=1,Size=UDim2.fromOffset(0,22),AutomaticSize=Enum.AutomaticSize.X,ZIndex=12},ver)
 
 	local right = new("Frame",{AnchorPoint=Vector2.new(1,0),Position=UDim2.new(1,0,0,0),
-		Size=UDim2.fromOffset(132,44),BackgroundTransparency=1,ZIndex=11},tb)
+		Size=UDim2.fromOffset(180,44),BackgroundTransparency=1,ZIndex=11},tb)
 	hlist(right,0)
 
 	local function mkBtn(sym,hc,cb,lo)
@@ -516,11 +525,31 @@ function Lib:_buildTitleBar(win)
 		b.Activated:Connect(cb)
 		return b
 	end
-	self._gearBtn = mkBtn("⚙",C.TextDim,function() self:_openSettings() end,0)
-	self._minBtn = mkBtn("-",C.White,function()
+
+	local function mkImgBtn(assetId, hc, cb, lo)
+		local wrap = new("Frame",{
+			Size=UDim2.fromOffset(44,44),BackgroundTransparency=1,ZIndex=12,LayoutOrder=lo,
+		}, right)
+		local img = new("ImageLabel",{
+			AnchorPoint=Vector2.new(.5,.5),Position=UDim2.fromScale(.5,.5),
+			Size=UDim2.fromOffset(18,18),BackgroundTransparency=1,
+			Image="rbxassetid://"..assetId,ImageColor3=C.TextDim,ZIndex=13,
+		}, wrap)
+		local btn = new("TextButton",{
+			Text="",BackgroundTransparency=1,Size=UDim2.fromScale(1,1),ZIndex=14,AutoButtonColor=false,
+		}, wrap)
+		btn.MouseEnter:Connect(function() tw(img,.12,{ImageColor3=hc}); tw(wrap,.12,{BackgroundTransparency=.93}) end)
+		btn.MouseLeave:Connect(function() tw(img,.15,{ImageColor3=C.TextDim}); tw(wrap,.15,{BackgroundTransparency=1}) end)
+		btn.Activated:Connect(cb)
+		return wrap, img, btn
+	end
+
+	local _, self._searchBtnImg = mkImgBtn("132302594577680", C.White, function() self:_toggleSearch() end, 0)
+	local _, self._gearImg      = mkImgBtn("101671992802622", C.TextDim, function() self:_openSettings() end, 1)
+	self._minBtn = mkBtn("-", C.White, function()
 		if self._minimised then self:Maximise() else self:Minimise() end
-	end,1)
-	mkBtn("x",C.Red,function() self:Hide() end,2)
+	end, 2)
+	mkBtn("x", C.Red, function() self:Hide() end, 3)
 
 	do
 		local drag = false
@@ -605,6 +634,59 @@ function Lib:_buildBody(win)
 		Size=UDim2.new(1,-cfg.SidebarWidth,1,0),BackgroundColor3=C.Bg2,BorderSizePixel=0,ClipsDescendants=true},body)
 	self._content = content
 
+	-- search bar (hidden until toggled)
+	local sbH = 48
+	local searchBar = new("Frame",{
+		Size=UDim2.new(1,0,0,0),BackgroundColor3=C.Card,
+		BorderSizePixel=0,ZIndex=20,ClipsDescendants=true,
+	}, content)
+	new("Frame",{Position=UDim2.new(0,0,1,-1),Size=UDim2.new(1,0,0,1),
+		BackgroundColor3=C.Border,BorderSizePixel=0,ZIndex=21},searchBar)
+	pad(searchBar,0,0,14,14)
+	hlist(searchBar,10)
+
+	local searchIcon = new("ImageLabel",{
+		Size=UDim2.fromOffset(16,16),BackgroundTransparency=1,
+		Image="rbxassetid://132302594577680",ImageColor3=C.TextDim,
+		LayoutOrder=0,ZIndex=22,
+	}, searchBar)
+
+	local searchBox = new("TextBox",{
+		Text="",PlaceholderText="Search in page...   (Ctrl+F)",
+		Font=Enum.Font.Gotham,TextSize=13,
+		TextColor3=C.Text,PlaceholderColor3=C.TextOff,
+		BackgroundTransparency=1,Size=UDim2.new(1,-80,1,0),
+		ClearTextOnFocus=false,TextXAlignment=Enum.TextXAlignment.Left,
+		ZIndex=22,LayoutOrder=1,
+	}, searchBar)
+
+	local resultLbl = new("TextLabel",{
+		Text="",Font=Enum.Font.Gotham,TextSize=11,TextColor3=C.TextDim,
+		BackgroundTransparency=1,Size=UDim2.fromOffset(46,sbH),
+		TextXAlignment=Enum.TextXAlignment.Right,ZIndex=22,LayoutOrder=2,
+	}, searchBar)
+
+	local closeSearchBtn = new("TextButton",{
+		Text="×",Font=Enum.Font.GothamBold,TextSize=18,TextColor3=C.TextDim,
+		BackgroundTransparency=1,Size=UDim2.fromOffset(28,sbH),
+		TextXAlignment=Enum.TextXAlignment.Center,AutoButtonColor=false,ZIndex=22,LayoutOrder=3,
+	}, searchBar)
+	closeSearchBtn.MouseEnter:Connect(function() tw(closeSearchBtn,.1,{TextColor3=C.Red}) end)
+	closeSearchBtn.MouseLeave:Connect(function() tw(closeSearchBtn,.12,{TextColor3=C.TextDim}) end)
+
+	self._searchBar    = searchBar
+	self._searchBox    = searchBox
+	self._searchResultLbl = resultLbl
+	self._searchOpen   = false
+	self._searchHighlights = {}
+
+	-- pages wrapper — shrinks down when search bar is open
+	local pagesWrap = new("Frame",{
+		Position=UDim2.fromOffset(0,0),Size=UDim2.fromScale(1,1),
+		BackgroundTransparency=1,ClipsDescendants=false,
+	}, content)
+	self._pagesWrap = pagesWrap
+
 	table.insert(self._conns, sidebar:GetPropertyChangedSignal("Size"):Connect(function()
 		local sw = sidebar.Size.X.Offset
 		content.Position = UDim2.new(0,sw,0,0)
@@ -615,6 +697,17 @@ function Lib:_buildBody(win)
 		Size=UDim2.new(.65,0,0,0),AutomaticSize=Enum.AutomaticSize.Y,BackgroundTransparency=1,ZIndex=200},win)
 	vlist(nh,6)
 	self._notifHolder = nh
+
+	-- search close button
+	closeSearchBtn.Activated:Connect(function() self:_closeSearch() end)
+
+	-- live search as user types
+	searchBox:GetPropertyChangedSignal("Text"):Connect(function()
+		self:_doSearch(searchBox.Text)
+	end)
+	searchBox.FocusLost:Connect(function(enter)
+		if enter then self:_doSearch(searchBox.Text) end
+	end)
 end
 
 function Lib:_makeNavBtn(page,index,parent)
@@ -655,7 +748,7 @@ end
 
 function Lib:_initPages()
 	for i=1,#self.cfg.Pages do
-		local frame = new("Frame",{Size=UDim2.fromScale(1,1),BackgroundTransparency=1,Visible=false},self._content)
+		local frame = new("Frame",{Size=UDim2.fromScale(1,1),BackgroundTransparency=1,Visible=false},self._pagesWrap)
 		local scroll = new("ScrollingFrame",{Size=UDim2.fromScale(1,1),BackgroundTransparency=1,
 			ScrollBarThickness=3,ScrollBarImageColor3=C.Border3,ScrollBarImageTransparency=.5,
 			CanvasSize=UDim2.new(0,0,0,0),AutomaticCanvasSize=Enum.AutomaticSize.Y,
@@ -669,13 +762,15 @@ end
 
 function Lib:SetPage(index)
 	local cfg = self.cfg
-	-- close settings if open
 	if self._settingsVisible then
 		self._settingsVisible = false
 		if self._settingsFrame then self._settingsFrame.Visible = false end
-		if self._gearBtn then tw(self._gearBtn,.15,{TextColor3=C.TextDim,BackgroundTransparency=1}) end
+		if self._gearImg then tw(self._gearImg,.15,{ImageColor3=C.TextDim}) end
 		if self._bar then self._bar.Visible = true end
 	end
+	self:_clearHighlights()
+	if self._searchBox and self._searchBox.Text ~= "" then self._searchBox.Text = "" end
+	if self._searchResultLbl then self._searchResultLbl.Text = "" end
 	if self._pages[self._pageIdx] then
 		self._pages[self._pageIdx].Frame.Visible = false
 	end
@@ -1112,7 +1207,7 @@ end
 function Lib:_buildSettingsPanel()
 	local frame = new("Frame",{
 		Size=UDim2.fromScale(1,1),BackgroundTransparency=1,Visible=false,ZIndex=5,
-	}, self._content)
+	}, self._pagesWrap)
 	local scroll = new("ScrollingFrame",{
 		Size=UDim2.fromScale(1,1),BackgroundTransparency=1,
 		ScrollBarThickness=3,ScrollBarImageColor3=C.Border3,ScrollBarImageTransparency=.5,
@@ -1224,7 +1319,7 @@ function Lib:_openSettings()
 	if self._settingsVisible then
 		self._settingsVisible = false
 		self._settingsFrame.Visible = false
-		if self._gearBtn then tw(self._gearBtn,.15,{TextColor3=C.TextDim,BackgroundTransparency=1}) end
+		if self._gearImg then tw(self._gearImg,.15,{ImageColor3=C.TextDim}) end
 		if self._pages[self._pageIdx] then self._pages[self._pageIdx].Frame.Visible = true end
 		local nb = self._navBtns[self._pageIdx]
 		if nb then
@@ -1247,8 +1342,129 @@ function Lib:_openSettings()
 		tw(old.Dot,self.cfg.TweenSpeed,{BackgroundColor3=C.TextOff,Size=UDim2.fromOffset(6,6)})
 	end
 	if self._bar then self._bar.Visible = false end
-	if self._gearBtn then tw(self._gearBtn,.15,{TextColor3=C.White,BackgroundTransparency=.93}) end
+	if self._gearImg then tw(self._gearImg,.15,{ImageColor3=C.White}) end
 	self._settingsFrame.Visible = true
+end
+
+function Lib:_toggleSearch()
+	if self._searchOpen then self:_closeSearch() else self:_openSearch() end
+end
+
+function Lib:_openSearch()
+	if self._searchOpen then return end
+	self._searchOpen = true
+	local sbH = 48
+	self._searchBar.Size = UDim2.new(1,0,0,0)
+	tw(self._searchBar, .25, {Size=UDim2.new(1,0,0,sbH)}, Enum.EasingStyle.Back, Enum.EasingDirection.Out)
+	tw(self._pagesWrap, .25, {
+		Position = UDim2.fromOffset(0,sbH),
+		Size     = UDim2.new(1,0,1,-sbH),
+	}, Enum.EasingStyle.Quint)
+	task.delay(.28, function()
+		if self._searchBox and self._searchBar.Size.Y.Offset > 0 then
+			self._searchBox:CaptureFocus()
+		end
+	end)
+	if self._searchBtnImg then tw(self._searchBtnImg,.15,{ImageColor3=C.White}) end
+end
+
+function Lib:_closeSearch()
+	if not self._searchOpen then return end
+	self._searchOpen = false
+	self:_clearHighlights()
+	if self._searchBox then self._searchBox.Text = "" end
+	if self._searchResultLbl then self._searchResultLbl.Text = "" end
+	tw(self._searchBar, .2, {Size=UDim2.new(1,0,0,0)}, Enum.EasingStyle.Quint, Enum.EasingDirection.In)
+	tw(self._pagesWrap, .2, {
+		Position = UDim2.fromOffset(0,0),
+		Size     = UDim2.fromScale(1,1),
+	}, Enum.EasingStyle.Quint)
+	if self._searchBtnImg then tw(self._searchBtnImg,.15,{ImageColor3=C.TextDim}) end
+end
+
+function Lib:_clearHighlights()
+	for _, info in ipairs(self._searchHighlights or {}) do
+		pcall(function()
+			if info.obj and info.obj.Parent then
+				info.obj.Text = info.original
+				info.obj.RichText = info.wasRich
+			end
+		end)
+	end
+	self._searchHighlights = {}
+end
+
+function Lib:_doSearch(query)
+	self:_clearHighlights()
+	if not query or query == "" then
+		if self._searchResultLbl then self._searchResultLbl.Text = "" end
+		return
+	end
+
+	local currentScroll = self._pages[self._pageIdx] and self._pages[self._pageIdx].Scroll
+	if not currentScroll then return end
+
+	local qLower = query:lower()
+	local count = 0
+	local highlights = {}
+
+	-- collect all TextLabel and TextButton descendants
+	local function scan(parent)
+		for _, child in ipairs(parent:GetChildren()) do
+			if child:IsA("TextLabel") or child:IsA("TextButton") then
+				local txt = child.Text or ""
+				if txt ~= "" and txt:lower():find(qLower, 1, true) then
+					local wasRich = child.RichText
+					local original = txt
+
+					-- escape any existing rich text markup from the original for display
+					local escaped = txt:gsub("&","&amp;"):gsub("<","&lt;"):gsub(">","&gt;")
+
+					-- build highlighted version (case-insensitive replace)
+					local esc_q = query:gsub("[%(%)%.%%%+%-%*%?%[%^%$]", "%%%1")
+					local highlighted = escaped:gsub("(?i)"..esc_q, function(m)
+						return '<font color="rgb(255,205,0)"><b>'..m..'</b></font>'
+					end)
+					-- lua doesn't support (?i) so do it manually:
+					highlighted = escaped
+					local result = ""
+					local i = 1
+					while i <= #escaped do
+						local s,e = escaped:lower():find(qLower, i, true)
+						if s then
+							result = result .. escaped:sub(i, s-1)
+							result = result .. '<font color="rgb(255,210,0)"><b>' .. escaped:sub(s,e) .. '</b></font>'
+							i = e+1
+							count = count + 1
+						else
+							result = result .. escaped:sub(i)
+							break
+						end
+					end
+
+					table.insert(highlights, {obj=child, original=original, wasRich=wasRich})
+					pcall(function()
+						child.RichText = true
+						child.Text = result
+					end)
+				end
+			end
+			scan(child)
+		end
+	end
+
+	scan(currentScroll)
+	self._searchHighlights = highlights
+
+	if self._searchResultLbl then
+		if count == 0 then
+			self._searchResultLbl.Text = "no results"
+			tw(self._searchResultLbl,.1,{TextColor3=C.Red})
+		else
+			self._searchResultLbl.Text = count.." found"
+			tw(self._searchResultLbl,.1,{TextColor3=C.Green})
+		end
+	end
 end
 
 function Lib:_o(pi)

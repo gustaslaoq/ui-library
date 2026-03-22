@@ -542,7 +542,7 @@ function Lib:_buildTitleBar(win)
 		local w = new("Frame",{Size=UDim2.fromOffset(44,44),BackgroundTransparency=1,ZIndex=12,LayoutOrder=1},right)
 		local img = new("ImageLabel",{AnchorPoint=Vector2.new(.5,.5),Position=UDim2.fromScale(.5,.5),
 			Size=UDim2.fromOffset(20,20),BackgroundTransparency=1,
-			Image="rbxassetid://7059346386",
+			Image="rbxassetid://7059346373",
 			ImageColor3=C.Text,ScaleType=Enum.ScaleType.Fit,ZIndex=13},w)
 		local btn = new("TextButton",{Text="",BackgroundTransparency=1,Size=UDim2.fromScale(1,1),ZIndex=14,AutoButtonColor=false},w)
 		btn.MouseEnter:Connect(function() tw(img,.12,{ImageColor3=C.White}); tw(w,.12,{BackgroundTransparency=.93}) end)

@@ -526,40 +526,30 @@ function Lib:_buildTitleBar(win)
 
 	do
 		local w = new("Frame",{Size=UDim2.fromOffset(44,44),BackgroundTransparency=1,ZIndex=12,LayoutOrder=0},right)
-		local fallback = new("TextLabel",{Text="S",Font=Enum.Font.GothamBold,TextSize=14,
-			TextColor3=C.Text,BackgroundTransparency=1,AnchorPoint=Vector2.new(.5,.5),
-			Position=UDim2.fromScale(.5,.5),Size=UDim2.fromOffset(22,22),
-			TextXAlignment=Enum.TextXAlignment.Center,ZIndex=13},w)
 		local img = new("ImageLabel",{AnchorPoint=Vector2.new(.5,.5),Position=UDim2.fromScale(.5,.5),
-			Size=UDim2.fromOffset(22,22),BackgroundTransparency=1,
-			Image="rbxasset://textures/ui/SearchIcon.png",
-			ImageColor3=C.Text,ScaleType=Enum.ScaleType.Fit,ZIndex=14},w)
-		task.defer(function() if img.IsLoaded then fallback.Visible=false end end)
-		local btn = new("TextButton",{Text="",BackgroundTransparency=1,Size=UDim2.fromScale(1,1),ZIndex=15,AutoButtonColor=false},w)
-		btn.MouseEnter:Connect(function() tw(img,.12,{ImageColor3=C.White}); tw(fallback,.12,{TextColor3=C.White}); tw(w,.12,{BackgroundTransparency=.93}) end)
-		btn.MouseLeave:Connect(function() tw(img,.15,{ImageColor3=C.Text}); tw(fallback,.15,{TextColor3=C.Text}); tw(w,.15,{BackgroundTransparency=1}) end)
+			Size=UDim2.fromOffset(20,20),BackgroundTransparency=1,
+			Image="rbxassetid://118685771787843",
+			ImageColor3=C.Text,ScaleType=Enum.ScaleType.Fit,ZIndex=13},w)
+		local btn = new("TextButton",{Text="",BackgroundTransparency=1,Size=UDim2.fromScale(1,1),ZIndex=14,AutoButtonColor=false},w)
+		btn.MouseEnter:Connect(function() tw(img,.12,{ImageColor3=C.White}); tw(w,.12,{BackgroundTransparency=.93}) end)
+		btn.MouseLeave:Connect(function() tw(img,.15,{ImageColor3=C.Text}); tw(w,.15,{BackgroundTransparency=1}) end)
 		btn.Activated:Connect(function() self:_toggleSearch() end)
 		self._searchBtnImg = img
-		self._searchBtnFb  = fallback
+		self._searchBtnFb  = nil
 	end
 
 	do
 		local w = new("Frame",{Size=UDim2.fromOffset(44,44),BackgroundTransparency=1,ZIndex=12,LayoutOrder=1},right)
-		local fallback = new("TextLabel",{Text="G",Font=Enum.Font.GothamBold,TextSize=14,
-			TextColor3=C.Text,BackgroundTransparency=1,AnchorPoint=Vector2.new(.5,.5),
-			Position=UDim2.fromScale(.5,.5),Size=UDim2.fromOffset(22,22),
-			TextXAlignment=Enum.TextXAlignment.Center,ZIndex=13},w)
 		local img = new("ImageLabel",{AnchorPoint=Vector2.new(.5,.5),Position=UDim2.fromScale(.5,.5),
-			Size=UDim2.fromOffset(22,22),BackgroundTransparency=1,
-			Image="rbxasset://textures/ui/SettingsIcon.png",
-			ImageColor3=C.Text,ScaleType=Enum.ScaleType.Fit,ZIndex=14},w)
-		task.defer(function() if img.IsLoaded then fallback.Visible=false end end)
-		local btn = new("TextButton",{Text="",BackgroundTransparency=1,Size=UDim2.fromScale(1,1),ZIndex=15,AutoButtonColor=false},w)
-		btn.MouseEnter:Connect(function() tw(img,.12,{ImageColor3=C.White}); tw(fallback,.12,{TextColor3=C.White}); tw(w,.12,{BackgroundTransparency=.93}) end)
-		btn.MouseLeave:Connect(function() tw(img,.15,{ImageColor3=C.Text}); tw(fallback,.15,{TextColor3=C.Text}); tw(w,.15,{BackgroundTransparency=1}) end)
+			Size=UDim2.fromOffset(20,20),BackgroundTransparency=1,
+			Image="rbxassetid://98211971158539",
+			ImageColor3=C.Text,ScaleType=Enum.ScaleType.Fit,ZIndex=13},w)
+		local btn = new("TextButton",{Text="",BackgroundTransparency=1,Size=UDim2.fromScale(1,1),ZIndex=14,AutoButtonColor=false},w)
+		btn.MouseEnter:Connect(function() tw(img,.12,{ImageColor3=C.White}); tw(w,.12,{BackgroundTransparency=.93}) end)
+		btn.MouseLeave:Connect(function() tw(img,.15,{ImageColor3=C.Text}); tw(w,.15,{BackgroundTransparency=1}) end)
 		btn.Activated:Connect(function() self:_openSettings() end)
 		self._gearImg = img
-		self._gearFb  = fallback
+		self._gearFb  = nil
 	end
 
 	do
@@ -675,20 +665,12 @@ function Lib:_buildBody(win)
 	new("Frame",{Position=UDim2.new(0,0,1,-1),Size=UDim2.new(1,0,0,1),
 		BackgroundColor3=C.Border,BorderSizePixel=0,ZIndex=21},searchBar)
 
-	do
-		local sIcon=new("ImageLabel",{
-			AnchorPoint=Vector2.new(0,.5),Position=UDim2.new(0,12,.5,0),
-			Size=UDim2.fromOffset(16,16),BackgroundTransparency=1,
-			Image="rbxasset://textures/ui/SearchIcon.png",
-			ImageColor3=C.Text,ScaleType=Enum.ScaleType.Fit,ZIndex=22,
-		}, searchBar)
-		local sIconFb=new("TextLabel",{
-			Text="?",Font=Enum.Font.GothamBold,TextSize=14,TextColor3=C.TextDim,
-			BackgroundTransparency=1,AnchorPoint=Vector2.new(0,.5),Position=UDim2.new(0,12,.5,0),
-			Size=UDim2.fromOffset(16,16),TextXAlignment=Enum.TextXAlignment.Center,ZIndex=22,
-		}, searchBar)
-		sIconFb.Visible = false
-	end
+	new("ImageLabel",{
+		AnchorPoint=Vector2.new(0,.5),Position=UDim2.new(0,12,.5,0),
+		Size=UDim2.fromOffset(16,16),BackgroundTransparency=1,
+		Image="rbxassetid://118685771787843",
+		ImageColor3=C.Text,ScaleType=Enum.ScaleType.Fit,ZIndex=22,
+	}, searchBar)
 
 	local searchBox = new("TextBox",{
 		AnchorPoint=Vector2.new(0,.5),Position=UDim2.new(0,36,.5,0),
@@ -851,7 +833,7 @@ function Lib:SetPage(index)
 		self._settingsVisible = false
 		if self._settingsFrame then self._settingsFrame.Visible = false end
 		if self._gearImg then tw(self._gearImg,.15,{ImageColor3=C.Text}) end
-		if self._gearFb  then tw(self._gearFb,.15,{TextColor3=C.Text}) end
+		
 		if self._bar then self._bar.Visible = true end
 	end
 	self:_clearHighlights()
@@ -1495,7 +1477,7 @@ function Lib:_openSettings()
 	end
 	if self._bar then self._bar.Visible = false end
 	if self._gearImg then tw(self._gearImg,.15,{ImageColor3=C.White}) end
-	if self._gearFb  then tw(self._gearFb,.15,{TextColor3=C.White}) end
+	
 	self._settingsFrame.Visible = true
 end
 

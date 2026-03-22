@@ -867,7 +867,10 @@ function Lib:_makeNavBtn(page,index,parent)
 			tw(dot,.18,{BackgroundColor3=C.TextOff,Size=UDim2.fromOffset(6,6)})
 		end
 	end)
-	click.Activated:Connect(function() self:SetPage(index) end)
+	click.Activated:Connect(function()
+		if self._pageIdx == index and not self._settingsVisible then return end
+		self:SetPage(index)
+	end)
 	self._navBtns[index] = {Frame=frame,Bg=bg,Lbl=lbl,Dot=dot}
 end
 
@@ -887,6 +890,7 @@ end
 
 function Lib:SetPage(index)
 	local cfg = self.cfg
+	if index == self._pageIdx and not self._settingsVisible then return end
 	if self._settingsVisible then
 		self._settingsVisible = false
 		if self._settingsFrame then self._settingsFrame.Visible = false end
@@ -1108,9 +1112,21 @@ function Lib:Minimise()
 	if mini then
 		self:_ensurePill()
 		local pill = self._mobilePill
-		tw(win,.25,{BackgroundTransparency=1},Enum.EasingStyle.Quint,Enum.EasingDirection.In)
-		task.delay(.27,function()
-			if win and win.Parent then win.Visible=false end
+		local ws = win.AbsoluteSize
+		win.ClipsDescendants = true
+		tw(win,.3,{
+			BackgroundTransparency=1,
+			Size=UDim2.fromOffset(ws.X*0.9, ws.Y*0.85),
+			Position=UDim2.new(.5,win.Position.X.Offset,.5,win.Position.Y.Offset+40),
+		},Enum.EasingStyle.Quint,Enum.EasingDirection.In)
+		task.delay(.32,function()
+			if win and win.Parent then
+				win.Visible=false
+				win.Size=UDim2.fromOffset(ws.X,ws.Y)
+				win.Position=UDim2.new(.5,win.Position.X.Offset - 0,.5,win.Position.Y.Offset - 40)
+				win.BackgroundTransparency=0
+				win.ClipsDescendants=false
+			end
 		end)
 		local cam=workspace.CurrentCamera
 		local vp=cam and cam.ViewportSize or Vector2.new(1920,1080)
@@ -1124,7 +1140,8 @@ function Lib:Minimise()
 		if self._tbFiller then self._tbFiller.Visible = false end
 		if self._tbBorderLine then self._tbBorderLine.Visible = false end
 		win.BackgroundColor3 = C.Bg2
-		tw(win,.35,{Size=UDim2.fromOffset(self._preMinSize.W, 44)},Enum.EasingStyle.Quint)
+		local minBarW = math.min(self._preMinSize.W, 340)
+		tw(win,.35,{Size=UDim2.fromOffset(minBarW, 44)},Enum.EasingStyle.Quint)
 		task.delay(.37,function()
 			if self._body then self._body.Visible = false end
 		end)
@@ -1736,23 +1753,36 @@ function Lib:_openSettings()
 
 	if self._settingsVisible then
 		self._settingsVisible = false
-		self._settingsFrame.Visible = false
 		if self._gearImg then tw(self._gearImg,.15,{ImageColor3=C.Text}) end
-		if self._pages[self._pageIdx] then self._pages[self._pageIdx].Frame.Visible = true end
+		if self._bar then self._bar.Visible = true end
+		local sf = self._settingsFrame
+		local sfs = sf and sf:FindFirstChildWhichIsA("ScrollingFrame")
 		local nb = self._navBtns[self._pageIdx]
-		if nb then
-			tw(nb.Lbl,self.cfg.TweenSpeed,{TextColor3=C.White})
-			tw(nb.Bg,self.cfg.TweenSpeed,{BackgroundTransparency=.88})
-			tw(nb.Dot,self.cfg.TweenSpeed,{BackgroundColor3=C.White,Size=UDim2.fromOffset(7,7)})
-			self:_animBar(nb.Frame)
+		if sfs then
+			tw(sfs,.18,{Position=UDim2.new(0,0,0,10)},Enum.EasingStyle.Quint,Enum.EasingDirection.In)
 		end
+		task.delay(.2,function()
+			if sf then sf.Visible=false end
+			if sfs and sfs.Parent then sfs.Position=UDim2.fromOffset(0,0) end
+			local pg = self._pages[self._pageIdx]
+			local pgFrame = pg and pg.Frame
+			if pgFrame then
+				local nfs = pgFrame:FindFirstChildWhichIsA("ScrollingFrame")
+				if nfs then nfs.Position=UDim2.new(0,0,0,20) end
+				pgFrame.Visible=true
+				if nfs then tw(nfs,.3,{Position=UDim2.fromOffset(0,0)},Enum.EasingStyle.Quint) end
+			end
+			if nb then
+				tw(nb.Lbl,self.cfg.TweenSpeed,{TextColor3=C.White})
+				tw(nb.Bg,self.cfg.TweenSpeed,{BackgroundTransparency=.88})
+				tw(nb.Dot,self.cfg.TweenSpeed,{BackgroundColor3=accentOrWhite(self),Size=UDim2.fromOffset(7,7)})
+				self:_animBar(nb.Frame)
+			end
+		end)
 		return
 	end
 
 	self._settingsVisible = true
-	for _,p in ipairs(self._pages) do
-		if p.Frame then p.Frame.Visible = false end
-	end
 	local old = self._navBtns[self._pageIdx]
 	if old then
 		tw(old.Lbl,self.cfg.TweenSpeed,{TextColor3=C.TextDim})
@@ -1761,8 +1791,27 @@ function Lib:_openSettings()
 	end
 	if self._bar then self._bar.Visible = false end
 	if self._gearImg then tw(self._gearImg,.15,{ImageColor3=C.White}) end
-	
-	self._settingsFrame.Visible = true
+
+	local curFrame = self._pages[self._pageIdx] and self._pages[self._pageIdx].Frame
+	local sf = self._settingsFrame
+	local sfs = sf:FindFirstChildWhichIsA("ScrollingFrame")
+	if curFrame and curFrame.Visible then
+		local ofs = curFrame:FindFirstChildWhichIsA("ScrollingFrame")
+		if ofs then
+			tw(ofs,.18,{Position=UDim2.new(0,0,0,10)},Enum.EasingStyle.Quint,Enum.EasingDirection.In)
+		end
+		task.delay(.2,function()
+			if curFrame and curFrame.Parent then curFrame.Visible=false end
+			if ofs and ofs.Parent then ofs.Position=UDim2.fromOffset(0,0) end
+			if sfs then sfs.Position=UDim2.new(0,0,0,20) end
+			sf.Visible=true
+			if sfs then tw(sfs,.3,{Position=UDim2.fromOffset(0,0)},Enum.EasingStyle.Quint) end
+		end)
+	else
+		if sfs then sfs.Position=UDim2.new(0,0,0,20) end
+		sf.Visible=true
+		if sfs then tw(sfs,.3,{Position=UDim2.fromOffset(0,0)},Enum.EasingStyle.Quint) end
+	end
 end
 
 function Lib:_toggleSearch()
@@ -2101,16 +2150,14 @@ function Lib:AddToggle(pi,label,default,callback)
 
 	local function apply(v,silent)
 		state=v
-		tw(track,.22,{BackgroundColor3=v and C.White or C.Card3},Enum.EasingStyle.Quart)
-		tw(tStroke,.22,{Color=v and fromHex("aaaaaa") or C.Border2})
-		tw(knob,.22,{Position=UDim2.new(0,v and 22 or 2,.5,0),BackgroundColor3=v and C.Bg or C.TextDim},Enum.EasingStyle.Back,Enum.EasingDirection.Out)
+		tw(track,.28,{BackgroundColor3=v and C.White or C.Card3},Enum.EasingStyle.Quint)
+		tw(tStroke,.28,{Color=v and fromHex("aaaaaa") or C.Border2})
+		tw(knob,.32,{Position=UDim2.new(0,v and 22 or 2,.5,0),BackgroundColor3=v and C.Bg or C.TextDim},Enum.EasingStyle.Back,Enum.EasingDirection.Out)
 		if not silent and callback then callback(v) end
 	end
 
 	local click=new("TextButton",{Text="",BackgroundTransparency=1,Size=UDim2.fromScale(1,1),ZIndex=5,AutoButtonColor=false},track)
 	pcall(function() click.CursorIcon="rbxasset://SystemCursors/PointingHand" end)
-	click.MouseButton1Down:Connect(function() tw(knob,.07,{Size=UDim2.fromOffset(22,18)}) end)
-	click.MouseButton1Up:Connect(function() tw(knob,.15,{Size=UDim2.fromOffset(20,20)},Enum.EasingStyle.Back,Enum.EasingDirection.Out) end)
 	click.Activated:Connect(function() apply(not state) end)
 	row.MouseEnter:Connect(function() tw(row,.15,{BackgroundColor3=C.Card2}) end)
 	row.MouseLeave:Connect(function() tw(row,.18,{BackgroundColor3=C.Card}) end)

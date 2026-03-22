@@ -17,11 +17,22 @@ local function fromHex(h)
 	)
 end
 
+local _rm = false
 local function tw(obj, t, props, es, ed)
 	if not obj or not obj.Parent then return end
+	local duration = _rm and math.min(t or .2, 0.08) or (t or .2)
+	local style = _rm and Enum.EasingStyle.Linear or (es or Enum.EasingStyle.Quint)
 	local ok, tween = pcall(TweenService.Create, TweenService, obj,
-		TweenInfo.new(t or .2, es or Enum.EasingStyle.Quint, ed or Enum.EasingDirection.Out), props)
+		TweenInfo.new(duration, style, ed or Enum.EasingDirection.Out), props)
 	if ok and tween then tween:Play() return tween end
+end
+
+
+local function accentOrWhite(lib)
+	if lib and lib.cfg and lib.cfg.AccentColor then
+		return lib.cfg.AccentColor
+	end
+	return C.White
 end
 
 local function new(class, props, parent)
@@ -92,6 +103,7 @@ local C = {
 }
 
 local DefaultConfig = {
+	AccentColor        = nil,
 	AppName            = "MY APP",
 	AppSubtitle        = "Subtitle",
 	AppVersion         = "1.0",
@@ -163,6 +175,8 @@ function Lib.new(userCfg)
 	self._toasts         = {}
 	self._toastCount     = 0
 	self._hidden         = false
+	self._reduceMotion   = false
+	self._simulateMobile = false
 	self._settingsVisible= false
 	self._settingsFrame  = nil
 	self._settingsScroll = nil
@@ -188,6 +202,20 @@ function Lib.new(userCfg)
 	if isDemo then self:_runDemo() end
 	self:_runSplash()
 
+	pcall(function()
+		local saved = self._loadState and self._loadState()
+		if saved then
+			if saved.pageIdx and self._pages[saved.pageIdx] then
+				self:SetPage(saved.pageIdx)
+			end
+			if saved.offsetX and saved.offsetY and not self:_useMiniMode() then
+				self.Window.Position = UDim2.new(0.5, saved.offsetX, 0.5, saved.offsetY)
+				self._dragTargetOX = saved.offsetX
+				self._dragTargetOY = saved.offsetY
+			end
+		end
+	end)
+
 	if not UserInputService.TouchEnabled then
 		self._keyConn = UserInputService.InputBegan:Connect(function(inp, gp)
 			if gp then return end
@@ -206,6 +234,7 @@ function Lib.new(userCfg)
 end
 
 function Lib:_useMiniMode()
+	if self._simulateMobile then return true end
 	local cam = workspace.CurrentCamera
 	local vp  = cam and cam.ViewportSize or Vector2.new(1920,1080)
 	return UserInputService.TouchEnabled or vp.X < 500
@@ -309,7 +338,8 @@ function Lib:_runSplash()
 		self.Window.Position = UDim2.fromScale(.5,.5)
 		tw(self.Window,.45,{BackgroundTransparency=0,Size=UDim2.fromOffset(tw2,th2)},Enum.EasingStyle.Back,Enum.EasingDirection.Out)
 		task.delay(.5, function()
-			if self._dragHandle then
+			local isMini = self:_useMiniMode()
+			if self._dragHandle and not isMini then
 				self._dragHandle.Visible = true
 				if self._syncHandle then self._syncHandle() end
 			end
@@ -361,6 +391,12 @@ function Lib:_buildWindow()
 		local sw = math.max(48, math.floor(cfg.SidebarWidth * s))
 
 		local collapsed = sw < 100
+
+		-- safe area buffer on mobile (notch, home indicator)
+		local isTouch = UserInputService.TouchEnabled or (self and self._simulateMobile)
+		if isTouch then
+			h = math.max(100, h - 52)
+		end
 
 		return w, h, sw, collapsed
 	end
@@ -639,7 +675,7 @@ function Lib:_buildBody(win)
 		Size=UDim2.new(.8,0,0,1),BackgroundColor3=C.Border,BorderSizePixel=0},divArea)
 
 	local bar = new("Frame",{Size=UDim2.fromOffset(3,0),AnchorPoint=Vector2.new(0,.5),
-		Position=UDim2.fromOffset(0,100),BackgroundColor3=C.White,BorderSizePixel=0,ZIndex=9,Visible=false},sidebar)
+		Position=UDim2.fromOffset(0,100),BackgroundColor3=accentOrWhite(self),BorderSizePixel=0,ZIndex=9,Visible=false},sidebar)
 	corner(bar,2)
 	self._bar = bar
 
@@ -773,7 +809,8 @@ function Lib:_buildBody(win)
 end
 
 function Lib:_makeNavBtn(page,index,parent)
-	local frame = new("Frame",{Size=UDim2.new(1,0,0,40),BackgroundTransparency=1,LayoutOrder=index+1},parent)
+	local fh = (UserInputService.TouchEnabled) and 48 or 40
+	local frame = new("Frame",{Size=UDim2.new(1,0,0,fh),BackgroundTransparency=1,LayoutOrder=index+1},parent)
 
 	local bg = new("Frame",{Size=UDim2.new(1,-8,1,-4),Position=UDim2.fromOffset(4,2),
 		BackgroundColor3=C.Card2,BackgroundTransparency=1,BorderSizePixel=0,ZIndex=5},frame)
@@ -877,9 +914,10 @@ function Lib:SetPage(index)
 	if nb then
 		tw(nb.Lbl,cfg.TweenSpeed,{TextColor3=C.White})
 		tw(nb.Bg,cfg.TweenSpeed,{BackgroundTransparency=.88})
-		tw(nb.Dot,cfg.TweenSpeed,{BackgroundColor3=C.White,Size=UDim2.fromOffset(7,7)})
+		tw(nb.Dot,cfg.TweenSpeed,{BackgroundColor3=accentOrWhite(self),Size=UDim2.fromOffset(7,7)})
 		self:_animBar(nb.Frame)
 	end
+	task.defer(function() self:SaveState() end)
 end
 
 function Lib:_animBar(target)
@@ -928,25 +966,84 @@ end
 
 function Lib:_ensurePill()
 	if self._mobilePill then return end
-	local pill = new("TextButton",{
+	local cfg = self.cfg
+	local pillW = 180
+
+	local pill = new("Frame",{
 		AnchorPoint=Vector2.new(.5,0),
-		Position=UDim2.new(.5,0,0,-60),
-		Size=UDim2.fromOffset(170,42),
-		BackgroundColor3=C.Card2,
+		Position=UDim2.new(.5,0,0,24),
+		Size=UDim2.fromOffset(pillW,44),
+		BackgroundColor3=fromHex("111111"),
+		BackgroundTransparency=0.18,
 		BorderSizePixel=0,
-		Text="Show Interface",
-		Font=Enum.Font.GothamBold,
-		TextSize=13,
-		TextColor3=C.White,
-		AutoButtonColor=false,
 		ZIndex=800,
 		Visible=false,
 	}, self._sg)
 	corner(pill,999)
 	stroke(pill,C.Border2,1)
-	pill.MouseEnter:Connect(function() tw(pill,.15,{BackgroundColor3=C.Card3}) end)
-	pill.MouseLeave:Connect(function() tw(pill,.18,{BackgroundColor3=C.Card2}) end)
-	pill.Activated:Connect(function() self:Show() end)
+
+	hlist(pill,8)
+	pad(pill,0,0,14,14)
+
+	if cfg.LogoImage ~= "" then
+		new("ImageLabel",{
+			Size=UDim2.fromOffset(20,20),BackgroundTransparency=1,
+			Image=cfg.LogoImage,ScaleType=Enum.ScaleType.Fit,
+			ZIndex=801,LayoutOrder=0,
+		},pill)
+	end
+
+	local pillLbl = new("TextLabel",{
+		Text="Show Interface",
+		Font=Enum.Font.GothamBold,TextSize=13,TextColor3=C.White,
+		BackgroundTransparency=1,
+		Size=UDim2.new(1,-38,1,0),
+		AutomaticSize=Enum.AutomaticSize.X,
+		TextXAlignment=Enum.TextXAlignment.Left,
+		ZIndex=801,LayoutOrder=1,
+	},pill)
+
+	local pillBtn = new("TextButton",{
+		Text="",BackgroundTransparency=1,
+		Size=UDim2.fromScale(1,1),ZIndex=802,AutoButtonColor=false,
+	},pill)
+
+	local dragging=false; local ds, px0, py0
+	pillBtn.InputBegan:Connect(function(i)
+		if i.UserInputType==Enum.UserInputType.MouseButton1 or i.UserInputType==Enum.UserInputType.Touch then
+			dragging=true
+			ds=i.Position
+			px0=pill.Position.X.Scale*0 + pill.Position.X.Offset
+			py0=pill.Position.Y.Scale*0 + pill.Position.Y.Offset
+			local cam=workspace.CurrentCamera
+			local vp=cam and cam.ViewportSize or Vector2.new(1920,1080)
+			px0=math.floor(vp.X*0.5)
+			py0=pill.Position.Y.Offset
+		end
+	end)
+	pillBtn.InputEnded:Connect(function(i)
+		if i.UserInputType==Enum.UserInputType.MouseButton1 or i.UserInputType==Enum.UserInputType.Touch then
+			local d=i.Position-ds
+			if math.abs(d.X)<6 and math.abs(d.Y)<6 then
+				self:Show()
+			end
+			dragging=false
+		end
+	end)
+	table.insert(self._conns,UserInputService.InputChanged:Connect(function(i)
+		if not dragging then return end
+		if i.UserInputType~=Enum.UserInputType.MouseMovement and i.UserInputType~=Enum.UserInputType.Touch then return end
+		local cam=workspace.CurrentCamera
+		local vp=cam and cam.ViewportSize or Vector2.new(1920,1080)
+		local d=i.Position-ds
+		local nx=math.clamp(px0+d.X, pillW*0.5, vp.X-pillW*0.5)
+		local ny=math.clamp(py0+d.Y, 10, vp.Y-54)
+		pill.Position=UDim2.new(0,nx,0,ny)
+	end))
+
+	pill.MouseEnter:Connect(function() tw(pill,.15,{BackgroundTransparency=0.05}) end)
+	pill.MouseLeave:Connect(function() tw(pill,.18,{BackgroundTransparency=0.18}) end)
+
 	self._mobilePill = pill
 end
 
@@ -966,10 +1063,13 @@ function Lib:Minimise()
 		task.delay(.27,function()
 			if win and win.Parent then win.Visible=false end
 		end)
+		local cam=workspace.CurrentCamera
+		local vp=cam and cam.ViewportSize or Vector2.new(1920,1080)
+		local pw=180
 		pill.Visible=true
-		pill.Position=UDim2.new(.5,0,0,-60)
+		pill.Position=UDim2.new(0,math.floor(vp.X*0.5),0,-60)
 		pill.BackgroundTransparency=1
-		tw(pill,.38,{Position=UDim2.new(.5,0,0,20),BackgroundTransparency=0},Enum.EasingStyle.Back,Enum.EasingDirection.Out)
+		tw(pill,.38,{Position=UDim2.new(0,math.floor(vp.X*0.5),0,24),BackgroundTransparency=0.18},Enum.EasingStyle.Back,Enum.EasingDirection.Out)
 	else
 		self._preMinSize = {W=win.AbsoluteSize.X, H=win.AbsoluteSize.Y}
 		if self._tbFiller then self._tbFiller.Visible = false end
@@ -1027,7 +1127,9 @@ function Lib:Maximise()
 		
 		if self._minFb  then self._minFb.Text  = "-" end
 	end
-	if self._dragHandle then self._dragHandle.Visible = true end
+	if self._dragHandle and not self:_useMiniMode() then
+		self._dragHandle.Visible = true
+	end
 end
 
 function Lib:ToggleVisibility()
@@ -1068,10 +1170,12 @@ function Lib:Hide()
 		self:_ensurePill()
 		local pill = self._mobilePill
 		if pill then
+			local cam2=workspace.CurrentCamera
+			local vp2=cam2 and cam2.ViewportSize or Vector2.new(1920,1080)
 			pill.Visible = true
-			pill.Position = UDim2.new(.5,0,0,-60)
+			pill.Position = UDim2.new(0,math.floor(vp2.X*0.5),0,-60)
 			pill.BackgroundTransparency = 1
-			tw(pill,.38,{Position=UDim2.new(.5,0,0,20),BackgroundTransparency=0},Enum.EasingStyle.Back,Enum.EasingDirection.Out)
+			tw(pill,.38,{Position=UDim2.new(0,math.floor(vp2.X*0.5),0,24),BackgroundTransparency=0.18},Enum.EasingStyle.Back,Enum.EasingDirection.Out)
 		end
 	else
 		self:ShowNotification(
@@ -1417,7 +1521,75 @@ function Lib:_buildSettingsPanel()
 		Size=UDim2.new(1,0,0,0),AutomaticSize=Enum.AutomaticSize.Y,
 		TextXAlignment=Enum.TextXAlignment.Left,TextWrapped=true,LayoutOrder=nextLo()},scroll)
 
-	new("Frame",{Size=UDim2.new(1,0,0,24),BackgroundTransparency=1,LayoutOrder=nextLo()},scroll)
+	new("Frame",{Size=UDim2.new(1,0,0,20),BackgroundTransparency=1,LayoutOrder=nextLo()},scroll)
+	new("Frame",{Size=UDim2.new(1,0,0,1),BackgroundColor3=C.Border,BorderSizePixel=0,LayoutOrder=nextLo()},scroll)
+	new("Frame",{Size=UDim2.new(1,0,0,16),BackgroundTransparency=1,LayoutOrder=nextLo()},scroll)
+
+	new("TextLabel",{Text="DISPLAY",Font=Enum.Font.GothamBold,TextSize=9,TextColor3=C.TextOff,
+		BackgroundTransparency=1,Size=UDim2.new(1,0,0,14),
+		TextXAlignment=Enum.TextXAlignment.Left,LayoutOrder=nextLo()},scroll)
+	new("Frame",{Size=UDim2.new(1,0,0,6),BackgroundTransparency=1,LayoutOrder=nextLo()},scroll)
+
+	do
+		local rmRow=new("Frame",{Size=UDim2.new(1,0,0,48),BackgroundColor3=C.Card,BorderSizePixel=0,LayoutOrder=nextLo()},scroll)
+		corner(rmRow,10); stroke(rmRow,C.Border,1); pad(rmRow,0,0,16,16)
+		new("TextLabel",{Text="Reduce Motion",Font=Enum.Font.Gotham,TextSize=13,TextColor3=C.Text,
+			BackgroundTransparency=1,Size=UDim2.new(1,-64,1,0),TextXAlignment=Enum.TextXAlignment.Left},rmRow)
+		new("TextLabel",{Text="Simpler animations, no easing overshoot",Font=Enum.Font.Gotham,TextSize=10,TextColor3=C.TextDim,
+			BackgroundTransparency=1,Position=UDim2.new(0,0,1,-14),Size=UDim2.new(1,-64,0,12),TextXAlignment=Enum.TextXAlignment.Left},rmRow)
+		local rmVal = self._reduceMotion
+		local track=new("Frame",{AnchorPoint=Vector2.new(1,.5),Position=UDim2.new(1,0,.5,0),
+			Size=UDim2.fromOffset(44,24),BackgroundColor3=rmVal and C.Green or C.Card3,BorderSizePixel=0},rmRow)
+		corner(track,12)
+		local knob=new("Frame",{AnchorPoint=Vector2.new(0,.5),
+			Position=UDim2.new(0,rmVal and 22 or 2,.5,0),
+			Size=UDim2.fromOffset(20,20),BackgroundColor3=rmVal and C.Bg or C.TextDim,BorderSizePixel=0},track)
+		corner(knob,10)
+		local rmClick=new("TextButton",{Text="",BackgroundTransparency=1,Size=UDim2.fromScale(1,1),ZIndex=5,AutoButtonColor=false},rmRow)
+		rmClick.Activated:Connect(function()
+			rmVal=not rmVal
+			self._reduceMotion=rmVal
+			_rm=rmVal
+			tw(track,.2,{BackgroundColor3=rmVal and C.Green or C.Card3})
+			tw(knob,.22,{Position=UDim2.new(0,rmVal and 22 or 2,.5,0),BackgroundColor3=rmVal and C.Bg or C.TextDim},Enum.EasingStyle.Back,Enum.EasingDirection.Out)
+			self:ShowNotification(rmVal and "Reduce Motion enabled" or "Reduce Motion disabled","info",2)
+		end)
+		rmRow.MouseEnter:Connect(function() tw(rmRow,.15,{BackgroundColor3=C.Card2}) end)
+		rmRow.MouseLeave:Connect(function() tw(rmRow,.18,{BackgroundColor3=C.Card}) end)
+	end
+
+	if not UserInputService.TouchEnabled then
+		new("Frame",{Size=UDim2.new(1,0,0,8),BackgroundTransparency=1,LayoutOrder=nextLo()},scroll)
+		do
+			local smRow=new("Frame",{Size=UDim2.new(1,0,0,48),BackgroundColor3=C.Card,BorderSizePixel=0,LayoutOrder=nextLo()},scroll)
+			corner(smRow,10); stroke(smRow,C.Border,1); pad(smRow,0,0,16,16)
+			new("TextLabel",{Text="Simulate Mobile",Font=Enum.Font.Gotham,TextSize=13,TextColor3=C.Text,
+				BackgroundTransparency=1,Size=UDim2.new(1,-64,1,0),TextXAlignment=Enum.TextXAlignment.Left},smRow)
+			new("TextLabel",{Text="Preview mobile layout (dev only)",Font=Enum.Font.Gotham,TextSize=10,TextColor3=C.TextDim,
+				BackgroundTransparency=1,Position=UDim2.new(0,0,1,-14),Size=UDim2.new(1,-64,0,12),TextXAlignment=Enum.TextXAlignment.Left},smRow)
+			local smVal = self._simulateMobile
+			local smTrack=new("Frame",{AnchorPoint=Vector2.new(1,.5),Position=UDim2.new(1,0,.5,0),
+				Size=UDim2.fromOffset(44,24),BackgroundColor3=smVal and C.Yellow or C.Card3,BorderSizePixel=0},smRow)
+			corner(smTrack,12)
+			local smKnob=new("Frame",{AnchorPoint=Vector2.new(0,.5),
+				Position=UDim2.new(0,smVal and 22 or 2,.5,0),
+				Size=UDim2.fromOffset(20,20),BackgroundColor3=smVal and C.Bg or C.TextDim,BorderSizePixel=0},smTrack)
+			corner(smKnob,10)
+			local smClick=new("TextButton",{Text="",BackgroundTransparency=1,Size=UDim2.fromScale(1,1),ZIndex=5,AutoButtonColor=false},smRow)
+			smClick.Activated:Connect(function()
+				smVal=not smVal
+				self._simulateMobile=smVal
+				tw(smTrack,.2,{BackgroundColor3=smVal and C.Yellow or C.Card3})
+				tw(smKnob,.22,{Position=UDim2.new(0,smVal and 22 or 2,.5,0),BackgroundColor3=smVal and C.Bg or C.TextDim},Enum.EasingStyle.Back,Enum.EasingDirection.Out)
+				if self._doScale then self._doScale() end
+				self:ShowNotification(smVal and "Mobile simulation ON" or "Mobile simulation OFF","warning",2)
+			end)
+			smRow.MouseEnter:Connect(function() tw(smRow,.15,{BackgroundColor3=C.Card2}) end)
+			smRow.MouseLeave:Connect(function() tw(smRow,.18,{BackgroundColor3=C.Card}) end)
+		end
+	end
+
+	new("Frame",{Size=UDim2.new(1,0,0,20),BackgroundTransparency=1,LayoutOrder=nextLo()},scroll)
 	new("Frame",{Size=UDim2.new(1,0,0,1),BackgroundColor3=C.Border,BorderSizePixel=0,LayoutOrder=nextLo()},scroll)
 	new("Frame",{Size=UDim2.new(1,0,0,18),BackgroundTransparency=1,LayoutOrder=nextLo()},scroll)
 
@@ -1624,19 +1796,19 @@ function Lib:_doSearch(query)
 end
 
 function Lib:IsMobile()
-	return UserInputService.TouchEnabled
+	return UserInputService.TouchEnabled or self._simulateMobile
 end
 
 function Lib:IsPC()
-	return not UserInputService.TouchEnabled
+	return not (UserInputService.TouchEnabled or self._simulateMobile)
 end
 
 function Lib:OnMobile(fn)
-	if UserInputService.TouchEnabled then fn() end
+	if UserInputService.TouchEnabled or self._simulateMobile then fn() end
 end
 
 function Lib:OnPC(fn)
-	if not UserInputService.TouchEnabled then fn() end
+	if not (UserInputService.TouchEnabled or self._simulateMobile) then fn() end
 end
 
 function Lib:AddPlatform(config)
@@ -3309,6 +3481,27 @@ function Lib:_runDemo()
 		"console:SetActive(bool)    toggles the status dot (green = online)"
 	)
 end
+
+function Lib:SaveState()
+	local ok, _ = pcall(function()
+		local win = self.Window
+		local state = {
+			pageIdx = self._pageIdx,
+			offsetX = win and win.Position.X.Offset or 0,
+			offsetY = win and win.Position.Y.Offset or 0,
+		}
+		if setclipboard then
+			-- Can't writefile in CoreGui context, use a module-level table
+		end
+		Lib._savedState = state
+	end)
+end
+
+function Lib:_loadState()
+	return Lib._savedState
+end
+Lib._savedState = nil
+
 
 local function processHexColors(text)
 	return (text:gsub("(#%x%x%x%x%x%x)", function(h)

@@ -185,6 +185,7 @@ function Lib.new(userCfg)
 	self._reduceMotion   = false
 	self._simulateMobile = false
 	self._settingsVisible= false
+	self._kbListening    = false
 	self._settingsFrame  = nil
 	self._settingsScroll = nil
 	self._gearImg        = nil
@@ -232,7 +233,7 @@ function Lib.new(userCfg)
 		self._keyConn = UserInputService.InputBegan:Connect(function(inp, gp)
 			if gp then return end
 			local kc = tostring(inp.KeyCode):gsub("Enum%.KeyCode%.","")
-			if kc == self._toggleKey then self:ToggleVisibility() end
+			if kc == self._toggleKey and not self._kbListening then self:ToggleVisibility() end
 			if kc == "F" and (UserInputService:IsKeyDown(Enum.KeyCode.LeftControl) or UserInputService:IsKeyDown(Enum.KeyCode.RightControl)) then
 				if not self._hidden then self:_openSearch() end
 			end
@@ -1113,19 +1114,19 @@ function Lib:Minimise()
 		self:_ensurePill()
 		local pill = self._mobilePill
 		local ws = win.AbsoluteSize
-		win.ClipsDescendants = true
+		local wox = win.Position.X.Offset
+		local woy = win.Position.Y.Offset
 		tw(win,.3,{
 			BackgroundTransparency=1,
-			Size=UDim2.fromOffset(ws.X*0.9, ws.Y*0.85),
-			Position=UDim2.new(.5,win.Position.X.Offset,.5,win.Position.Y.Offset+40),
+			Size=UDim2.fromOffset(ws.X*0.92, ws.Y*0.88),
+			Position=UDim2.new(.5,wox,.5,woy+36),
 		},Enum.EasingStyle.Quint,Enum.EasingDirection.In)
 		task.delay(.32,function()
 			if win and win.Parent then
 				win.Visible=false
 				win.Size=UDim2.fromOffset(ws.X,ws.Y)
-				win.Position=UDim2.new(.5,win.Position.X.Offset - 0,.5,win.Position.Y.Offset - 40)
+				win.Position=UDim2.new(.5,wox,.5,woy)
 				win.BackgroundTransparency=0
-				win.ClipsDescendants=false
 			end
 		end)
 		local cam=workspace.CurrentCamera
@@ -1328,49 +1329,6 @@ function Lib:Shake(intensity)
 end
 
 function Lib:Destroy()
-	local isMobile = UserInputService.TouchEnabled
-	local keyInfo = (not isMobile) and ("Press "..self._toggleKey.." to reopen.") or "Use the button to reopen."
-
-	pcall(function()
-		local tmpSg = new("ScreenGui",{
-			Name="SlaoqUIToast",ResetOnSpawn=false,
-			ZIndexBehavior=Enum.ZIndexBehavior.Sibling,DisplayOrder=1000,
-		}, self._sg.Parent)
-		pcall(function() tmpSg.IgnoreGuiInset = true end)
-
-		local toastW = 300
-		local toast = new("Frame",{
-			AnchorPoint = Vector2.new(1,1),
-			Position    = UDim2.new(1,320,1,-16),
-			Size        = UDim2.fromOffset(toastW,0),
-			AutomaticSize = Enum.AutomaticSize.Y,
-			BackgroundColor3 = C.Card2,
-			BorderSizePixel  = 0,
-			ZIndex = 1001,
-		}, tmpSg)
-		corner(toast,10)
-		stroke(toast,C.Border2,1)
-		pad(toast,12,12,14,14)
-		vlist(toast,4)
-
-		local topRow=new("Frame",{Size=UDim2.new(1,0,0,16),BackgroundTransparency=1,LayoutOrder=0},toast)
-		hlist(topRow,8)
-		local dot=new("Frame",{Size=UDim2.fromOffset(8,8),BackgroundColor3=C.TextDim,BorderSizePixel=0,LayoutOrder=0},topRow)
-		corner(dot,4)
-		new("TextLabel",{Text="INTERFACE CLOSED",Font=Enum.Font.GothamBold,TextSize=12,TextColor3=C.TextDim,
-			BackgroundTransparency=1,Size=UDim2.new(0,0,1,0),AutomaticSize=Enum.AutomaticSize.X,
-			TextXAlignment=Enum.TextXAlignment.Left,ZIndex=1002,LayoutOrder=1},topRow)
-		new("TextLabel",{Text=keyInfo,Font=Enum.Font.Gotham,TextSize=12,TextColor3=C.TextDim,
-			BackgroundTransparency=1,Size=UDim2.new(1,0,0,0),AutomaticSize=Enum.AutomaticSize.Y,
-			TextXAlignment=Enum.TextXAlignment.Left,TextWrapped=true,ZIndex=1002,LayoutOrder=1},toast)
-
-		tw(toast,.38,{Position=UDim2.new(1,-16,1,-16)},Enum.EasingStyle.Back,Enum.EasingDirection.Out)
-		task.delay(5,function()
-			tw(toast,.22,{Position=UDim2.new(1,320,1,-16),BackgroundTransparency=1},Enum.EasingStyle.Quint,Enum.EasingDirection.In)
-			task.delay(.25,function() pcall(function() tmpSg:Destroy() end) end)
-		end)
-	end)
-
 	for _,c in ipairs(self._conns) do pcall(function() c:Disconnect() end) end
 	if self._keyConn then pcall(function() self._keyConn:Disconnect() end) end
 	if self._sg and self._sg.Parent then
@@ -1567,7 +1525,7 @@ function Lib:_buildSettingsPanel()
 	local kbListening=false
 	kbBtn.Activated:Connect(function()
 		if kbListening then return end
-		kbListening=true; kbBtn.Text="..."
+		kbListening=true; self._kbListening=true; kbBtn.Text="..."
 		tw(kbBtn,.15,{BackgroundColor3=C.Card2})
 	end)
 	table.insert(self._conns, UserInputService.InputBegan:Connect(function(inp,gp)
@@ -1575,10 +1533,10 @@ function Lib:_buildSettingsPanel()
 		if inp.UserInputType~=Enum.UserInputType.Keyboard then return end
 		local name=tostring(inp.KeyCode):gsub("Enum%.KeyCode%.","")
 		if name=="Escape" then
-			kbListening=false; kbBtn.Text=self._toggleKey
+			kbListening=false; self._kbListening=false; kbBtn.Text=self._toggleKey
 			tw(kbBtn,.15,{BackgroundColor3=C.Card3}); return
 		end
-		self._toggleKey=name; kbBtn.Text=name; kbListening=false
+		self._toggleKey=name; kbBtn.Text=name; kbListening=false; self._kbListening=false
 		tw(kbBtn,.15,{BackgroundColor3=C.Card3})
 		self:ShowNotification("Keybind updated to: "..name,"success",3,"Settings")
 	end))
@@ -2152,12 +2110,15 @@ function Lib:AddToggle(pi,label,default,callback)
 		state=v
 		tw(track,.28,{BackgroundColor3=v and C.White or C.Card3},Enum.EasingStyle.Quint)
 		tw(tStroke,.28,{Color=v and fromHex("aaaaaa") or C.Border2})
-		tw(knob,.32,{Position=UDim2.new(0,v and 22 or 2,.5,0),BackgroundColor3=v and C.Bg or C.TextDim},Enum.EasingStyle.Back,Enum.EasingDirection.Out)
+		tw(knob,.28,{BackgroundColor3=v and C.Bg or C.TextDim},Enum.EasingStyle.Quint)
+		tw(knob,.32,{Position=UDim2.new(0,v and 22 or 2,.5,0)},Enum.EasingStyle.Back,Enum.EasingDirection.Out)
 		if not silent and callback then callback(v) end
 	end
 
 	local click=new("TextButton",{Text="",BackgroundTransparency=1,Size=UDim2.fromScale(1,1),ZIndex=5,AutoButtonColor=false},track)
 	pcall(function() click.CursorIcon="rbxasset://SystemCursors/PointingHand" end)
+	click.MouseButton1Down:Connect(function() tw(knob,.07,{Size=UDim2.fromOffset(22,18)}) end)
+	click.MouseButton1Up:Connect(function() tw(knob,.15,{Size=UDim2.fromOffset(20,20)},Enum.EasingStyle.Back,Enum.EasingDirection.Out) end)
 	click.Activated:Connect(function() apply(not state) end)
 	row.MouseEnter:Connect(function() tw(row,.15,{BackgroundColor3=C.Card2}) end)
 	row.MouseLeave:Connect(function() tw(row,.18,{BackgroundColor3=C.Card}) end)
@@ -2188,7 +2149,7 @@ function Lib:AddCheckbox(pi,label,default,callback)
 		Image="rbxasset://textures/ui/CheckIcon.png",
 		ImageColor3=C.Bg,ScaleType=Enum.ScaleType.Fit,
 		ImageTransparency=state and 0 or 1,ZIndex=2},box)
-	local check=new("TextLabel",{Text="v",Font=Enum.Font.GothamBold,TextSize=12,TextColor3=C.Bg,
+	local check=new("TextLabel",{Text=string.char(226,156,147),Font=Enum.Font.GothamBold,TextSize=11,TextColor3=C.Bg,
 		BackgroundTransparency=1,Size=UDim2.fromScale(1,1),
 		TextTransparency=1,TextXAlignment=Enum.TextXAlignment.Center,ZIndex=3},box)
 
@@ -2627,6 +2588,10 @@ function Lib:AddColorPicker(pi,label,default,callback)
 		local function applyColor()
 			preview.BackgroundColor3=currentColor
 			if hexBox then hexBox.Text=toHex(currentColor) end
+		end
+		local function commitColor()
+			preview.BackgroundColor3=currentColor
+			if hexBox then hexBox.Text=toHex(currentColor) end
 			if callback then callback(currentColor,toHex(currentColor)) end
 		end
 
@@ -2786,6 +2751,7 @@ function Lib:AddColorPicker(pi,label,default,callback)
 		applyBtn.MouseEnter:Connect(function() tw(applyBtn,.12,{BackgroundColor3=fromHex("e0e0e0")}) end)
 		applyBtn.MouseLeave:Connect(function() tw(applyBtn,.15,{BackgroundColor3=C.White}) end)
 		applyBtn.Activated:Connect(function()
+			commitColor()
 			local cc1,cc2=c1,c2; local cc3,cc4=c3,c4
 			cc1:Disconnect(); cc2:Disconnect(); cc3:Disconnect(); cc4:Disconnect()
 			closePopup()

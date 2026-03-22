@@ -893,9 +893,46 @@ function Lib:_makeNavBtn(page,index,parent)
 		BackgroundColor3=C.Card2,BackgroundTransparency=1,BorderSizePixel=0,ZIndex=5},frame)
 	corner(bg,8)
 
+	local hasIcon = page.Icon and tostring(page.Icon) ~= ""
+	local iconId = hasIcon and tostring(page.Icon) or nil
+
 	local dot = new("Frame",{AnchorPoint=Vector2.new(.5,.5),Position=UDim2.new(0,22,.5,0),
-		Size=UDim2.fromOffset(6,6),BackgroundColor3=C.TextOff,BorderSizePixel=0,ZIndex=6},frame)
+		Size=UDim2.fromOffset(6,6),BackgroundColor3=C.TextOff,BorderSizePixel=0,ZIndex=6,
+		Visible=not hasIcon},frame)
 	corner(dot,3)
+
+	if hasIcon then
+		local iconFrame = new("Frame",{AnchorPoint=Vector2.new(.5,.5),Position=UDim2.new(0,22,.5,0),
+			Size=UDim2.fromOffset(20,20),BackgroundTransparency=1,ZIndex=6},frame)
+		local img = new("ImageLabel",{Size=UDim2.fromScale(1,1),BackgroundTransparency=1,
+			Image="rbxassetid://"..iconId,ImageColor3=C.TextDim,ScaleType=Enum.ScaleType.Fit,ZIndex=6},iconFrame)
+		task.defer(function()
+			if not img.IsLoaded then
+				img.Image = ""
+				local fb = new("TextLabel",{Text=string.upper(string.sub(page.Name,1,1)),
+					Font=Enum.Font.GothamBold,TextSize=10,TextColor3=C.TextDim,
+					BackgroundTransparency=1,Size=UDim2.fromScale(1,1),
+					TextXAlignment=Enum.TextXAlignment.Center,ZIndex=7},iconFrame)
+				dot.Visible = false
+				_ = fb
+			end
+		end)
+		dot = {
+			_img=img,
+			_frame=iconFrame,
+			_isIcon=true,
+		}
+		setmetatable(dot, {
+			__index=function(t,k)
+				if k=="BackgroundColor3" then return nil end
+				return rawget(t,k)
+			end
+		})
+		dot.setColor = function(col)
+			if img and img.Parent then img.ImageColor3=col end
+		end
+		dot.setSize = function() end
+	end
 
 	local lbl = new("TextLabel",{Text=page.Name,Font=Enum.Font.GothamBold,TextSize=12,TextColor3=C.TextDim,
 		BackgroundTransparency=1,Position=UDim2.fromOffset(36,0),Size=UDim2.new(1,-44,1,0),
@@ -904,25 +941,38 @@ function Lib:_makeNavBtn(page,index,parent)
 	local click = new("TextButton",{Text="",BackgroundTransparency=1,Size=UDim2.fromScale(1,1),ZIndex=7,AutoButtonColor=false},frame)
 	pcall(function() click.CursorIcon = "rbxasset://SystemCursors/PointingHand" end)
 
+	local function setDotColor(col)
+		if hasIcon then
+			if dot._img and dot._img.Parent then dot._img.ImageColor3=col end
+		else
+			tw(dot,.15,{BackgroundColor3=col})
+		end
+	end
+	local function setDotSize(sz)
+		if not hasIcon then
+			tw(dot,.15,{Size=UDim2.fromOffset(sz,sz)})
+		end
+	end
+
 	click.MouseEnter:Connect(function()
 		if self._pageIdx ~= index then
 			tw(bg,.15,{BackgroundTransparency=.88})
 			tw(lbl,.15,{TextColor3=C.Text})
-			tw(dot,.15,{BackgroundColor3=C.TextDim,Size=UDim2.fromOffset(7,7)})
+			setDotColor(C.TextDim); setDotSize(7)
 		end
 	end)
 	click.MouseLeave:Connect(function()
 		if self._pageIdx ~= index then
 			tw(bg,.18,{BackgroundTransparency=1})
 			tw(lbl,.18,{TextColor3=C.TextDim})
-			tw(dot,.18,{BackgroundColor3=C.TextOff,Size=UDim2.fromOffset(6,6)})
+			setDotColor(C.TextOff); setDotSize(6)
 		end
 	end)
 	click.Activated:Connect(function()
 		if self._pageIdx == index and not self._settingsVisible then return end
 		self:SetPage(index)
 	end)
-	self._navBtns[index] = {Frame=frame,Bg=bg,Lbl=lbl,Dot=dot}
+	self._navBtns[index] = {Frame=frame,Bg=bg,Lbl=lbl,Dot=dot,HasIcon=hasIcon,SetDotColor=setDotColor,SetDotSize=setDotSize}
 end
 
 function Lib:_initPages()
@@ -958,7 +1008,7 @@ function Lib:SetPage(index)
 	if old then
 		tw(old.Lbl,cfg.TweenSpeed,{TextColor3=C.TextDim})
 		tw(old.Bg,cfg.TweenSpeed,{BackgroundTransparency=1})
-		tw(old.Dot,cfg.TweenSpeed,{BackgroundColor3=C.TextOff,Size=UDim2.fromOffset(6,6)})
+		if old.SetDotColor then old.SetDotColor(C.TextOff) else tw(old.Dot,cfg.TweenSpeed,{BackgroundColor3=C.TextOff,Size=UDim2.fromOffset(6,6)}) end
 	end
 	self._pageIdx = index
 	local fadeDelay = 0
@@ -995,7 +1045,7 @@ function Lib:SetPage(index)
 	if nb then
 		tw(nb.Lbl,cfg.TweenSpeed,{TextColor3=C.White})
 		tw(nb.Bg,cfg.TweenSpeed,{BackgroundTransparency=.88})
-		tw(nb.Dot,cfg.TweenSpeed,{BackgroundColor3=accentOrWhite(self),Size=UDim2.fromOffset(7,7)})
+		if nb.SetDotColor then nb.SetDotColor(accentOrWhite(self)) else tw(nb.Dot,cfg.TweenSpeed,{BackgroundColor3=accentOrWhite(self),Size=UDim2.fromOffset(7,7)}) end
 		self:_animBar(nb.Frame)
 	end
 	task.defer(function() self:SaveState() end)
@@ -1783,7 +1833,7 @@ function Lib:_openSettings()
 			if nb then
 				tw(nb.Lbl,self.cfg.TweenSpeed,{TextColor3=C.White})
 				tw(nb.Bg,self.cfg.TweenSpeed,{BackgroundTransparency=.88})
-				tw(nb.Dot,self.cfg.TweenSpeed,{BackgroundColor3=accentOrWhite(self),Size=UDim2.fromOffset(7,7)})
+				if nb.SetDotColor then nb.SetDotColor(accentOrWhite(self)) else tw(nb.Dot,self.cfg.TweenSpeed,{BackgroundColor3=accentOrWhite(self),Size=UDim2.fromOffset(7,7)}) end
 				self:_animBar(nb.Frame)
 			end
 		end)
@@ -1795,7 +1845,7 @@ function Lib:_openSettings()
 	if old then
 		tw(old.Lbl,self.cfg.TweenSpeed,{TextColor3=C.TextDim})
 		tw(old.Bg,self.cfg.TweenSpeed,{BackgroundTransparency=1})
-		tw(old.Dot,self.cfg.TweenSpeed,{BackgroundColor3=C.TextOff,Size=UDim2.fromOffset(6,6)})
+		if old.SetDotColor then old.SetDotColor(C.TextOff) else tw(old.Dot,self.cfg.TweenSpeed,{BackgroundColor3=C.TextOff,Size=UDim2.fromOffset(6,6)}) end
 	end
 	if self._bar then self._bar.Visible = false end
 	if self._gearImg then tw(self._gearImg,.15,{ImageColor3=C.White}) end
@@ -2022,6 +2072,10 @@ function Lib:_gap(s,pi,h)
 	new("Frame",{Size=UDim2.new(1,0,0,h or 8),BackgroundTransparency=1,LayoutOrder=self:_o(pi)},s)
 end
 
+function Lib:AddSection(pi,name)
+	self:AddSectionHeader(pi,name)
+end
+
 function Lib:AddSectionHeader(pi,title,sub)
 	local s=self:GetPage(pi); if not s then return end
 	self:_gap(s,pi,4)
@@ -2134,7 +2188,20 @@ end
 
 function Lib:AddButton(pi,text,style,cb)
 	local r=self:AddButtonRow(pi,{{Text=text,Style=style or "primary",Callback=cb}})
-	return r and r[1]
+	local btn=r and r[1]
+	if not btn then return end
+	local obj={Button=btn,Frame=btn}
+	function obj:Set(v)
+		if btn and btn.Parent then btn.Text=tostring(v) end
+	end
+	function obj:SetEnabled(v)
+		if btn and btn.Parent then
+			btn.AutoButtonColor=false
+			btn.Active=v
+			btn.BackgroundTransparency=v and 0 or 0.4
+		end
+	end
+	return obj
 end
 
 function Lib:AddToggle(pi,label,default,callback)
@@ -2174,9 +2241,11 @@ function Lib:AddToggle(pi,label,default,callback)
 	row.MouseLeave:Connect(function() tw(row,.18,{BackgroundColor3=C.Card}) end)
 
 	self:_gap(s,pi,6)
-	local t={Track=track,Knob=knob}
+	local t={Track=track,Knob=knob,Frame=row}
 	function t:SetState(v) apply(v,true) end
 	function t:GetState() return state end
+	function t:Set(v) apply(v==true,true) end
+	function t:Get() return state end
 	return t
 end
 
@@ -2243,33 +2312,49 @@ function Lib:AddCheckbox(pi,label,default,callback)
 	local obj={Frame=row,Box=box}
 	function obj:SetState(v) apply(v,true) end
 	function obj:GetState() return state end
+	function obj:Set(v) apply(v==true,true) end
+	function obj:Get() return state end
 	return obj
 end
 
-function Lib:AddInput(pi,labelTxt,placeholder,callback)
+function Lib:AddInput(pi,labelTxt,placeholder,callback,opts)
 	local s=self:GetPage(pi); if not s then return end
+	opts = opts or {}
+	local removeAfterFocus = opts.RemoveTextAfterFocusLost
+	local clearOnFocus = opts.ClearTextOnFocus
+	local multiLine = opts.MultiLine
+	local textSize = opts.TextSize or 13
 	if labelTxt then
 		new("TextLabel",{Text=labelTxt,Font=Enum.Font.GothamBold,TextSize=11,TextColor3=C.TextDim,
 			BackgroundTransparency=1,Size=UDim2.new(1,0,0,18),
 			TextXAlignment=Enum.TextXAlignment.Left,LayoutOrder=self:_o(pi)},s)
 		self:_gap(s,pi,4)
 	end
-	local wrap=new("Frame",{Size=UDim2.new(1,0,0,44),BackgroundColor3=C.Card,BorderSizePixel=0,LayoutOrder=self:_o(pi)},s)
+	local wrapH = multiLine and 80 or 44
+	local wrap=new("Frame",{Size=UDim2.new(1,0,0,wrapH),BackgroundColor3=C.Card,BorderSizePixel=0,LayoutOrder=self:_o(pi)},s)
 	corner(wrap,10)
 	local ws=stroke(wrap,C.Border,1)
 	pad(wrap,0,0,16,16)
-	local box=new("TextBox",{Text="",PlaceholderText=placeholder or "",Font=Enum.Font.Gotham,TextSize=13,
+	local box=new("TextBox",{Text="",PlaceholderText=placeholder or "",Font=Enum.Font.Gotham,TextSize=textSize,
 		TextColor3=C.Text,PlaceholderColor3=C.TextOff,BackgroundTransparency=1,
-		Size=UDim2.fromScale(1,1),ClearTextOnFocus=false,TextXAlignment=Enum.TextXAlignment.Left},wrap)
+		Size=UDim2.fromScale(1,1),ClearTextOnFocus=clearOnFocus==true,
+		TextXAlignment=Enum.TextXAlignment.Left,
+		MultiLine=multiLine==true,TextWrapped=multiLine==true},wrap)
 	box.Focused:Connect(function() tw(wrap,.16,{BackgroundColor3=C.Card2}); tw(ws,.16,{Color=C.Border3}) end)
 	box.FocusLost:Connect(function(enter)
 		tw(wrap,.18,{BackgroundColor3=C.Card}); tw(ws,.18,{Color=C.Border})
 		if callback then callback(box.Text,enter) end
+		if removeAfterFocus then box.Text="" end
 	end)
 	wrap.MouseEnter:Connect(function() if not box:IsFocused() then tw(wrap,.15,{BackgroundColor3=C.Card2}) end end)
 	wrap.MouseLeave:Connect(function() if not box:IsFocused() then tw(wrap,.18,{BackgroundColor3=C.Card}) end end)
 	self:_gap(s,pi,10)
-	return box
+	local obj={TextBox=box,Frame=wrap}
+	function obj:Set(v) if box and box.Parent then box.Text=tostring(v) end end
+	function obj:Get() return box and box.Text or "" end
+	function obj:Focus() if box and box.Parent then box:CaptureFocus() end end
+	function obj:Clear() if box and box.Parent then box.Text="" end end
+	return obj
 end
 
 function Lib:AddSearchInput(pi,placeholder,callback)
@@ -3014,7 +3099,11 @@ function Lib:AddLabel(pi,text,style)
 		BackgroundTransparency=1,Size=UDim2.new(1,0,0,st.size+12),
 		TextXAlignment=Enum.TextXAlignment.Left,TextWrapped=true,LayoutOrder=self:_o(pi)},s)
 	self:_gap(s,pi,4)
-	return lbl
+	local obj={Label=lbl}
+	function obj:Set(v) if lbl and lbl.Parent then lbl.Text=tostring(v) end end
+	function obj:SetColor(col) if lbl and lbl.Parent then lbl.TextColor3=col end end
+	obj.Frame = lbl
+	return obj
 end
 
 function Lib:AddSeparator(pi,spacing)
@@ -3680,6 +3769,11 @@ function Lib:_loadState()
 	return Lib._savedState
 end
 Lib._savedState = nil
+
+function Lib.Page(name, icon)
+	return {Name=name, Icon=icon}
+end
+
 
 local function processHexColors(text)
 	return (text:gsub("(#%x%x%x%x%x%x)", function(h)

@@ -20,10 +20,18 @@ end
 local _rm = false
 local function tw(obj, t, props, es, ed)
 	if not obj or not obj.Parent then return end
-	local duration = _rm and math.min(t or .2, 0.08) or (t or .2)
-	local style = _rm and Enum.EasingStyle.Linear or (es or Enum.EasingStyle.Quint)
+	local duration, style, dir
+	if _rm then
+		duration = math.min(t or .2, 0.06)
+		style = Enum.EasingStyle.Quint
+		dir = Enum.EasingDirection.Out
+	else
+		duration = t or .2
+		style = es or Enum.EasingStyle.Quint
+		dir = ed or Enum.EasingDirection.Out
+	end
 	local ok, tween = pcall(TweenService.Create, TweenService, obj,
-		TweenInfo.new(duration, style, ed or Enum.EasingDirection.Out), props)
+		TweenInfo.new(duration, style, dir), props)
 	if ok and tween then tween:Play() return tween end
 end
 
@@ -68,39 +76,39 @@ local function vlist(obj, spacing, halign)
 end
 
 local C = {
-    Bg       = fromHex("060606"),
-    Bg2      = fromHex("080808"),
-    Sidebar  = fromHex("050505"),
-    Card     = fromHex("0e0e0e"),
-    Card2    = fromHex("131313"),
-    Card3    = fromHex("191919"),
-    Border   = fromHex("1a1a1a"),
-    Border2  = fromHex("222222"),
-    Border3  = fromHex("2e2e2e"),
-    Text     = fromHex("d8d8d8"),
-    TextDim  = fromHex("666666"),
-    TextOff  = fromHex("2e2e2e"),
-    White    = fromHex("ffffff"),
-    Green    = fromHex("00e87a"),
-    GreenBg  = fromHex("030e08"),
-    Red      = fromHex("e84040"),
-    RedBg    = fromHex("0e0404"),
-    Yellow   = fromHex("f0c030"),
-    YellowBg = fromHex("0e0b02"),
-    Orange   = fromHex("f07020"),
-    Blue     = fromHex("4488ff"),
-    BlueBg   = fromHex("030914"),
-    Purple   = fromHex("aa44ff"),
-    PurpleBg = fromHex("0a0414"),
-}
+	Bg       = fromHex("060606"),
+	Bg2      = fromHex("080808"),
+	Sidebar  = fromHex("050505"),
+	Card     = fromHex("0e0e0e"),
+	Card2    = fromHex("131313"),
+	Card3    = fromHex("191919"),
+	Border   = fromHex("1a1a1a"),
+	Border2  = fromHex("222222"),
+	Border3  = fromHex("2e2e2e"),
+	Text     = fromHex("d8d8d8"),
+	TextDim  = fromHex("666666"),
+	TextOff  = fromHex("2e2e2e"),
+	White    = fromHex("ffffff"),
+	Green    = fromHex("00e87a"),
+	GreenBg  = fromHex("030e08"),
+	Red      = fromHex("e84040"),
+	RedBg    = fromHex("0e0404"),
+	Yellow   = fromHex("f0c030"),
+	YellowBg = fromHex("0e0b02"),
+	Orange   = fromHex("f07020"),
+	Blue     = fromHex("4488ff"),
+	BlueBg   = fromHex("030914"),
+	Purple   = fromHex("aa44ff"),
+	PurpleBg = fromHex("0a0414"),
 
 local function accentOrWhite(lib)
-    if lib and lib.cfg and lib.cfg.AccentColor then
-        return lib.cfg.AccentColor
-    end
-    return C.White
+	if lib and lib.cfg and lib.cfg.AccentColor then
+		return lib.cfg.AccentColor
+	end
+	return C.White
 end
 
+}
 
 local DefaultConfig = {
 	AccentColor        = nil,
@@ -987,26 +995,28 @@ function Lib:_ensurePill()
 	corner(pill,999)
 	stroke(pill,C.Border2,1)
 
-	hlist(pill,8)
-	pad(pill,0,0,14,14)
+	local pillInner = new("Frame",{
+		BackgroundTransparency=1,Size=UDim2.fromScale(1,1),ZIndex=801,
+	},pill)
+	hlist(pillInner,8)
+	pad(pillInner,0,0,14,14)
 
 	if cfg.LogoImage ~= "" then
 		new("ImageLabel",{
 			Size=UDim2.fromOffset(20,20),BackgroundTransparency=1,
 			Image=cfg.LogoImage,ScaleType=Enum.ScaleType.Fit,
 			ZIndex=801,LayoutOrder=0,
-		},pill)
+		},pillInner)
 	end
 
-	local pillLbl = new("TextLabel",{
+	new("TextLabel",{
 		Text="Show Interface",
 		Font=Enum.Font.GothamBold,TextSize=13,TextColor3=C.White,
 		BackgroundTransparency=1,
-		Size=UDim2.new(1,-38,1,0),
-		AutomaticSize=Enum.AutomaticSize.X,
+		Size=UDim2.new(1,cfg.LogoImage~="" and -34 or 0,1,0),
 		TextXAlignment=Enum.TextXAlignment.Left,
 		ZIndex=801,LayoutOrder=1,
-	},pill)
+	},pillInner)
 
 	local pillBtn = new("TextButton",{
 		Text="",BackgroundTransparency=1,
@@ -1170,8 +1180,8 @@ function Lib:Hide()
 	end)
 	if self._dragHandle then self._dragHandle.Visible = false end
 
-	local isMobile = UserInputService.TouchEnabled
-	if isMobile then
+	local useMini = self:_useMiniMode()
+	if useMini then
 		self:_ensurePill()
 		local pill = self._mobilePill
 		if pill then
@@ -1556,7 +1566,7 @@ function Lib:_buildSettingsPanel()
 			self._reduceMotion=rmVal
 			_rm=rmVal
 			tw(track,.2,{BackgroundColor3=rmVal and C.Green or C.Card3})
-			tw(knob,.22,{Position=UDim2.new(0,rmVal and 22 or 2,.5,0),BackgroundColor3=rmVal and C.Bg or C.TextDim},Enum.EasingStyle.Back,Enum.EasingDirection.Out)
+			tw(knob,.22,{Position=UDim2.new(0,rmVal and 22 or 2,.5,0),BackgroundColor3=rmVal and C.Bg or C.TextDim})
 			self:ShowNotification(rmVal and "Reduce Motion enabled" or "Reduce Motion disabled","info",2)
 		end)
 		rmRow.MouseEnter:Connect(function() tw(rmRow,.15,{BackgroundColor3=C.Card2}) end)
@@ -1585,7 +1595,22 @@ function Lib:_buildSettingsPanel()
 				smVal=not smVal
 				self._simulateMobile=smVal
 				tw(smTrack,.2,{BackgroundColor3=smVal and C.Yellow or C.Card3})
-				tw(smKnob,.22,{Position=UDim2.new(0,smVal and 22 or 2,.5,0),BackgroundColor3=smVal and C.Bg or C.TextDim},Enum.EasingStyle.Back,Enum.EasingDirection.Out)
+				tw(smKnob,.22,{Position=UDim2.new(0,smVal and 22 or 2,.5,0),BackgroundColor3=smVal and C.Bg or C.TextDim})
+				if smVal then
+					if self._mobilePill then
+						pcall(function() self._mobilePill:Destroy() end)
+						self._mobilePill = nil
+					end
+					if self._dragHandle then self._dragHandle.Visible = false end
+				else
+					if self._mobilePill then
+						pcall(function() self._mobilePill:Destroy() end)
+						self._mobilePill = nil
+					end
+					if self._dragHandle and not self._hidden then
+						self._dragHandle.Visible = true
+					end
+				end
 				if self._doScale then self._doScale() end
 				self:ShowNotification(smVal and "Mobile simulation ON" or "Mobile simulation OFF","warning",2)
 			end)
@@ -1597,6 +1622,56 @@ function Lib:_buildSettingsPanel()
 	new("Frame",{Size=UDim2.new(1,0,0,20),BackgroundTransparency=1,LayoutOrder=nextLo()},scroll)
 	new("Frame",{Size=UDim2.new(1,0,0,1),BackgroundColor3=C.Border,BorderSizePixel=0,LayoutOrder=nextLo()},scroll)
 	new("Frame",{Size=UDim2.new(1,0,0,18),BackgroundTransparency=1,LayoutOrder=nextLo()},scroll)
+
+	new("Frame",{Size=UDim2.new(1,0,0,20),BackgroundTransparency=1,LayoutOrder=nextLo()},scroll)
+	new("Frame",{Size=UDim2.new(1,0,0,1),BackgroundColor3=C.Border,BorderSizePixel=0,LayoutOrder=nextLo()},scroll)
+	new("Frame",{Size=UDim2.new(1,0,0,16),BackgroundTransparency=1,LayoutOrder=nextLo()},scroll)
+
+	new("TextLabel",{Text="DANGER ZONE",Font=Enum.Font.GothamBold,TextSize=9,TextColor3=C.Red,
+		BackgroundTransparency=1,Size=UDim2.new(1,0,0,14),
+		TextXAlignment=Enum.TextXAlignment.Left,LayoutOrder=nextLo()},scroll)
+	new("Frame",{Size=UDim2.new(1,0,0,6),BackgroundTransparency=1,LayoutOrder=nextLo()},scroll)
+
+	do
+		local unloadRow=new("Frame",{Size=UDim2.new(1,0,0,48),BackgroundColor3=fromHex("1a0505"),BorderSizePixel=0,LayoutOrder=nextLo()},scroll)
+		corner(unloadRow,10)
+		stroke(unloadRow,fromHex("3a0808"),1)
+		pad(unloadRow,0,0,16,16)
+		new("TextLabel",{Text="Unload Script",Font=Enum.Font.GothamBold,TextSize=13,TextColor3=C.Red,
+			BackgroundTransparency=1,Size=UDim2.new(1,-120,1,0),TextXAlignment=Enum.TextXAlignment.Left},unloadRow)
+		new("TextLabel",{Text="Completely removes the interface and stops all connections",Font=Enum.Font.Gotham,TextSize=10,TextColor3=fromHex("884444"),
+			BackgroundTransparency=1,Position=UDim2.new(0,0,1,-14),Size=UDim2.new(1,-120,0,12),TextXAlignment=Enum.TextXAlignment.Left},unloadRow)
+		local unloadBtn=new("TextButton",{
+			Text="UNLOAD",Font=Enum.Font.GothamBold,TextSize=11,TextColor3=C.White,
+			BackgroundColor3=C.Red,BorderSizePixel=0,AutoButtonColor=false,
+			AnchorPoint=Vector2.new(1,.5),Position=UDim2.new(1,0,.5,0),
+			Size=UDim2.fromOffset(100,32)},unloadRow)
+		corner(unloadBtn,8)
+		unloadBtn.MouseEnter:Connect(function() tw(unloadBtn,.1,{BackgroundColor3=fromHex("ff5555")}) end)
+		unloadBtn.MouseLeave:Connect(function() tw(unloadBtn,.12,{BackgroundColor3=C.Red}) end)
+		local confirmed=false
+		unloadBtn.Activated:Connect(function()
+			if not confirmed then
+				confirmed=true
+				unloadBtn.Text="CONFIRM"
+				tw(unloadBtn,.1,{BackgroundColor3=fromHex("ff3333")})
+				task.delay(2.5,function()
+					if confirmed then
+						confirmed=false
+						unloadBtn.Text="UNLOAD"
+						tw(unloadBtn,.15,{BackgroundColor3=C.Red})
+					end
+				end)
+			else
+				confirmed=false
+				self:Destroy()
+			end
+		end)
+	end
+
+	new("Frame",{Size=UDim2.new(1,0,0,20),BackgroundTransparency=1,LayoutOrder=nextLo()},scroll)
+	new("Frame",{Size=UDim2.new(1,0,0,1),BackgroundColor3=C.Border,BorderSizePixel=0,LayoutOrder=nextLo()},scroll)
+	new("Frame",{Size=UDim2.new(1,0,0,16),BackgroundTransparency=1,LayoutOrder=nextLo()},scroll)
 
 	new("TextLabel",{Text="ABOUT",Font=Enum.Font.GothamBold,TextSize=9,TextColor3=C.TextOff,
 		BackgroundTransparency=1,Size=UDim2.new(1,0,0,14),

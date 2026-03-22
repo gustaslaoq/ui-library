@@ -551,7 +551,7 @@ function Lib:_buildTitleBar(win)
 			TextXAlignment=Enum.TextXAlignment.Center,ZIndex=13},w)
 		local img = new("ImageLabel",{AnchorPoint=Vector2.new(.5,.5),Position=UDim2.fromScale(.5,.5),
 			Size=UDim2.fromOffset(22,22),BackgroundTransparency=1,
-			Image="rbxasset://textures/ui/Settings/Icon.png",
+			Image="rbxasset://textures/ui/SettingsIcon.png",
 			ImageColor3=C.Text,ScaleType=Enum.ScaleType.Fit,ZIndex=14},w)
 		task.defer(function() if img.IsLoaded then fallback.Visible=false end end)
 		local btn = new("TextButton",{Text="",BackgroundTransparency=1,Size=UDim2.fromScale(1,1),ZIndex=15,AutoButtonColor=false},w)
@@ -563,42 +563,24 @@ function Lib:_buildTitleBar(win)
 	end
 
 	do
-		local w = new("Frame",{Size=UDim2.fromOffset(44,44),BackgroundTransparency=1,ZIndex=12,LayoutOrder=2},right)
-		local fb = new("TextLabel",{Text="-",Font=Enum.Font.GothamBold,TextSize=18,
-			TextColor3=C.White,BackgroundTransparency=1,AnchorPoint=Vector2.new(.5,.5),
-			Position=UDim2.fromScale(.5,.5),Size=UDim2.fromOffset(22,22),
-			TextXAlignment=Enum.TextXAlignment.Center,ZIndex=13},w)
-		local img = new("ImageLabel",{AnchorPoint=Vector2.new(.5,.5),Position=UDim2.fromScale(.5,.5),
-			Size=UDim2.fromOffset(18,18),BackgroundTransparency=1,
-			Image="rbxasset://textures/ui/MinimizeIcon.png",
-			ImageColor3=C.White,ScaleType=Enum.ScaleType.Fit,ZIndex=14},w)
-		task.defer(function() if img.IsLoaded then fb.Visible=false end end)
-		local btn = new("TextButton",{Text="",BackgroundTransparency=1,Size=UDim2.fromScale(1,1),ZIndex=15,AutoButtonColor=false},w)
-		btn.MouseEnter:Connect(function() tw(img,.12,{ImageColor3=C.White}); tw(fb,.12,{TextColor3=C.White}); tw(w,.12,{BackgroundTransparency=.93}) end)
-		btn.MouseLeave:Connect(function() tw(img,.15,{ImageColor3=C.White}); tw(fb,.15,{TextColor3=C.White}); tw(w,.15,{BackgroundTransparency=1}) end)
-		btn.Activated:Connect(function()
+		local b = new("TextButton",{Text="-",Font=Enum.Font.GothamBold,TextSize=18,TextColor3=C.White,
+			BackgroundTransparency=1,Size=UDim2.fromOffset(44,44),ZIndex=12,AutoButtonColor=false,LayoutOrder=2},right)
+		b.MouseEnter:Connect(function() tw(b,.12,{TextColor3=C.White,BackgroundTransparency=.93}) end)
+		b.MouseLeave:Connect(function() tw(b,.15,{TextColor3=C.White,BackgroundTransparency=1}) end)
+		b.Activated:Connect(function()
 			if self._minimised then self:Maximise() else self:Minimise() end
 		end)
-		self._minBtn = btn
-		self._minImg = img
-		self._minFb  = fb
+		self._minBtn = b
+		self._minImg = nil
+		self._minFb  = b
 	end
 
 	do
-		local w = new("Frame",{Size=UDim2.fromOffset(44,44),BackgroundTransparency=1,ZIndex=12,LayoutOrder=3},right)
-		local fb = new("TextLabel",{Text="x",Font=Enum.Font.GothamBold,TextSize=16,
-			TextColor3=C.Red,BackgroundTransparency=1,AnchorPoint=Vector2.new(.5,.5),
-			Position=UDim2.fromScale(.5,.5),Size=UDim2.fromOffset(22,22),
-			TextXAlignment=Enum.TextXAlignment.Center,ZIndex=13},w)
-		local img = new("ImageLabel",{AnchorPoint=Vector2.new(.5,.5),Position=UDim2.fromScale(.5,.5),
-			Size=UDim2.fromOffset(18,18),BackgroundTransparency=1,
-			Image="rbxasset://textures/ui/CloseIcon.png",
-			ImageColor3=C.Red,ScaleType=Enum.ScaleType.Fit,ZIndex=14},w)
-		task.defer(function() if img.IsLoaded then fb.Visible=false end end)
-		local btn = new("TextButton",{Text="",BackgroundTransparency=1,Size=UDim2.fromScale(1,1),ZIndex=15,AutoButtonColor=false},w)
-		btn.MouseEnter:Connect(function() tw(img,.12,{ImageColor3=fromHex("ff6666")}); tw(fb,.12,{TextColor3=fromHex("ff6666")}); tw(w,.12,{BackgroundTransparency=.93}) end)
-		btn.MouseLeave:Connect(function() tw(img,.15,{ImageColor3=C.Red}); tw(fb,.15,{TextColor3=C.Red}); tw(w,.15,{BackgroundTransparency=1}) end)
-		btn.Activated:Connect(function() self:Hide() end)
+		local b = new("TextButton",{Text="x",Font=Enum.Font.GothamBold,TextSize=18,TextColor3=C.Red,
+			BackgroundTransparency=1,Size=UDim2.fromOffset(44,44),ZIndex=12,AutoButtonColor=false,LayoutOrder=3},right)
+		b.MouseEnter:Connect(function() tw(b,.12,{TextColor3=fromHex("ff6666"),BackgroundTransparency=.93}) end)
+		b.MouseLeave:Connect(function() tw(b,.15,{TextColor3=C.Red,BackgroundTransparency=1}) end)
+		b.Activated:Connect(function() self:Hide() end)
 	end
 
 	do
@@ -760,19 +742,11 @@ function Lib:_buildBody(win)
 	local closeSearchBtn = new("TextButton",{
 		AnchorPoint=Vector2.new(1,.5),Position=UDim2.new(1,-16,.5,0),
 		Size=UDim2.fromOffset(28,28),
-		Text="",BackgroundTransparency=1,AutoButtonColor=false,ZIndex=22,
+		Text="x",Font=Enum.Font.GothamBold,TextSize=16,TextColor3=C.TextDim,
+		BackgroundTransparency=1,AutoButtonColor=false,ZIndex=22,
 	}, searchBar)
-	do
-		local img=new("ImageLabel",{AnchorPoint=Vector2.new(.5,.5),Position=UDim2.fromScale(.5,.5),
-			Size=UDim2.fromOffset(14,14),BackgroundTransparency=1,
-			Image="rbxasset://textures/ui/CloseIcon.png",
-			ImageColor3=C.TextDim,ScaleType=Enum.ScaleType.Fit,ZIndex=23},closeSearchBtn)
-		local fb=new("TextLabel",{Text="x",Font=Enum.Font.GothamBold,TextSize=14,TextColor3=C.TextDim,
-			BackgroundTransparency=1,Size=UDim2.fromScale(1,1),TextXAlignment=Enum.TextXAlignment.Center,ZIndex=23},closeSearchBtn)
-		task.defer(function() if img.IsLoaded then fb.Visible=false end end)
-		closeSearchBtn.MouseEnter:Connect(function() tw(img,.1,{ImageColor3=C.Red}); tw(fb,.1,{TextColor3=C.Red}) end)
-		closeSearchBtn.MouseLeave:Connect(function() tw(img,.12,{ImageColor3=C.TextDim}); tw(fb,.12,{TextColor3=C.TextDim}) end)
-	end
+	closeSearchBtn.MouseEnter:Connect(function() tw(closeSearchBtn,.1,{TextColor3=C.Red}) end)
+	closeSearchBtn.MouseLeave:Connect(function() tw(closeSearchBtn,.12,{TextColor3=C.TextDim}) end)
 
 	for _,nb in ipairs({navUp,navDown}) do
 		nb.MouseEnter:Connect(function() tw(nb,.1,{BackgroundColor3=C.Card2,TextColor3=C.White}) end)
@@ -1028,7 +1002,7 @@ function Lib:Minimise()
 		task.delay(.37,function()
 			if self._body then self._body.Visible = false end
 		end)
-		if self._minImg then self._minImg.Image = "rbxasset://textures/ui/MaximizeIcon.png" end
+		
 		if self._minFb  then self._minFb.Text  = "+" end
 		if self._dragHandle then self._dragHandle.Visible = false end
 	end
@@ -1073,7 +1047,7 @@ function Lib:Maximise()
 			self:_setCollapsed(collapsed)
 		end
 		tw(win,.45,{Size=UDim2.fromOffset(targetW, targetH)},Enum.EasingStyle.Back,Enum.EasingDirection.Out)
-		if self._minImg then self._minImg.Image = "rbxasset://textures/ui/MinimizeIcon.png" end
+		
 		if self._minFb  then self._minFb.Text  = "-" end
 	end
 	if self._dragHandle then self._dragHandle.Visible = true end
@@ -1095,7 +1069,7 @@ function Lib:Hide()
 	if not win then return end
 	if self._minimised then
 		self._minimised = false
-		if self._minImg then self._minImg.Image = "rbxasset://textures/ui/MinimizeIcon.png" end
+		
 		if self._minFb  then self._minFb.Text  = "-" end
 		if self._body then self._body.Visible = true end
 		win.BackgroundColor3 = C.Bg
@@ -1146,7 +1120,7 @@ function Lib:Show()
 	self._dragTargetOY = 0
 	if self._minimised then
 		self._minimised = false
-		if self._minImg then self._minImg.Image = "rbxasset://textures/ui/MinimizeIcon.png" end
+		
 		if self._minFb  then self._minFb.Text  = "-" end
 	end
 	if self._body then self._body.Visible = true end

@@ -469,12 +469,14 @@ function Lib:_buildWindow()
 	end
 
 	local lerpConn = RunService.Heartbeat:Connect(function()
+		local cam = workspace.CurrentCamera
+		local vp = cam and cam.ViewportSize or Vector2.new(1920,1080)
+		local tx = self._dragTargetOX
+		local ty = self._dragTargetOY
 		if self._dragActive then
 			local wx = win.Position.X.Offset
 			local wy = win.Position.Y.Offset
-			local tx = self._dragTargetOX
-			local ty = self._dragTargetOY
-			local sp = 0.22
+			local sp = 0.10
 			local nx = wx + (tx - wx) * sp
 			local ny = wy + (ty - wy) * sp
 			if math.abs(nx - tx) < 0.5 then nx = tx end
@@ -482,11 +484,9 @@ function Lib:_buildWindow()
 			win.Position = UDim2.new(0.5, nx, 0.5, ny)
 		end
 		if dh.Visible then
-			local cam = workspace.CurrentCamera
-			local vp = cam and cam.ViewportSize or Vector2.new(1920,1080)
-			local cx = vp.X * 0.5 + win.Position.X.Offset
-			local cy = vp.Y * 0.5 + win.Position.Y.Offset + win.AbsoluteSize.Y * 0.5 + 14
-			dh.Position = UDim2.fromOffset(cx, cy)
+			local dhX = vp.X * 0.5 + tx
+			local dhY = vp.Y * 0.5 + ty + win.AbsoluteSize.Y * 0.5 + 14
+			dh.Position = UDim2.fromOffset(dhX, dhY)
 		end
 	end)
 	table.insert(self._conns, lerpConn)
@@ -1040,25 +1040,41 @@ function Lib:_ensurePill()
 	},pill)
 
 	local dragging=false; local ds, px0, py0
+
+	local function clampPill()
+		if not pill or not pill.Parent then return end
+		local cam=workspace.CurrentCamera
+		local vp=cam and cam.ViewportSize or Vector2.new(1920,1080)
+		local pw=pill.AbsoluteSize.X
+		local ph=pill.AbsoluteSize.Y
+		local cx=pill.Position.X.Offset
+		local cy=pill.Position.Y.Offset
+		local ncx=math.clamp(cx, pw*0.5, vp.X-pw*0.5)
+		local ncy=math.clamp(cy, 10, vp.Y-ph-10)
+		if ncx~=cx or ncy~=cy then
+			pill.Position=UDim2.new(0,ncx,0,ncy)
+		end
+	end
+
+	table.insert(self._conns, workspace.CurrentCamera:GetPropertyChangedSignal("ViewportSize"):Connect(function()
+		task.defer(clampPill)
+	end))
+
 	pillBtn.InputBegan:Connect(function(i)
 		if i.UserInputType==Enum.UserInputType.MouseButton1 or i.UserInputType==Enum.UserInputType.Touch then
 			dragging=true
 			ds=i.Position
-			px0=pill.Position.X.Scale*0 + pill.Position.X.Offset
-			py0=pill.Position.Y.Scale*0 + pill.Position.Y.Offset
-			local cam=workspace.CurrentCamera
-			local vp=cam and cam.ViewportSize or Vector2.new(1920,1080)
-			px0=math.floor(vp.X*0.5)
+			px0=pill.Position.X.Offset
 			py0=pill.Position.Y.Offset
 		end
 	end)
 	pillBtn.InputEnded:Connect(function(i)
 		if i.UserInputType==Enum.UserInputType.MouseButton1 or i.UserInputType==Enum.UserInputType.Touch then
-			local d=i.Position-ds
-			if math.abs(d.X)<6 and math.abs(d.Y)<6 then
+			local moved=dragging and ds and (math.abs(i.Position.X-ds.X)>6 or math.abs(i.Position.Y-ds.Y)>6)
+			dragging=false
+			if not moved then
 				self:Show()
 			end
-			dragging=false
 		end
 	end)
 	table.insert(self._conns,UserInputService.InputChanged:Connect(function(i)
@@ -1067,8 +1083,10 @@ function Lib:_ensurePill()
 		local cam=workspace.CurrentCamera
 		local vp=cam and cam.ViewportSize or Vector2.new(1920,1080)
 		local d=i.Position-ds
-		local pw=pill.AbsoluteSize.X; local nx=math.clamp(px0+d.X, pw*0.5, vp.X-pw*0.5)
-		local ny=math.clamp(py0+d.Y, 10, vp.Y-54)
+		local pw=pill.AbsoluteSize.X
+		local ph=pill.AbsoluteSize.Y
+		local nx=math.clamp(px0+d.X, pw*0.5, vp.X-pw*0.5)
+		local ny=math.clamp(py0+d.Y, 10, vp.Y-ph-10)
 		pill.Position=UDim2.new(0,nx,0,ny)
 	end))
 
@@ -1567,12 +1585,10 @@ function Lib:_buildSettingsPanel()
 	do
 		local rmRow=new("Frame",{Size=UDim2.new(1,0,0,56),BackgroundColor3=C.Card,BorderSizePixel=0,LayoutOrder=nextLo()},scroll)
 		corner(rmRow,10); stroke(rmRow,C.Border,1)
-		local rmLeft=new("Frame",{BackgroundTransparency=1,Position=UDim2.fromOffset(16,0),Size=UDim2.new(1,-80,1,0)},rmRow)
-		vlist(rmLeft,2); pad(rmLeft,0,0,0,12)
 		new("TextLabel",{Text="Reduce Motion",Font=Enum.Font.Gotham,TextSize=13,TextColor3=C.Text,
-			BackgroundTransparency=1,Size=UDim2.new(1,0,0,18),TextXAlignment=Enum.TextXAlignment.Left,LayoutOrder=0},rmLeft)
+			BackgroundTransparency=1,Position=UDim2.new(0,16,.5,-16),Size=UDim2.new(1,-80,0,18),TextXAlignment=Enum.TextXAlignment.Left},rmRow)
 		new("TextLabel",{Text="Simpler animations, no easing overshoot",Font=Enum.Font.Gotham,TextSize=10,TextColor3=C.TextDim,
-			BackgroundTransparency=1,Size=UDim2.new(1,0,0,14),TextXAlignment=Enum.TextXAlignment.Left,LayoutOrder=1},rmLeft)
+			BackgroundTransparency=1,Position=UDim2.new(0,16,.5,4),Size=UDim2.new(1,-80,0,14),TextXAlignment=Enum.TextXAlignment.Left},rmRow)
 		local rmVal = self._reduceMotion
 		local track=new("Frame",{AnchorPoint=Vector2.new(1,.5),Position=UDim2.new(1,-16,.5,0),
 			Size=UDim2.fromOffset(44,24),BackgroundColor3=rmVal and C.Green or C.Card3,BorderSizePixel=0},rmRow)
@@ -1599,12 +1615,10 @@ function Lib:_buildSettingsPanel()
 		do
 			local smRow=new("Frame",{Size=UDim2.new(1,0,0,56),BackgroundColor3=C.Card,BorderSizePixel=0,LayoutOrder=nextLo()},scroll)
 			corner(smRow,10); stroke(smRow,C.Border,1)
-			local smLeft=new("Frame",{BackgroundTransparency=1,Position=UDim2.fromOffset(16,0),Size=UDim2.new(1,-80,1,0)},smRow)
-			vlist(smLeft,2); pad(smLeft,0,0,0,12)
 			new("TextLabel",{Text="Simulate Mobile",Font=Enum.Font.Gotham,TextSize=13,TextColor3=C.Text,
-				BackgroundTransparency=1,Size=UDim2.new(1,0,0,18),TextXAlignment=Enum.TextXAlignment.Left,LayoutOrder=0},smLeft)
+				BackgroundTransparency=1,Position=UDim2.new(0,16,.5,-16),Size=UDim2.new(1,-80,0,18),TextXAlignment=Enum.TextXAlignment.Left},smRow)
 			new("TextLabel",{Text="Preview mobile layout (dev only)",Font=Enum.Font.Gotham,TextSize=10,TextColor3=C.TextDim,
-				BackgroundTransparency=1,Size=UDim2.new(1,0,0,14),TextXAlignment=Enum.TextXAlignment.Left,LayoutOrder=1},smLeft)
+				BackgroundTransparency=1,Position=UDim2.new(0,16,.5,4),Size=UDim2.new(1,-80,0,14),TextXAlignment=Enum.TextXAlignment.Left},smRow)
 			local smVal = self._simulateMobile
 			local smTrack=new("Frame",{AnchorPoint=Vector2.new(1,.5),Position=UDim2.new(1,-16,.5,0),
 				Size=UDim2.fromOffset(44,24),BackgroundColor3=smVal and C.Yellow or C.Card3,BorderSizePixel=0},smRow)
@@ -1661,9 +1675,9 @@ function Lib:_buildSettingsPanel()
 		stroke(unloadRow,fromHex("3a0808"),1)
 		pad(unloadRow,0,0,16,16)
 		new("TextLabel",{Text="Unload Script",Font=Enum.Font.GothamBold,TextSize=13,TextColor3=C.Red,
-			BackgroundTransparency=1,Size=UDim2.new(1,-120,1,0),TextXAlignment=Enum.TextXAlignment.Left},unloadRow)
-		new("TextLabel",{Text="Completely removes the interface and stops all connections",Font=Enum.Font.Gotham,TextSize=10,TextColor3=fromHex("884444"),
-			BackgroundTransparency=1,Position=UDim2.new(0,0,.5,2),Size=UDim2.new(1,-120,0,12),TextXAlignment=Enum.TextXAlignment.Left},unloadRow)
+			BackgroundTransparency=1,Position=UDim2.new(0,16,.5,-16),Size=UDim2.new(1,-140,0,18),TextXAlignment=Enum.TextXAlignment.Left},unloadRow)
+		new("TextLabel",{Text="Completely removes the interface",Font=Enum.Font.Gotham,TextSize=10,TextColor3=fromHex("884444"),
+			BackgroundTransparency=1,Position=UDim2.new(0,16,.5,4),Size=UDim2.new(1,-140,0,13),TextXAlignment=Enum.TextXAlignment.Left},unloadRow)
 		local unloadBtn=new("TextButton",{
 			Text="UNLOAD",Font=Enum.Font.GothamBold,TextSize=11,TextColor3=C.White,
 			BackgroundColor3=C.Red,BorderSizePixel=0,AutoButtonColor=false,

@@ -75,32 +75,70 @@ local function vlist(obj, spacing, halign)
 	},obj)
 end
 
-local C = {
-    Bg       = fromHex("060606"),
-    Bg2      = fromHex("080808"),
-    Sidebar  = fromHex("050505"),
-    Card     = fromHex("0e0e0e"),
-    Card2    = fromHex("131313"),
-    Card3    = fromHex("191919"),
-    Border   = fromHex("1a1a1a"),
-    Border2  = fromHex("222222"),
-    Border3  = fromHex("2e2e2e"),
-    Text     = fromHex("d8d8d8"),
-    TextDim  = fromHex("666666"),
-    TextOff  = fromHex("2e2e2e"),
-    White    = fromHex("ffffff"),
-    Green    = fromHex("00e87a"),
-    GreenBg  = fromHex("030e08"),
-    Red      = fromHex("e84040"),
-    RedBg    = fromHex("0e0404"),
-    Yellow   = fromHex("f0c030"),
-    YellowBg = fromHex("0e0b02"),
-    Orange   = fromHex("f07020"),
-    Blue     = fromHex("4488ff"),
-    BlueBg   = fromHex("030914"),
-    Purple   = fromHex("aa44ff"),
-    PurpleBg = fromHex("0a0414"),
+local THEMES = {
+    dark = {
+        Bg="060606",Bg2="080808",Sidebar="050505",
+        Card="0e0e0e",Card2="131313",Card3="191919",
+        Border="1a1a1a",Border2="222222",Border3="2e2e2e",
+        Text="d8d8d8",TextDim="666666",TextOff="2e2e2e",
+    },
+    midnight = {
+        Bg="050812",Bg2="070b18",Sidebar="030610",
+        Card="0d1226",Card2="111730",Card3="161e38",
+        Border="1a2040",Border2="212850",Border3="2a3360",
+        Text="d0d8f0",TextDim="5a6890",TextOff="2a3048",
+    },
+    slate = {
+        Bg="0d0f10",Bg2="111316",Sidebar="0a0c0d",
+        Card="181b1e",Card2="1e2226",Card3="242830",
+        Border="262b30",Border2="2e343c",Border3="3a4248",
+        Text="c8cdd4",TextDim="5a6370",TextOff="2e3540",
+    },
+    solarized = {
+        Bg="001b26",Bg2="002433",Sidebar="001520",
+        Card="00303f",Card2="003a4c",Card3="004458",
+        Border="00485e",Border2="005068",Border3="006070",
+        Text="93a1a1",TextDim="4a6070",TextOff="1a3040",
+    },
+    mocha = {
+        Bg="12100f",Bg2="161210",Sidebar="0f0d0c",
+        Card="1e1a18",Card2="242018",Card3="2a241e",
+        Border="302820",Border2="382e26",Border3="42362c",
+        Text="d4c8bc",TextDim="6a5c50",TextOff="302820",
+    },
 }
+
+local function buildC(themeName)
+    local t = THEMES[themeName] or THEMES.dark
+    return {
+        Bg       = fromHex(t.Bg),
+        Bg2      = fromHex(t.Bg2),
+        Sidebar  = fromHex(t.Sidebar),
+        Card     = fromHex(t.Card),
+        Card2    = fromHex(t.Card2),
+        Card3    = fromHex(t.Card3),
+        Border   = fromHex(t.Border),
+        Border2  = fromHex(t.Border2),
+        Border3  = fromHex(t.Border3),
+        Text     = fromHex(t.Text),
+        TextDim  = fromHex(t.TextDim),
+        TextOff  = fromHex(t.TextOff),
+        White    = fromHex("ffffff"),
+        Green    = fromHex("00e87a"),
+        GreenBg  = fromHex("030e08"),
+        Red      = fromHex("e84040"),
+        RedBg    = fromHex("0e0404"),
+        Yellow   = fromHex("f0c030"),
+        YellowBg = fromHex("0e0b02"),
+        Orange   = fromHex("f07020"),
+        Blue     = fromHex("4488ff"),
+        BlueBg   = fromHex("030914"),
+        Purple   = fromHex("aa44ff"),
+        PurpleBg = fromHex("0a0414"),
+    }
+end
+
+local C = buildC("dark")
 
 local function accentOrWhite(lib)
     if lib and lib.cfg and lib.cfg.AccentColor then
@@ -111,6 +149,7 @@ end
 
 local DefaultConfig = {
 	AccentColor        = nil,
+	Theme              = "dark",
 	AppName            = "MY APP",
 	AppSubtitle        = "Subtitle",
 	AppVersion         = "1.0",
@@ -166,6 +205,11 @@ function Lib.new(userCfg)
 		for k,v in pairs(userCfg) do self.cfg[k]=v end
 	end
 
+	if self.cfg.Theme and self.cfg.Theme ~= "dark" then
+		local newC = buildC(self.cfg.Theme)
+		for k,v in pairs(newC) do C[k]=v end
+	end
+
 	self._pages      = {}
 	self._navBtns    = {}
 	self._conns      = {}
@@ -188,6 +232,8 @@ function Lib.new(userCfg)
 	self._simulateMobile = false
 	self._settingsVisible= false
 	self._kbListening    = false
+	self._currentTheme   = self.cfg.Theme or "dark"
+	self._onDestroyFns   = {}
 	self._settingsFrame  = nil
 	self._settingsScroll = nil
 	self._gearImg        = nil
@@ -756,10 +802,54 @@ function Lib:_buildBody(win)
 	corner(bar,2)
 	self._bar = bar
 
-	for i,page in ipairs(cfg.Pages) do
-		self:_makeNavBtn(page,i,ss)
+	local pageIndex = 0
+	local function addNavBtn(page, parent, indented)
+		pageIndex = pageIndex + 1
+		self:_makeNavBtn(page, pageIndex, parent, indented)
 	end
-	new("Frame",{Size=UDim2.fromOffset(1,14),BackgroundTransparency=1,LayoutOrder=#cfg.Pages+10},ss)
+
+	for _, entry in ipairs(cfg.Pages) do
+		if entry.Group then
+			local groupPages = entry.Pages or {}
+			local groupOpen = entry.DefaultOpen ~= false
+
+			local grpBtn = new("TextButton",{
+				Text="",BackgroundTransparency=1,
+				Size=UDim2.new(1,0,0,36),LayoutOrder=pageIndex,
+				AutoButtonColor=false,ZIndex=6,
+			},ss)
+			pad(grpBtn,0,0,10,10)
+
+			local arrow=new("TextLabel",{Text="v",Font=Enum.Font.GothamBold,TextSize=9,TextColor3=C.TextOff,
+				BackgroundTransparency=1,AnchorPoint=Vector2.new(1,.5),Position=UDim2.new(1,0,.5,0),
+				Size=UDim2.fromOffset(18,18),TextXAlignment=Enum.TextXAlignment.Center,ZIndex=7},grpBtn)
+			new("TextLabel",{Text=string.upper(entry.Group),Font=Enum.Font.GothamBold,TextSize=9,TextColor3=C.TextOff,
+				BackgroundTransparency=1,Size=UDim2.new(1,-22,1,0),
+				TextXAlignment=Enum.TextXAlignment.Left,ZIndex=7},grpBtn)
+
+			local subContainer=new("Frame",{
+				Size=UDim2.new(1,0,0,0),AutomaticSize=Enum.AutomaticSize.Y,
+				BackgroundTransparency=1,BorderSizePixel=0,
+				Visible=groupOpen,
+				LayoutOrder=pageIndex+1,
+			},ss)
+			new("UIListLayout",{SortOrder=Enum.SortOrder.LayoutOrder,Padding=UDim.new(0,0)},subContainer)
+
+			for _, page in ipairs(groupPages) do
+				addNavBtn(page, subContainer, true)
+			end
+
+			grpBtn.Activated:Connect(function()
+				groupOpen = not groupOpen
+				subContainer.Visible = groupOpen
+				tw(arrow,.2,{Rotation=groupOpen and 0 or -90})
+			end)
+			if not groupOpen then arrow.Rotation=-90 end
+		else
+			addNavBtn(entry, ss, false)
+		end
+	end
+	new("Frame",{Size=UDim2.fromOffset(1,14),BackgroundTransparency=1,LayoutOrder=pageIndex+10},ss)
 
 	local content = new("Frame",{Position=UDim2.new(0,cfg.SidebarWidth,0,0),
 		Size=UDim2.new(1,-cfg.SidebarWidth,1,0),BackgroundColor3=C.Bg2,BorderSizePixel=0,ClipsDescendants=true},body)
@@ -885,9 +975,9 @@ function Lib:_buildBody(win)
 	end)
 end
 
-function Lib:_makeNavBtn(page,index,parent)
+function Lib:_makeNavBtn(page,index,parent,indented)
 	local fh = (UserInputService.TouchEnabled) and 48 or 40
-	local frame = new("Frame",{Size=UDim2.new(1,0,0,fh),BackgroundTransparency=1,LayoutOrder=index+1},parent)
+	local frame = new("Frame",{Size=UDim2.new(1,0,0,fh),BackgroundTransparency=1,LayoutOrder=index},parent)
 
 	local bg = new("Frame",{Size=UDim2.new(1,-8,1,-4),Position=UDim2.fromOffset(4,2),
 		BackgroundColor3=C.Card2,BackgroundTransparency=1,BorderSizePixel=0,ZIndex=5},frame)
@@ -896,13 +986,15 @@ function Lib:_makeNavBtn(page,index,parent)
 	local hasIcon = page.Icon and tostring(page.Icon) ~= ""
 	local iconId = hasIcon and tostring(page.Icon) or nil
 
-	local dot = new("Frame",{AnchorPoint=Vector2.new(.5,.5),Position=UDim2.new(0,22,.5,0),
+	local dotX = indented and 30 or 22
+	local lblX = indented and 44 or 36
+	local dot = new("Frame",{AnchorPoint=Vector2.new(.5,.5),Position=UDim2.new(0,dotX,.5,0),
 		Size=UDim2.fromOffset(6,6),BackgroundColor3=C.TextOff,BorderSizePixel=0,ZIndex=6,
 		Visible=not hasIcon},frame)
 	corner(dot,3)
 
 	if hasIcon then
-		local iconFrame = new("Frame",{AnchorPoint=Vector2.new(.5,.5),Position=UDim2.new(0,22,.5,0),
+		local iconFrame = new("Frame",{AnchorPoint=Vector2.new(.5,.5),Position=UDim2.new(0,dotX,.5,0),
 			Size=UDim2.fromOffset(20,20),BackgroundTransparency=1,ZIndex=6},frame)
 		local img = new("ImageLabel",{Size=UDim2.fromScale(1,1),BackgroundTransparency=1,
 			Image="rbxassetid://"..iconId,ImageColor3=C.TextDim,ScaleType=Enum.ScaleType.Fit,ZIndex=6},iconFrame)
@@ -935,7 +1027,7 @@ function Lib:_makeNavBtn(page,index,parent)
 	end
 
 	local lbl = new("TextLabel",{Text=page.Name,Font=Enum.Font.GothamBold,TextSize=12,TextColor3=C.TextDim,
-		BackgroundTransparency=1,Position=UDim2.fromOffset(36,0),Size=UDim2.new(1,-44,1,0),
+		BackgroundTransparency=1,Position=UDim2.fromOffset(lblX,0),Size=UDim2.new(1,-(lblX+8),1,0),
 		TextXAlignment=Enum.TextXAlignment.Left,TextTruncate=Enum.TextTruncate.AtEnd,ZIndex=6},frame)
 
 	local click = new("TextButton",{Text="",BackgroundTransparency=1,Size=UDim2.fromScale(1,1),ZIndex=7,AutoButtonColor=false},frame)
@@ -1038,6 +1130,19 @@ function Lib:SetPage(index)
 			newFrame.Visible = true
 			if nfs then
 				tw(nfs, .3, {Position=UDim2.fromOffset(0,0)}, Enum.EasingStyle.Quint)
+				if not _rm then
+					local children = nfs:GetChildren()
+					for i, child in ipairs(children) do
+						if child:IsA("Frame") or child:IsA("TextLabel") then
+							child.BackgroundTransparency = child.BackgroundTransparency == 1 and 1 or 0.95
+							task.delay(i * 0.018, function()
+								if child and child.Parent then
+									tw(child, .18, {BackgroundTransparency = child:GetAttribute("OrigBGT") or (child.BackgroundColor3 and 0 or 1)}, Enum.EasingStyle.Quint)
+								end
+							end)
+						end
+					end
+				end
 			end
 		end)
 	end
@@ -1428,7 +1533,90 @@ function Lib:Shake(intensity)
 	end)
 end
 
+function Lib:Confirm(title, message, onConfirm, onCancel)
+	local sg = self._sg
+	if not sg then return end
+
+	local overlay = new("Frame",{
+		Size=UDim2.fromScale(1,1), BackgroundColor3=fromHex("000000"),
+		BackgroundTransparency=0.45, BorderSizePixel=0, ZIndex=900,
+	},sg)
+
+	local blur = new("Frame",{
+		AnchorPoint=Vector2.new(.5,.5),Position=UDim2.fromScale(.5,.5),
+		Size=UDim2.fromOffset(360,0),AutomaticSize=Enum.AutomaticSize.Y,
+		BackgroundColor3=C.Card2,BorderSizePixel=0,ZIndex=901,
+	},sg)
+	corner(blur,16)
+	stroke(blur,C.Border2,1)
+	vlist(blur,0)
+
+	local header=new("Frame",{Size=UDim2.new(1,0,0,52),BackgroundColor3=C.Card3,BorderSizePixel=0,ZIndex=902},blur)
+	corner(header,16)
+	new("Frame",{Position=UDim2.new(0,0,1,-8),Size=UDim2.new(1,0,0,8),BackgroundColor3=C.Card3,BorderSizePixel=0,ZIndex=902},header)
+	pad(header,0,0,20,20)
+	new("TextLabel",{Text=title or "Confirm",Font=Enum.Font.GothamBold,TextSize=15,TextColor3=C.White,
+		BackgroundTransparency=1,Size=UDim2.new(1,0,1,0),TextXAlignment=Enum.TextXAlignment.Left,ZIndex=903},header)
+
+	local body=new("Frame",{Size=UDim2.new(1,0,0,0),AutomaticSize=Enum.AutomaticSize.Y,
+		BackgroundTransparency=1,BorderSizePixel=0},blur)
+	pad(body,16,16,20,20)
+	new("TextLabel",{Text=message or "",Font=Enum.Font.Gotham,TextSize=13,TextColor3=C.TextDim,
+		BackgroundTransparency=1,Size=UDim2.new(1,0,0,0),AutomaticSize=Enum.AutomaticSize.Y,
+		TextXAlignment=Enum.TextXAlignment.Left,TextWrapped=true},body)
+
+	local btnRow=new("Frame",{Size=UDim2.new(1,0,0,52),BackgroundTransparency=1},blur)
+	pad(btnRow,0,0,16,16)
+	hlist(btnRow,10)
+
+	local function closeModal()
+		tw(overlay,.2,{BackgroundTransparency=1},Enum.EasingStyle.Quint)
+		tw(blur,.2,{BackgroundTransparency=1},Enum.EasingStyle.Quint)
+		task.delay(.22,function()
+			pcall(function() overlay:Destroy() end)
+			pcall(function() blur:Destroy() end)
+		end)
+	end
+
+	local cancelBtn=new("TextButton",{Text="Cancel",Font=Enum.Font.GothamBold,TextSize=13,
+		TextColor3=C.TextDim,BackgroundColor3=C.Card3,BorderSizePixel=0,
+		Size=UDim2.new(.5,-5,1,0),AutoButtonColor=false,ZIndex=903,LayoutOrder=0},btnRow)
+	corner(cancelBtn,10)
+	stroke(cancelBtn,C.Border2,1)
+	cancelBtn.MouseEnter:Connect(function() tw(cancelBtn,.1,{BackgroundColor3=C.Card2}) end)
+	cancelBtn.MouseLeave:Connect(function() tw(cancelBtn,.12,{BackgroundColor3=C.Card3}) end)
+	cancelBtn.Activated:Connect(function()
+		closeModal()
+		if onCancel then pcall(onCancel) end
+	end)
+
+	local confirmBtn=new("TextButton",{Text="Confirm",Font=Enum.Font.GothamBold,TextSize=13,
+		TextColor3=C.White,BackgroundColor3=C.Red,BorderSizePixel=0,
+		Size=UDim2.new(.5,-5,1,0),AutoButtonColor=false,ZIndex=903,LayoutOrder=1},btnRow)
+	corner(confirmBtn,10)
+	confirmBtn.MouseEnter:Connect(function() tw(confirmBtn,.1,{BackgroundColor3=fromHex("ff5555")}) end)
+	confirmBtn.MouseLeave:Connect(function() tw(confirmBtn,.12,{BackgroundColor3=C.Red}) end)
+	confirmBtn.Activated:Connect(function()
+		closeModal()
+		if onConfirm then pcall(onConfirm) end
+	end)
+
+	overlay.BackgroundTransparency=1
+	blur.BackgroundTransparency=1
+	blur.Position=UDim2.new(.5,0,.5,20)
+	tw(overlay,.25,{BackgroundTransparency=0.45},Enum.EasingStyle.Quint)
+	tw(blur,.3,{BackgroundTransparency=0,Position=UDim2.fromScale(.5,.5)},Enum.EasingStyle.Back,Enum.EasingDirection.Out)
+end
+
+
+function Lib:OnDestroy(fn)
+	if type(fn)=="function" then
+		table.insert(self._onDestroyFns, fn)
+	end
+end
+
 function Lib:Destroy()
+	for _,fn in ipairs(self._onDestroyFns or {}) do pcall(fn) end
 	for _,c in ipairs(self._conns) do pcall(function() c:Disconnect() end) end
 	if self._keyConn then pcall(function() self._keyConn:Disconnect() end) end
 	if self._sg and self._sg.Parent then
@@ -1658,6 +1846,37 @@ function Lib:_buildSettingsPanel()
 	new("Frame",{Size=UDim2.new(1,0,0,6),BackgroundTransparency=1,LayoutOrder=nextLo()},scroll)
 
 	do
+		local themeRow=new("Frame",{Size=UDim2.new(1,0,0,56),BackgroundColor3=C.Card,BorderSizePixel=0,LayoutOrder=nextLo()},scroll)
+		corner(themeRow,10); stroke(themeRow,C.Border,1)
+		new("TextLabel",{Text="Theme",Font=Enum.Font.Gotham,TextSize=13,TextColor3=C.Text,
+			BackgroundTransparency=1,Position=UDim2.new(0,16,.5,-16),Size=UDim2.new(1,-170,0,18),TextXAlignment=Enum.TextXAlignment.Left},themeRow)
+		new("TextLabel",{Text="Requires restart to apply fully",Font=Enum.Font.Gotham,TextSize=10,TextColor3=C.TextDim,
+			BackgroundTransparency=1,Position=UDim2.new(0,16,.5,4),Size=UDim2.new(1,-170,0,14),TextXAlignment=Enum.TextXAlignment.Left},themeRow)
+		local themeNames={"dark","midnight","slate","solarized","mocha"}
+		local themeOptions={"Dark","Midnight","Slate","Solarized","Mocha"}
+		local currentThemeIdx=1
+		for i,tn in ipairs(themeNames) do if tn==(self._currentTheme or "dark") then currentThemeIdx=i end end
+		local themeBtn=new("TextButton",{
+			Text=themeOptions[currentThemeIdx] or "Dark",Font=Enum.Font.GothamBold,TextSize=11,
+			TextColor3=C.White,BackgroundColor3=C.Card3,BorderSizePixel=0,AutoButtonColor=false,
+			AnchorPoint=Vector2.new(1,.5),Position=UDim2.new(1,-16,.5,0),
+			Size=UDim2.fromOffset(100,30)},themeRow)
+		corner(themeBtn,8); stroke(themeBtn,C.Border2,1)
+		themeBtn.MouseEnter:Connect(function() tw(themeBtn,.1,{BackgroundColor3=C.Card2}) end)
+		themeBtn.MouseLeave:Connect(function() tw(themeBtn,.12,{BackgroundColor3=C.Card3}) end)
+		themeBtn.Activated:Connect(function()
+			currentThemeIdx=(currentThemeIdx%#themeNames)+1
+			local tn=themeNames[currentThemeIdx]
+			self._currentTheme=tn
+			themeBtn.Text=themeOptions[currentThemeIdx]
+			local newC=buildC(tn)
+			for k,v in pairs(newC) do C[k]=v end
+			self:ShowNotification("Theme: "..themeOptions[currentThemeIdx],"info",2,"Display")
+		end)
+	end
+	new("Frame",{Size=UDim2.new(1,0,0,8),BackgroundTransparency=1,LayoutOrder=nextLo()},scroll)
+
+	do
 		local rmRow=new("Frame",{Size=UDim2.new(1,0,0,56),BackgroundColor3=C.Card,BorderSizePixel=0,LayoutOrder=nextLo()},scroll)
 		corner(rmRow,10); stroke(rmRow,C.Border,1)
 		new("TextLabel",{Text="Reduce Motion",Font=Enum.Font.Gotham,TextSize=13,TextColor3=C.Text,
@@ -1761,23 +1980,12 @@ function Lib:_buildSettingsPanel()
 		corner(unloadBtn,8)
 		unloadBtn.MouseEnter:Connect(function() tw(unloadBtn,.1,{BackgroundColor3=fromHex("ff5555")}) end)
 		unloadBtn.MouseLeave:Connect(function() tw(unloadBtn,.12,{BackgroundColor3=C.Red}) end)
-		local confirmed=false
 		unloadBtn.Activated:Connect(function()
-			if not confirmed then
-				confirmed=true
-				unloadBtn.Text="CONFIRM"
-				tw(unloadBtn,.1,{BackgroundColor3=fromHex("ff3333")})
-				task.delay(2.5,function()
-					if confirmed then
-						confirmed=false
-						unloadBtn.Text="UNLOAD"
-						tw(unloadBtn,.15,{BackgroundColor3=C.Red})
-					end
-				end)
-			else
-				confirmed=false
-				self:Destroy()
-			end
+			self:Confirm(
+				"Unload Script",
+				"This will completely remove the interface and stop all connections. This cannot be undone.",
+				function() self:Destroy() end
+			)
 		end)
 	end
 
@@ -2072,6 +2280,35 @@ function Lib:_gap(s,pi,h)
 	new("Frame",{Size=UDim2.new(1,0,0,h or 8),BackgroundTransparency=1,LayoutOrder=self:_o(pi)},s)
 end
 
+function Lib:Notify(text, style, duration, title)
+	self:ShowNotification(text, style or "info", duration or 3, title)
+end
+
+function Lib:SetPageBadge(pi, text)
+	local nb = self._navBtns[pi]
+	if not nb then return end
+	local frame = nb.Frame
+	if nb._badge then
+		if text and text ~= "" then
+			nb._badge.Text = tostring(text)
+			nb._badge.Visible = true
+		else
+			nb._badge.Visible = false
+		end
+		return
+	end
+	if not text or text == "" then return end
+	local badge = new("TextLabel",{
+		Text=tostring(text), Font=Enum.Font.GothamBold, TextSize=9,
+		TextColor3=C.White, BackgroundColor3=C.Red, BorderSizePixel=0,
+		AnchorPoint=Vector2.new(1,0), Position=UDim2.new(1,-2,0,2),
+		Size=UDim2.fromOffset(0,14), AutomaticSize=Enum.AutomaticSize.X,
+		TextXAlignment=Enum.TextXAlignment.Center, ZIndex=8,
+	}, frame)
+	corner(badge, 999)
+	nb._badge = badge
+end
+
 function Lib:AddSection(pi,name)
 	self:AddSectionHeader(pi,name)
 end
@@ -2190,28 +2427,52 @@ function Lib:AddButton(pi,text,style,cb)
 	local r=self:AddButtonRow(pi,{{Text=text,Style=style or "primary",Callback=cb}})
 	local btn=r and r[1]
 	if not btn then return end
+	local _originalText = text
+	local _loading = false
 	local obj={Button=btn,Frame=btn}
 	function obj:Set(v)
-		if btn and btn.Parent then btn.Text=tostring(v) end
+		_originalText=tostring(v)
+		if btn and btn.Parent and not _loading then btn.Text=_originalText end
 	end
 	function obj:SetEnabled(v)
 		if btn and btn.Parent then
 			btn.AutoButtonColor=false
-			btn.Active=v
-			btn.BackgroundTransparency=v and 0 or 0.4
+			btn.Active=v==true
+			btn.BackgroundTransparency=v==true and 0 or 0.5
+		end
+	end
+	function obj:SetLoading(v)
+		_loading=v==true
+		if not btn or not btn.Parent then return end
+		if _loading then
+			btn.Text="..."
+			btn.Active=false
+			btn.BackgroundTransparency=0.4
+		else
+			btn.Text=_originalText
+			btn.Active=true
+			btn.BackgroundTransparency=0
 		end
 	end
 	return obj
 end
 
-function Lib:AddToggle(pi,label,default,callback)
+function Lib:AddToggle(pi,label,default,callback,desc)
 	local s=self:GetPage(pi); if not s then return end
-	local row=new("Frame",{Size=UDim2.new(1,0,0,48),BackgroundColor3=C.Card,BorderSizePixel=0,LayoutOrder=self:_o(pi)},s)
+	local rowH = desc and 58 or 48
+	local row=new("Frame",{Size=UDim2.new(1,0,0,rowH),BackgroundColor3=C.Card,BorderSizePixel=0,LayoutOrder=self:_o(pi)},s)
 	corner(row,10)
 	stroke(row,C.Border,1)
 	pad(row,0,0,16,16)
-	new("TextLabel",{Text=label or "",Font=Enum.Font.Gotham,TextSize=13,TextColor3=C.Text,
-		BackgroundTransparency=1,Size=UDim2.new(1,-64,1,0),TextXAlignment=Enum.TextXAlignment.Left},row)
+	if desc then
+		new("TextLabel",{Text=label or "",Font=Enum.Font.GothamBold,TextSize=13,TextColor3=C.Text,
+			BackgroundTransparency=1,Position=UDim2.new(0,0,0,10),Size=UDim2.new(1,-64,0,18),TextXAlignment=Enum.TextXAlignment.Left},row)
+		new("TextLabel",{Text=desc,Font=Enum.Font.Gotham,TextSize=10,TextColor3=C.TextDim,
+			BackgroundTransparency=1,Position=UDim2.new(0,0,0,30),Size=UDim2.new(1,-64,0,14),TextXAlignment=Enum.TextXAlignment.Left},row)
+	else
+		new("TextLabel",{Text=label or "",Font=Enum.Font.Gotham,TextSize=13,TextColor3=C.Text,
+			BackgroundTransparency=1,Size=UDim2.new(1,-64,1,0),TextXAlignment=Enum.TextXAlignment.Left},row)
+	end
 
 	local state=default==true
 	local track=new("Frame",{AnchorPoint=Vector2.new(1,.5),Position=UDim2.new(1,0,.5,0),
@@ -2343,7 +2604,7 @@ function Lib:AddInput(pi,labelTxt,placeholder,callback,opts)
 	box.Focused:Connect(function() tw(wrap,.16,{BackgroundColor3=C.Card2}); tw(ws,.16,{Color=C.Border3}) end)
 	box.FocusLost:Connect(function(enter)
 		tw(wrap,.18,{BackgroundColor3=C.Card}); tw(ws,.18,{Color=C.Border})
-		if callback then callback(box.Text,enter) end
+		if callback then callback(box.Text,enter or UserInputService.TouchEnabled) end
 		if removeAfterFocus then box.Text="" end
 	end)
 	wrap.MouseEnter:Connect(function() if not box:IsFocused() then tw(wrap,.15,{BackgroundColor3=C.Card2}) end end)
@@ -2354,6 +2615,281 @@ function Lib:AddInput(pi,labelTxt,placeholder,callback,opts)
 	function obj:Get() return box and box.Text or "" end
 	function obj:Focus() if box and box.Parent then box:CaptureFocus() end end
 	function obj:Clear() if box and box.Parent then box.Text="" end end
+	return obj
+end
+
+
+function Lib:AddInputNumber(pi, labelTxt, opts, callback)
+	opts = opts or {}
+	local min = opts.Min or 0
+	local max = opts.Max or 999999999
+	local step = opts.Step
+	local placeholder = opts.Placeholder or tostring(min)
+	local s=self:GetPage(pi); if not s then return end
+	if labelTxt then
+		new("TextLabel",{Text=labelTxt,Font=Enum.Font.GothamBold,TextSize=11,TextColor3=C.TextDim,
+			BackgroundTransparency=1,Size=UDim2.new(1,0,0,18),
+			TextXAlignment=Enum.TextXAlignment.Left,LayoutOrder=self:_o(pi)},s)
+		self:_gap(s,pi,4)
+	end
+	local wrap=new("Frame",{Size=UDim2.new(1,0,0,44),BackgroundColor3=C.Card,BorderSizePixel=0,LayoutOrder=self:_o(pi)},s)
+	corner(wrap,10)
+	local ws=stroke(wrap,C.Border,1)
+	pad(wrap,0,0,16,16)
+	local box=new("TextBox",{Text="",PlaceholderText=placeholder,Font=Enum.Font.Gotham,TextSize=13,
+		TextColor3=C.Text,PlaceholderColor3=C.TextOff,BackgroundTransparency=1,
+		Size=UDim2.new(1,-60,1,0),ClearTextOnFocus=false,TextXAlignment=Enum.TextXAlignment.Left},wrap)
+	box.Focused:Connect(function() tw(wrap,.16,{BackgroundColor3=C.Card2}); tw(ws,.16,{Color=C.Border3}) end)
+	local errLbl=new("TextLabel",{Text="",Font=Enum.Font.Gotham,TextSize=10,TextColor3=C.Red,
+		BackgroundTransparency=1,AnchorPoint=Vector2.new(1,.5),Position=UDim2.new(1,0,.5,0),
+		Size=UDim2.fromOffset(56,20),TextXAlignment=Enum.TextXAlignment.Right},wrap)
+	box.FocusLost:Connect(function(enter)
+		tw(wrap,.18,{BackgroundColor3=C.Card}); tw(ws,.18,{Color=C.Border})
+		local raw = box.Text:gsub("[^%d%.%-]","")
+		local n = tonumber(raw)
+		if n == nil then
+			tw(ws,.12,{Color=C.Red})
+			errLbl.Text="invalid"
+		else
+			if n < min then n=min elseif n > max then n=max end
+			if step then n=math.floor(n/step+0.5)*step end
+			box.Text=tostring(n)
+			errLbl.Text=""
+			if callback then callback(n, enter or UserInputService.TouchEnabled) end
+		end
+	end)
+	wrap.MouseEnter:Connect(function() if not box:IsFocused() then tw(wrap,.15,{BackgroundColor3=C.Card2}) end end)
+	wrap.MouseLeave:Connect(function() if not box:IsFocused() then tw(wrap,.18,{BackgroundColor3=C.Card}) end end)
+	self:_gap(s,pi,10)
+	local obj={TextBox=box,Frame=wrap}
+	function obj:Set(v)
+		if box and box.Parent then
+			local n=tonumber(v) or min
+			n=math.clamp(n,min,max)
+			box.Text=tostring(n)
+		end
+	end
+	function obj:Get() return tonumber(box.Text) or min end
+	function obj:SetValid(valid, msg)
+		if valid then
+			tw(ws,.15,{Color=C.Green})
+			errLbl.Text=msg or ""
+			errLbl.TextColor3=C.Green
+		else
+			tw(ws,.15,{Color=C.Red})
+			errLbl.Text=msg or "invalid"
+			errLbl.TextColor3=C.Red
+		end
+	end
+	return obj
+end
+
+function Lib:AddMultiSelect(pi, labelTxt, options, callback)
+	local s=self:GetPage(pi); if not s then return end
+	local selected = {}
+	for _,opt in ipairs(options) do selected[opt]=false end
+
+	local wrapper=new("Frame",{Size=UDim2.new(1,0,0,0),AutomaticSize=Enum.AutomaticSize.Y,
+		BackgroundColor3=C.Card,BorderSizePixel=0,LayoutOrder=self:_o(pi),ClipsDescendants=false},s)
+	corner(wrapper,10)
+	stroke(wrapper,C.Border,1)
+
+	local header=new("Frame",{Size=UDim2.new(1,0,0,44),BackgroundTransparency=1},wrapper)
+	pad(header,0,0,16,16)
+	new("TextLabel",{Text=labelTxt or "Select",Font=Enum.Font.Gotham,TextSize=13,TextColor3=C.Text,
+		BackgroundTransparency=1,Size=UDim2.new(1,-56,1,0),TextXAlignment=Enum.TextXAlignment.Left},header)
+
+	local countLbl=new("TextLabel",{Text="0 selected",Font=Enum.Font.Gotham,TextSize=11,TextColor3=C.TextDim,
+		BackgroundTransparency=1,AnchorPoint=Vector2.new(1,.5),Position=UDim2.new(1,-8,.5,0),
+		Size=UDim2.fromOffset(80,20),TextXAlignment=Enum.TextXAlignment.Right},header)
+
+	local listFrame=new("Frame",{Size=UDim2.new(1,0,0,0),AutomaticSize=Enum.AutomaticSize.Y,
+		BackgroundTransparency=1,BorderSizePixel=0,Visible=false},wrapper)
+	new("Frame",{Size=UDim2.new(1,0,0,1),BackgroundColor3=C.Border,BorderSizePixel=0},listFrame)
+	local listInner=new("Frame",{Size=UDim2.new(1,0,0,0),AutomaticSize=Enum.AutomaticSize.Y,
+		BackgroundTransparency=1,BorderSizePixel=0},listFrame)
+	vlist(listInner,0)
+
+	local open=false
+	local toggleBtn=new("TextButton",{Text="",BackgroundTransparency=1,
+		Size=UDim2.fromScale(1,1),ZIndex=52,AutoButtonColor=false},header)
+
+	local function refreshCount()
+		local n=0; for _,v in pairs(selected) do if v then n=n+1 end end
+		countLbl.Text = n==0 and "none" or n.." selected"
+		if callback then callback(selected) end
+	end
+
+	for i,opt in ipairs(options) do
+		local row=new("Frame",{Size=UDim2.new(1,0,0,40),BackgroundTransparency=1,BorderSizePixel=0,
+			LayoutOrder=i},listInner)
+		pad(row,0,0,16,16)
+		local chkBox=new("Frame",{Size=UDim2.fromOffset(18,18),BackgroundColor3=selected[opt] and C.White or C.Card3,
+			BorderSizePixel=0,AnchorPoint=Vector2.new(0,.5),Position=UDim2.new(0,0,.5,0)},row)
+		corner(chkBox,4)
+		stroke(chkBox,selected[opt] and fromHex("aaaaaa") or C.Border2,1)
+		local chkMark=new("TextLabel",{Text=string.char(226,156,147),Font=Enum.Font.GothamBold,TextSize=11,
+			TextColor3=C.Bg,BackgroundTransparency=1,Size=UDim2.fromScale(1,1),
+			TextXAlignment=Enum.TextXAlignment.Center,TextTransparency=selected[opt] and 0 or 1},chkBox)
+		new("TextLabel",{Text=tostring(opt),Font=Enum.Font.Gotham,TextSize=13,TextColor3=C.Text,
+			BackgroundTransparency=1,Position=UDim2.fromOffset(28,0),
+			Size=UDim2.new(1,-28,1,0),TextXAlignment=Enum.TextXAlignment.Left},row)
+		local btn=new("TextButton",{Text="",BackgroundTransparency=1,Size=UDim2.fromScale(1,1),
+			ZIndex=53,AutoButtonColor=false},row)
+		btn.Activated:Connect(function()
+			selected[opt]=not selected[opt]
+			local v=selected[opt]
+			tw(chkBox,.15,{BackgroundColor3=v and C.White or C.Card3})
+			tw(chkMark,.12,{TextTransparency=v and 0 or 1})
+			refreshCount()
+		end)
+		btn.MouseEnter:Connect(function() tw(row,.1,{BackgroundTransparency=.94}) end)
+		btn.MouseLeave:Connect(function() tw(row,.12,{BackgroundTransparency=1}) end)
+	end
+
+	toggleBtn.Activated:Connect(function()
+		open=not open
+		listFrame.Visible=open
+	end)
+	header.MouseEnter:Connect(function() tw(wrapper,.15,{BackgroundColor3=C.Card2}) end)
+	header.MouseLeave:Connect(function() tw(wrapper,.18,{BackgroundColor3=C.Card}) end)
+
+	self:_gap(s,pi,6)
+	local obj={Frame=wrapper}
+	function obj:GetSelected()
+		local r={}
+		for opt,v in pairs(selected) do if v then r[#r+1]=opt end end
+		return r
+	end
+	function obj:SetSelected(tbl)
+		for opt in pairs(selected) do selected[opt]=false end
+		if type(tbl)=="table" then
+			for _,opt in ipairs(tbl) do selected[opt]=true end
+		end
+		refreshCount()
+	end
+	function obj:IsSelected(opt) return selected[opt]==true end
+	return obj
+end
+
+function Lib:AddList(pi, labelTxt, opts)
+	opts = opts or {}
+	local maxItems = opts.MaxItems or 50
+	local itemH = opts.ItemHeight or 36
+	local showIndex = opts.ShowIndex
+	local s=self:GetPage(pi); if not s then return end
+	local items = {}
+
+	local wrap=new("Frame",{Size=UDim2.new(1,0,0,0),AutomaticSize=Enum.AutomaticSize.Y,
+		BackgroundColor3=C.Card,BorderSizePixel=0,LayoutOrder=self:_o(pi)},s)
+	corner(wrap,10)
+	stroke(wrap,C.Border,1)
+
+	if labelTxt then
+		local hdr=new("Frame",{Size=UDim2.new(1,0,0,34),BackgroundColor3=C.Card3,BorderSizePixel=0},wrap)
+		corner(hdr,10)
+		new("Frame",{Position=UDim2.new(0,0,1,-6),Size=UDim2.new(1,0,0,6),BackgroundColor3=C.Card3,BorderSizePixel=0},hdr)
+		pad(hdr,0,0,16,16)
+		new("TextLabel",{Text=labelTxt,Font=Enum.Font.GothamBold,TextSize=11,TextColor3=C.TextDim,
+			BackgroundTransparency=1,Size=UDim2.fromScale(1,1),TextXAlignment=Enum.TextXAlignment.Left},hdr)
+	end
+
+	local listFrame=new("Frame",{Size=UDim2.new(1,0,0,0),AutomaticSize=Enum.AutomaticSize.Y,
+		BackgroundTransparency=1,BorderSizePixel=0},wrap)
+	vlist(listFrame,0)
+
+	self:_gap(s,pi,8)
+
+	local obj={Frame=wrap}
+	function obj:Add(text, color)
+		if #items >= maxItems then obj:RemoveAt(1) end
+		local idx=#items+1
+		local row=new("Frame",{Size=UDim2.new(1,0,0,itemH),BackgroundTransparency=1,
+			BorderSizePixel=0,LayoutOrder=idx},listFrame)
+		pad(row,0,4,16,16)
+		local prefix=showIndex and (tostring(idx)..".  ") or ""
+		local lbl=new("TextLabel",{Text=prefix..tostring(text),Font=Enum.Font.Gotham,TextSize=12,
+			TextColor3=color or C.TextDim,BackgroundTransparency=1,
+			Size=UDim2.fromScale(1,1),TextXAlignment=Enum.TextXAlignment.Left,TextTruncate=Enum.TextTruncate.AtEnd},row)
+		row.BackgroundTransparency=1
+		table.insert(items,{Row=row,Label=lbl,Text=text})
+		return #items
+	end
+	function obj:RemoveAt(i)
+		local item=items[i]
+		if item and item.Row and item.Row.Parent then item.Row:Destroy() end
+		table.remove(items,i)
+	end
+	function obj:Clear()
+		for _,item in ipairs(items) do
+			if item.Row and item.Row.Parent then item.Row:Destroy() end
+		end
+		items={}
+	end
+	function obj:GetItems()
+		local r={}; for _,item in ipairs(items) do r[#r+1]=item.Text end; return r
+	end
+	function obj:Count() return #items end
+	return obj
+end
+
+function Lib:AddTag(pi, text, style)
+	local s=self:GetPage(pi); if not s then return end
+	local colors={
+		info    = {bg=C.BlueBg,  tc=C.Blue},
+		success = {bg=C.GreenBg, tc=C.Green},
+		warning = {bg=C.YellowBg,tc=C.Yellow},
+		error   = {bg=C.RedBg,   tc=C.Red},
+		muted   = {bg=C.Card2,   tc=C.TextDim},
+		default = {bg=C.Card2,   tc=C.Text},
+	}
+	local st=colors[style or "default"] or colors.default
+	local tag=new("TextLabel",{
+		Text=" "..tostring(text).." ",
+		Font=Enum.Font.GothamBold,TextSize=10,TextColor3=st.tc,
+		BackgroundColor3=st.bg,BorderSizePixel=0,
+		Size=UDim2.fromOffset(0,22),AutomaticSize=Enum.AutomaticSize.X,
+		TextXAlignment=Enum.TextXAlignment.Center,
+		LayoutOrder=self:_o(pi),
+	},s)
+	corner(tag,999)
+	self:_gap(s,pi,6)
+	local obj={Label=tag,Frame=tag}
+	function obj:Set(v) if tag and tag.Parent then tag.Text=" "..tostring(v).." " end end
+	function obj:SetStyle(newStyle)
+		local ns=colors[newStyle] or colors.default
+		tw(tag,.2,{BackgroundColor3=ns.bg,TextColor3=ns.tc})
+		end
+	return obj
+end
+
+function Lib:AddStatusBadge2(pi, label, state)
+	local s=self:GetPage(pi); if not s then return end
+	local stateColors={
+		online  = C.Green,  offline = C.Red,
+		idle    = C.Yellow, loading = C.Blue,
+	}
+	local row=new("Frame",{Size=UDim2.new(1,0,0,40),BackgroundColor3=C.Card,BorderSizePixel=0,LayoutOrder=self:_o(pi)},s)
+	corner(row,10)
+	stroke(row,C.Border,1)
+	pad(row,0,0,16,16)
+	new("TextLabel",{Text=label or "Status",Font=Enum.Font.Gotham,TextSize=13,TextColor3=C.Text,
+		BackgroundTransparency=1,Size=UDim2.new(1,-100,.8,0),TextXAlignment=Enum.TextXAlignment.Left},row)
+	local dot=new("Frame",{AnchorPoint=Vector2.new(1,.5),Position=UDim2.new(1,-44,.5,0),
+		Size=UDim2.fromOffset(8,8),BackgroundColor3=stateColors[state or "offline"] or C.TextDim,BorderSizePixel=0},row)
+	corner(dot,4)
+	local stateLbl=new("TextLabel",{Text=string.upper(state or "offline"),Font=Enum.Font.GothamBold,TextSize=10,
+		TextColor3=stateColors[state or "offline"] or C.TextDim,
+		BackgroundTransparency=1,AnchorPoint=Vector2.new(1,.5),Position=UDim2.new(1,0,.5,0),
+		Size=UDim2.fromOffset(90,20),TextXAlignment=Enum.TextXAlignment.Right},row)
+	self:_gap(s,pi,6)
+	local obj={Frame=row}
+	function obj:SetState(v)
+		local col=stateColors[v] or C.TextDim
+		tw(dot,.2,{BackgroundColor3=col})
+		tw(stateLbl,.2,{TextColor3=col})
+		stateLbl.Text=string.upper(v or "")
+	end
 	return obj
 end
 
@@ -3772,6 +4308,96 @@ Lib._savedState = nil
 
 function Lib.Page(name, icon)
 	return {Name=name, Icon=icon}
+end
+
+function Lib.Group(name, pages, defaultOpen)
+	return {Group=name, Pages=pages, DefaultOpen=defaultOpen ~= false}
+end
+
+
+function Lib:AddNotificationCenter(pi, opts)
+	opts = opts or {}
+	local maxItems = opts.MaxItems or 30
+	local height = opts.Height or 200
+	local s=self:GetPage(pi); if not s then return end
+
+	local wrap=new("Frame",{Size=UDim2.new(1,0,0,height+34),BackgroundColor3=fromHex("050505"),
+		BorderSizePixel=0,ClipsDescendants=true,LayoutOrder=self:_o(pi)},s)
+	corner(wrap,10)
+	stroke(wrap,C.Border,1)
+
+	local hdr=new("Frame",{Size=UDim2.new(1,0,0,34),BackgroundColor3=C.Card,BorderSizePixel=0},wrap)
+	corner(hdr,10)
+	new("Frame",{Position=UDim2.new(0,0,1,-8),Size=UDim2.new(1,0,0,8),BackgroundColor3=C.Card,BorderSizePixel=0},hdr)
+	pad(hdr,0,0,14,14); hlist(hdr,8)
+	local dot=new("Frame",{Size=UDim2.fromOffset(7,7),BackgroundColor3=C.Green,BorderSizePixel=0,LayoutOrder=0},hdr)
+	corner(dot,4)
+	new("TextLabel",{Text="NOTIFICATIONS",Font=Enum.Font.GothamBold,TextSize=10,TextColor3=C.TextDim,
+		BackgroundTransparency=1,Size=UDim2.new(1,0,1,0),TextXAlignment=Enum.TextXAlignment.Left,LayoutOrder=1},hdr)
+	local clearBtn=new("TextButton",{Text="Clear",Font=Enum.Font.GothamBold,TextSize=9,TextColor3=C.TextOff,
+		BackgroundTransparency=1,AnchorPoint=Vector2.new(1,.5),Position=UDim2.new(1,0,.5,0),
+		Size=UDim2.fromOffset(36,20),ZIndex=2,AutoButtonColor=false},hdr)
+	clearBtn.MouseEnter:Connect(function() tw(clearBtn,.1,{TextColor3=C.TextDim}) end)
+	clearBtn.MouseLeave:Connect(function() tw(clearBtn,.12,{TextColor3=C.TextOff}) end)
+
+	local scroll=new("ScrollingFrame",{
+		Position=UDim2.fromOffset(0,34),Size=UDim2.new(1,0,1,-34),
+		BackgroundTransparency=1,BorderSizePixel=0,
+		ScrollBarThickness=3,ScrollBarImageColor3=C.Border3,ScrollBarImageTransparency=.4,
+		CanvasSize=UDim2.new(0,0,0,0),AutomaticCanvasSize=Enum.AutomaticSize.Y,
+		ScrollingDirection=Enum.ScrollingDirection.Y,ZIndex=2,
+	},wrap)
+	pad(scroll,4,4,10,10)
+	new("UIListLayout",{SortOrder=Enum.SortOrder.LayoutOrder,Padding=UDim.new(0,3)},scroll)
+
+	local items={}
+	local count=0
+
+	local styleColors={
+		info   ={C.Blue,  fromHex("030914")},
+		success={C.Green, fromHex("030e08")},
+		warning={C.Yellow,fromHex("0e0b02")},
+		error  ={C.Red,   fromHex("0e0404")},
+		default={C.TextDim,C.Card},
+	}
+
+	self:_gap(s,pi,8)
+
+	local obj={Frame=wrap}
+	function obj:Push(text, style, label)
+		if #items>=maxItems then
+			if items[1] and items[1].Parent then items[1]:Destroy() end
+			table.remove(items,1)
+		end
+		count=count+1
+		local sc=styleColors[style] or styleColors.default
+		local row=new("Frame",{Size=UDim2.new(1,0,0,0),AutomaticSize=Enum.AutomaticSize.Y,
+			BackgroundColor3=sc[2],BorderSizePixel=0,LayoutOrder=count},scroll)
+		corner(row,8)
+		pad(row,8,6,10,10)
+		if label then
+			new("TextLabel",{Text=label,Font=Enum.Font.GothamBold,TextSize=9,TextColor3=sc[1],
+				BackgroundTransparency=1,Size=UDim2.new(1,0,0,12),TextXAlignment=Enum.TextXAlignment.Left,LayoutOrder=0},row)
+		end
+		new("TextLabel",{Text=tostring(text),Font=Enum.Font.Gotham,TextSize=11,TextColor3=C.Text,
+			BackgroundTransparency=1,Size=UDim2.new(1,0,0,0),AutomaticSize=Enum.AutomaticSize.Y,
+			TextXAlignment=Enum.TextXAlignment.Left,TextWrapped=true,LayoutOrder=1},row)
+		table.insert(items,row)
+		task.defer(function()
+			if scroll and scroll.Parent then
+				scroll.CanvasPosition=Vector2.new(0,math.huge)
+			end
+		end)
+	end
+	function obj:Clear()
+		for _,r in ipairs(items) do if r and r.Parent then r:Destroy() end end
+		items={}
+	end
+	function obj:SetActive(v)
+		tw(dot,.2,{BackgroundColor3=v and C.Green or C.Red})
+	end
+	clearBtn.Activated:Connect(function() obj:Clear() end)
+	return obj
 end
 
 

@@ -92,6 +92,7 @@ local C = {
 	BlueBg   = fromHex("030914"),
 	Purple   = fromHex("aa44ff"),
 	PurpleBg = fromHex("0a0414"),
+}
 
 local function accentOrWhite(lib)
 	if lib and lib.cfg and lib.cfg.AccentColor then
@@ -100,7 +101,6 @@ local function accentOrWhite(lib)
 	return C.White
 end
 
-}
 
 local DefaultConfig = {
 	AccentColor        = nil,

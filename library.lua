@@ -27,14 +27,6 @@ local function tw(obj, t, props, es, ed)
 	if ok and tween then tween:Play() return tween end
 end
 
-
-local function accentOrWhite(lib)
-	if lib and lib.cfg and lib.cfg.AccentColor then
-		return lib.cfg.AccentColor
-	end
-	return C.White
-end
-
 local function new(class, props, parent)
 	local ok, obj = pcall(Instance.new, class)
 	if not ok then return end
@@ -100,6 +92,14 @@ local C = {
 	BlueBg   = fromHex("030914"),
 	Purple   = fromHex("aa44ff"),
 	PurpleBg = fromHex("0a0414"),
+
+local function accentOrWhite(lib)
+	if lib and lib.cfg and lib.cfg.AccentColor then
+		return lib.cfg.AccentColor
+	end
+	return C.White
+end
+
 }
 
 local DefaultConfig = {
@@ -199,11 +199,16 @@ function Lib.new(userCfg)
 
 	self:_buildToastSystem()
 	self:_buildWindow()
-	if isDemo then self:_runDemo() end
+	if isDemo then
+		local ok, err = pcall(function() self:_runDemo() end)
+		if not ok then
+			warn("[SlaoqUILib] _runDemo error: " .. tostring(err))
+		end
+	end
 	self:_runSplash()
 
 	pcall(function()
-		local saved = self._loadState and self._loadState()
+		local saved = self._loadState and self:_loadState()
 		if saved then
 			if saved.pageIdx and self._pages[saved.pageIdx] then
 				self:SetPage(saved.pageIdx)

@@ -95,7 +95,7 @@ local DefaultConfig = {
 	AppName            = "MY APP",
 	AppSubtitle        = "Subtitle",
 	AppVersion         = "1.0",
-	LogoImage          = "",
+	LogoImage          = "rbxassetid://102126718358520",
 	GuiParent          = "CoreGui",
 	WindowWidth        = 920,
 	WindowHeight       = 580,
@@ -229,13 +229,11 @@ function Lib:_runSplash()
 
 	local logoBox = new("Frame",{
 		AnchorPoint=Vector2.new(.5,0), Position=UDim2.new(.5,0,0,30),
-		Size=UDim2.fromOffset(54,54), BackgroundColor3=C.Card3,
+		Size=UDim2.fromOffset(54,54), BackgroundTransparency=1,
 		BorderSizePixel=0, ZIndex=601,
 	}, card)
-	corner(logoBox, 14)
-	stroke(logoBox, C.Border3, 1)
 	if cfg.LogoImage ~= "" then
-		new("ImageLabel",{Size=UDim2.fromScale(1,1),BackgroundTransparency=1,Image=cfg.LogoImage,ZIndex=602},logoBox)
+		new("ImageLabel",{Size=UDim2.fromScale(1,1),BackgroundTransparency=1,Image=cfg.LogoImage,ScaleType=Enum.ScaleType.Fit,ZIndex=602},logoBox)
 	else
 		new("TextLabel",{Size=UDim2.fromScale(1,1),BackgroundTransparency=1,
 			Text=string.upper(string.sub(cfg.AppName,1,1)),
@@ -490,10 +488,9 @@ function Lib:_buildTitleBar(win)
 	pad(left,0,0,14,0)
 	hlist(left,10)
 
-	local logoMini = new("Frame",{Size=UDim2.fromOffset(26,26),BackgroundColor3=C.Card3,BorderSizePixel=0,LayoutOrder=0},left)
-	corner(logoMini,7)
+	local logoMini = new("Frame",{Size=UDim2.fromOffset(26,26),BackgroundTransparency=1,BorderSizePixel=0,LayoutOrder=0},left)
 	if cfg.LogoImage ~= "" then
-		new("ImageLabel",{Size=UDim2.fromScale(1,1),BackgroundTransparency=1,Image=cfg.LogoImage,ZIndex=12},logoMini)
+		new("ImageLabel",{Size=UDim2.fromScale(1,1),BackgroundTransparency=1,Image=cfg.LogoImage,ScaleType=Enum.ScaleType.Fit,ZIndex=12},logoMini)
 	else
 		new("TextLabel",{Size=UDim2.fromScale(1,1),BackgroundTransparency=1,
 			Text=string.upper(string.sub(cfg.AppName,1,1)),
@@ -621,11 +618,9 @@ function Lib:_buildBody(win)
 	local logoArea = new("Frame",{Size=UDim2.new(1,0,0,104),BackgroundTransparency=1,LayoutOrder=0},ss)
 	self._logoArea = logoArea
 	local logoWrap = new("Frame",{AnchorPoint=Vector2.new(.5,0),Position=UDim2.new(.5,0,0,0),
-		Size=UDim2.fromOffset(52,52),BackgroundColor3=C.Card3,BorderSizePixel=0},logoArea)
-	corner(logoWrap,14)
-	stroke(logoWrap,C.Border2,1)
+		Size=UDim2.fromOffset(52,52),BackgroundTransparency=1,BorderSizePixel=0},logoArea)
 	if cfg.LogoImage ~= "" then
-		new("ImageLabel",{Size=UDim2.fromScale(1,1),BackgroundTransparency=1,Image=cfg.LogoImage},logoWrap)
+		new("ImageLabel",{Size=UDim2.fromScale(1,1),BackgroundTransparency=1,Image=cfg.LogoImage,ScaleType=Enum.ScaleType.Fit},logoWrap)
 	else
 		new("TextLabel",{Size=UDim2.fromScale(1,1),BackgroundTransparency=1,
 			Text=string.upper(string.sub(cfg.AppName,1,1)),
@@ -1626,6 +1621,46 @@ function Lib:_doSearch(query)
 		if nd then nd.Visible = total > 1 end
 		self:_searchNavigate(0)
 	end
+end
+
+function Lib:IsMobile()
+	return UserInputService.TouchEnabled
+end
+
+function Lib:IsPC()
+	return not UserInputService.TouchEnabled
+end
+
+function Lib:OnMobile(fn)
+	if UserInputService.TouchEnabled then fn() end
+end
+
+function Lib:OnPC(fn)
+	if not UserInputService.TouchEnabled then fn() end
+end
+
+function Lib:AddPlatform(config)
+	local isTouch = UserInputService.TouchEnabled
+	local fn = isTouch and config.Mobile or config.PC
+	if fn then return fn() end
+end
+
+function Lib:AddMobileOnly(pi, buildFn)
+	if UserInputService.TouchEnabled then return buildFn(pi) end
+end
+
+function Lib:AddPCOnly(pi, buildFn)
+	if not UserInputService.TouchEnabled then return buildFn(pi) end
+end
+
+function Lib:AddPlatformLabel(pi, pcText, mobileText, style)
+	local text = UserInputService.TouchEnabled and (mobileText or pcText) or pcText
+	return self:AddLabel(pi, text, style)
+end
+
+function Lib:AddPlatformAlert(pi, title, pcMsg, mobileMsg, style)
+	local msg = UserInputService.TouchEnabled and (mobileMsg or pcMsg) or pcMsg
+	return self:AddAlert(pi, title, msg, style)
 end
 
 function Lib:_o(pi)

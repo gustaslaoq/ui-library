@@ -2985,6 +2985,242 @@ function Lib:_runDemo()
 		{Label="Jump Power", Value=50,  Unit="power"},
 	})
 
+	task.spawn(function()
+		while self._sg and self._sg.Parent do
+			task.wait(1)
+			local hum = getHum()
+			if hum and metrics then
+				self:SetMetricValue(metrics[1], math.floor(hum.WalkSpeed))
+				self:SetMetricValue(metrics[2], math.floor(hum.Health))
+				self:SetMetricValue(metrics[3], math.floor(hum.JumpPower))
+			end
+		end
+	end)
+
+	self:AddDivider(1, "Status")
+	local hpBar = self:AddProgressBar(1, "Health", 100, 100)
+	local xpBar = self:AddProgressBar(1, "Experience", 34, 100)
+
+	task.spawn(function()
+		local xp = 34
+		while self._sg and self._sg.Parent do
+			task.wait(3)
+			xp = math.min(100, xp + math.random(1,5))
+			if xpBar then xpBar:SetValue(xp) end
+			local hum = getHum()
+			if hum and hpBar then hpBar:SetValue(math.floor(hum.Health)) end
+		end
+	end)
+
+	self:AddDivider(1, "Alerts")
+	self:AddAlert(1, "Welcome!", "This is the SlaoqUILib showcase. Press Ctrl+F to search within any page.", "info")
+	self:AddAlert(1, "Tip", "All pages contain live interactive components. Settings are in the gear icon.", "success")
+
+	self:AddSectionHeader(2, "Player", "Character controls")
+
+	self:AddDivider(2, "Movement")
+	local speedSlider = self:AddSlider(2, "Walk Speed", 0, 100, 16, function(v)
+		local hum = getHum()
+		if hum then hum.WalkSpeed = v end
+	end)
+	local jumpSlider = self:AddSlider(2, "Jump Power", 0, 200, 50, function(v)
+		local hum = getHum()
+		if hum then hum.JumpPower = v end
+	end)
+
+	self:AddDivider(2, "Health")
+	self:AddSlider(2, "Max Health", 50, 500, 100, function(v)
+		local hum = getHum()
+		if hum then hum.MaxHealth = v end
+	end)
+	self:AddButtonRow(2, {
+		{Text="Full Health", Style="success", Width=130, Callback=function()
+			local hum = getHum()
+			if hum then hum.Health = hum.MaxHealth end
+			self:ShowNotification("Health fully restored!", "success", 2.5)
+		end},
+		{Text="Reset Stats", Style="ghost", Width=120, Callback=function()
+			local hum = getHum()
+			if hum then hum.WalkSpeed=16; hum.JumpPower=50; hum.MaxHealth=100; hum.Health=100 end
+			if speedSlider then speedSlider:SetValue(16) end
+			if jumpSlider  then jumpSlider:SetValue(50)  end
+			self:ShowNotification("Stats reset to default.", "info", 2.5)
+		end},
+		{Text="Respawn", Style="warning", Width=100, Callback=function()
+			lp:LoadCharacter()
+			self:ShowNotification("Character respawned!", "warning", 2)
+		end},
+	})
+
+	self:AddDivider(2, "Modifiers")
+	self:AddToggle(2, "God Mode", false, function(v)
+		local hum = getHum()
+		if hum then hum.MaxHealth = v and math.huge or 100 end
+		self:ShowNotification(v and "God Mode enabled!" or "God Mode disabled", v and "success" or "info", 2)
+	end)
+	self:AddToggle(2, "Infinite Jump", false, function(v)
+		self:ShowNotification(v and "Infinite Jump enabled!" or "Infinite Jump disabled", v and "success" or "info", 2)
+	end)
+	self:AddToggle(2, "Speed Boost (x3)", false, function(v)
+		local hum = getHum()
+		if hum then hum.WalkSpeed = v and 48 or 16 end
+		self:ShowNotification(v and "Speed boost active (48 studs/s)" or "Speed restored.", v and "warning" or "info", 2)
+	end)
+
+	self:AddSectionHeader(3, "Components", "All available UI components")
+
+	self:AddDivider(3, "Labels")
+	self:AddLabel(3, "Title label", "title")
+	self:AddLabel(3, "Subtitle label", "subtitle")
+	self:AddLabel(3, "Body text - default for content and descriptions.", "body")
+	self:AddLabel(3, "Muted text - secondary information.", "muted")
+	self:AddLabel(3, "Caption text - metadata and footers.", "caption")
+
+	self:AddDivider(3, "Rich Text")
+	self:AddRichLabel(3, 'Supports <b>bold</b>, <i>italic</i>, <u>underline</u>, <font color="rgb(0,232,122)">colors</font>, and <font size="16">size changes</font>.')
+	self:AddColorSwatch(3, "Blue",   "4488ff")
+	self:AddColorSwatch(3, "Green",  "00e87a")
+	self:AddColorSwatch(3, "Yellow", "f0c030")
+
+	self:AddDivider(3, "Alerts")
+	self:AddAlert(3, "Info",    "Informational message.",  "info")
+	self:AddAlert(3, "Success", "Operation completed.",    "success")
+	self:AddAlert(3, "Warning", "Attention required.",     "warning")
+	self:AddAlert(3, "Error",   "Something went wrong.",   "error")
+
+	self:AddDivider(3, "Progress Bars")
+	local pb1 = self:AddProgressBar(3, "Download", 65, 100)
+	local pb2 = self:AddProgressBar(3, "Storage",  42, 100)
+	self:AddButtonRow(3, {
+		{Text="Randomize", Style="primary", Width=120, Callback=function()
+			pb1:SetValue(math.random(10,100))
+			pb2:SetValue(math.random(10,100))
+		end},
+	})
+
+	self:AddDivider(3, "Spinner")
+	local spinner = self:AddSpinner(3, "Processing request...")
+	self:AddButtonRow(3, {
+		{Text="Start", Style="success", Width=100, Callback=function() spinner:Start() end},
+		{Text="Stop",  Style="danger",  Width=100, Callback=function() spinner:Stop()  end},
+	})
+
+	self:AddDivider(3, "Color Picker")
+	self:AddColorPicker(3, "Accent Color", "4488ff", function(color, hex)
+		self:ShowNotification("Applied color: #"..hex, "success", 2, "Color Picker")
+	end)
+
+	self:AddDivider(3, "Notifications")
+	self:AddLabel(3, "External toast (bottom-right corner):", "muted")
+	self:AddButtonRow(3, {
+		{Text="Info",    Style="ghost",   Width=90, Callback=function() self:ShowNotification("Informational message.",  "info",    3, "Info")    end},
+		{Text="Success", Style="success", Width=90, Callback=function() self:ShowNotification("Operation completed!",    "success", 3, "Success") end},
+		{Text="Warning", Style="warning", Width=90, Callback=function() self:ShowNotification("Attention required.",     "warning", 3, "Warning") end},
+		{Text="Error",   Style="danger",  Width=90, Callback=function() self:ShowNotification("Something went wrong.",   "error",   3, "Error")   end},
+	})
+	self:AddLabel(3, "Inline notification (inside UI):", "muted")
+	self:AddButtonRow(3, {
+		{Text="Inline Info",    Style="ghost",   Width=110, Callback=function() self:ShowInlineNotification("Inline info.",    "info",    2.5) end},
+		{Text="Inline Success", Style="success", Width=110, Callback=function() self:ShowInlineNotification("Inline success.", "success", 2.5) end},
+		{Text="Inline Error",   Style="danger",  Width=110, Callback=function() self:ShowInlineNotification("Inline error.",   "error",   2.5) end},
+	})
+	self:AddButtonRow(3, {
+		{Text="Stack 3 Toasts", Style="outline", Width=150, Callback=function()
+			task.spawn(function()
+				self:ShowNotification("First toast",  "info",    4, "Stacked")
+				task.wait(0.35)
+				self:ShowNotification("Second toast", "success", 4, "Stacked")
+				task.wait(0.35)
+				self:ShowNotification("Third toast",  "warning", 4, "Stacked")
+			end)
+		end},
+		{Text="Shake Window", Style="ghost", Width=130, Callback=function() self:Shake(8) end},
+	})
+
+	self:AddSectionHeader(4, "Inputs", "All interactive input components")
+
+	self:AddDivider(4, "Text")
+	self:AddInput(4, "Text Input", "Type here and press Enter...", function(text, enter)
+		if enter and text ~= "" then
+			self:ShowNotification('Input: "'..text..'"', "info", 3, "Input")
+		end
+	end)
+
+	self:AddDivider(4, "Numbers")
+	self:AddStepper(4, "Quantity", 0, 99, 1, 1, function(v)
+		self:ShowNotification("Quantity: "..v, "info", 1.5)
+	end)
+	self:AddStepper(4, "Precision (step 0.25)", 0, 10, 0, 0.25, function(v)
+		self:ShowNotification("Value: "..v, "info", 1.5)
+	end)
+
+	self:AddDivider(4, "Selection")
+	self:AddDropdown(4, "Choose Framework", {
+		"React","Vue","Angular","Svelte","Solid",
+	}, function(v)
+		self:ShowNotification("Selected: "..v, "success", 2)
+	end)
+	self:AddRadioGroup(4, "Theme", {"Dark","Light","System"}, "Dark", function(v)
+		self:ShowNotification("Theme: "..v, "success", 2)
+	end)
+
+	self:AddDivider(4, "Toggles & Checks")
+	self:AddToggle(4, "Dark Mode", true, function(v)
+		self:ShowNotification(v and "Dark mode on" or "Dark mode off", "info", 1.5)
+	end)
+	self:AddCheckbox(4, "Enable notifications", true, function(v)
+		self:ShowNotification(v and "Notifications on" or "Notifications off", v and "success" or "info", 1.5)
+	end)
+	self:AddCheckbox(4, "Auto-save", false, function(v)
+		self:ShowNotification(v and "Auto-save enabled" or "Auto-save disabled", v and "success" or "info", 1.5)
+	end)
+
+	self:AddDivider(4, "Keybind")
+	self:AddKeybind(4, "Custom hotkey (click to rebind)", "G", function(key)
+		self:ShowNotification("Keybind set to: "..key, "success", 2)
+	end)
+
+	self:AddSectionHeader(5, "Logs", "Real-time event log with color coding")
+	local console = self:AddLogConsole(5, 280)
+
+	console:Log("SlaoqUILib initialized successfully", "SUCCESS")
+	console:Log("Running in demo mode - use Lib.new({...}) in your script", "INFO")
+	console:Log("Player: "..(lp and lp.Name or "Unknown").."  |  UserId: "..(lp and tostring(lp.UserId) or "0"), "INFO")
+	console:Log("Log console: ScrollingFrame-based, auto-scrolls, 60 line buffer", "DEBUG")
+	console:Log("Awaiting events...", "DEBUG")
+
+	self:AddButtonRow(5, {
+		{Text="Info",    Style="ghost",   Width=100, Callback=function() console:Log("Informational event logged",   "INFO")    end},
+		{Text="Success", Style="success", Width=100, Callback=function() console:Log("Operation succeeded",          "SUCCESS") end},
+		{Text="Warn",    Style="warning", Width=100, Callback=function() console:Log("Warning detected",             "WARN")    end},
+		{Text="Error",   Style="danger",  Width=100, Callback=function() console:Log("Critical error encountered",   "ERROR")   end},
+	})
+	self:AddButtonRow(5, {
+		{Text="Spam 20 Logs", Style="outline", Width=140, Callback=function()
+			task.spawn(function()
+				local lvls = {"INFO","SUCCESS","WARN","ERROR","DEBUG"}
+				for i = 1, 20 do
+					console:Log("Spam log entry #"..i.." - testing buffer limit", lvls[math.random(1,#lvls)])
+					task.wait(0.05)
+				end
+			end)
+		end},
+		{Text="Clear", Style="danger", Width=90, Callback=function()
+			console:Clear()
+			console:Log("Console cleared.", "INFO")
+		end},
+		{Text="Set Online",  Style="success", Width=110, Callback=function()
+			console:SetActive(true);  console:Log("Status changed to ONLINE",  "SUCCESS")
+		end},
+		{Text="Set Offline", Style="danger",  Width=110, Callback=function()
+			console:SetActive(false); console:Log("Status changed to OFFLINE", "WARN")
+		end},
+	})
+	self:AddParagraph(5, "Console API",
+		"console:Log(msg, level)    level: INFO | SUCCESS | WARN | ERROR | SNIPE | DEBUG\n"..
+		"console:Clear()            removes all log entries\n"..
+		"console:SetActive(bool)    toggles the status dot (green = online)"
+	)
 end
 
 local function processHexColors(text)

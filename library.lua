@@ -123,6 +123,8 @@ local DefaultConfig = {
 	BarTweenSpeed      = 0.28,
 	MiniModeBreakpoint = 700,
 	ToggleKey          = nil,
+	ShowPill           = true,
+	SplashMode         = "splash",
 	Pages = {
 		{Name="Dashboard"},
 		{Name="Settings"},
@@ -254,8 +256,45 @@ function Lib:_useMiniMode()
 end
 
 function Lib:_runSplash()
-	self.Window.Visible = false
 	local cfg = self.cfg
+	local mode = cfg.SplashMode or "splash"
+
+	if mode == "none" then
+		local tw2, th2
+		if self._computeScale then tw2, th2 = self._computeScale()
+		else tw2, th2 = cfg.WindowWidth, cfg.WindowHeight end
+		self.Window.Visible = true
+		self.Window.Size = UDim2.fromOffset(tw2, th2)
+		self.Window.Position = UDim2.fromScale(.5,.5)
+		task.defer(function()
+			if self._dragHandle and not self:_useMiniMode() then
+				self._dragHandle.Visible = true
+				if self._syncHandle then self._syncHandle() end
+			end
+		end)
+		return
+	elseif mode == "silent" then
+		self.Window.Visible = false
+		task.spawn(function()
+			local tw2, th2
+			if self._computeScale then tw2, th2 = self._computeScale()
+			else tw2, th2 = cfg.WindowWidth, cfg.WindowHeight end
+			self.Window.Visible = true
+			self.Window.BackgroundTransparency = 1
+			self.Window.Size = UDim2.fromOffset(math.floor(tw2*0.94), math.floor(th2*0.94))
+			self.Window.Position = UDim2.new(.5,0,.5,16)
+			tw(self.Window,.42,{BackgroundTransparency=0,Size=UDim2.fromOffset(tw2,th2),Position=UDim2.fromScale(.5,.5)},Enum.EasingStyle.Back,Enum.EasingDirection.Out)
+			task.delay(.5,function()
+				if self._dragHandle and not self:_useMiniMode() then
+					self._dragHandle.Visible = true
+					if self._syncHandle then self._syncHandle() end
+				end
+			end)
+		end)
+		return
+	end
+
+	self.Window.Visible = false
 
 	local card = new("Frame",{
 		AnchorPoint      = Vector2.new(.5,.5),
@@ -434,6 +473,7 @@ function Lib:_buildWindow()
 	self:_buildTitleBar(clip)
 	self:_buildBody(clip)
 	self:_initPages()
+	self._pageIdx = -1
 	self:SetPage(1)
 	task.defer(doScale)
 
@@ -626,10 +666,20 @@ function Lib:_buildTitleBar(win)
 	end
 
 	do
-		local b = new("TextButton",{Text="x",Font=Enum.Font.GothamBold,TextSize=18,TextColor3=C.Red,
+		local b = new("TextButton",{Text="x",Font=Enum.Font.GothamBold,TextSize=18,TextColor3=C.TextDim,
 			BackgroundTransparency=1,Size=UDim2.fromOffset(44,44),ZIndex=12,AutoButtonColor=false,LayoutOrder=3},right)
-		b.MouseEnter:Connect(function() tw(b,.12,{TextColor3=fromHex("ff6666"),BackgroundTransparency=.93}) end)
-		b.MouseLeave:Connect(function() tw(b,.15,{TextColor3=C.Red,BackgroundTransparency=1}) end)
+		b.MouseEnter:Connect(function() tw(b,.1,{TextColor3=C.Red,BackgroundTransparency=.93}) end)
+		b.MouseLeave:Connect(function() tw(b,.15,{TextColor3=C.TextDim,BackgroundTransparency=1}) end)
+		b.InputBegan:Connect(function(i)
+			if i.UserInputType==Enum.UserInputType.Touch then
+				tw(b,.08,{TextColor3=C.Red,BackgroundTransparency=.93})
+			end
+		end)
+		b.InputEnded:Connect(function(i)
+			if i.UserInputType==Enum.UserInputType.Touch then
+				tw(b,.15,{TextColor3=C.TextDim,BackgroundTransparency=1})
+			end
+		end)
 		b.Activated:Connect(function() self:Hide() end)
 	end
 
@@ -1111,7 +1161,7 @@ function Lib:Minimise()
 	self._miniWasUsed = mini
 
 	if mini then
-		self:_ensurePill()
+		if self.cfg.ShowPill ~= false then self:_ensurePill() end
 		local pill = self._mobilePill
 		local ws = win.AbsoluteSize
 		local wox = win.Position.X.Offset
@@ -1234,7 +1284,7 @@ function Lib:Hide()
 
 	local useMini = self:_useMiniMode()
 	if useMini then
-		self:_ensurePill()
+		if self.cfg.ShowPill ~= false then self:_ensurePill() end
 		local pill = self._mobilePill
 		if pill then
 			local cam2=workspace.CurrentCamera

@@ -534,10 +534,7 @@ function Lib:_buildTitleBar(win)
 			Size=UDim2.fromOffset(22,22),BackgroundTransparency=1,
 			Image="rbxasset://textures/ui/SearchIcon.png",
 			ImageColor3=C.Text,ScaleType=Enum.ScaleType.Fit,ZIndex=14},w)
-		img:GetPropertyChangedSignal("IsLoaded"):connect(function()
-			if img.IsLoaded then fallback.Visible=false end
-		end)
-		if img.IsLoaded then fallback.Visible=false end
+		task.defer(function() if img.IsLoaded then fallback.Visible=false end end)
 		local btn = new("TextButton",{Text="",BackgroundTransparency=1,Size=UDim2.fromScale(1,1),ZIndex=15,AutoButtonColor=false},w)
 		btn.MouseEnter:Connect(function() tw(img,.12,{ImageColor3=C.White}); tw(fallback,.12,{TextColor3=C.White}); tw(w,.12,{BackgroundTransparency=.93}) end)
 		btn.MouseLeave:Connect(function() tw(img,.15,{ImageColor3=C.Text}); tw(fallback,.15,{TextColor3=C.Text}); tw(w,.15,{BackgroundTransparency=1}) end)
@@ -556,10 +553,7 @@ function Lib:_buildTitleBar(win)
 			Size=UDim2.fromOffset(22,22),BackgroundTransparency=1,
 			Image="rbxasset://textures/ui/Settings/Icon.png",
 			ImageColor3=C.Text,ScaleType=Enum.ScaleType.Fit,ZIndex=14},w)
-		img:GetPropertyChangedSignal("IsLoaded"):connect(function()
-			if img.IsLoaded then fallback.Visible=false end
-		end)
-		if img.IsLoaded then fallback.Visible=false end
+		task.defer(function() if img.IsLoaded then fallback.Visible=false end end)
 		local btn = new("TextButton",{Text="",BackgroundTransparency=1,Size=UDim2.fromScale(1,1),ZIndex=15,AutoButtonColor=false},w)
 		btn.MouseEnter:Connect(function() tw(img,.12,{ImageColor3=C.White}); tw(fallback,.12,{TextColor3=C.White}); tw(w,.12,{BackgroundTransparency=.93}) end)
 		btn.MouseLeave:Connect(function() tw(img,.15,{ImageColor3=C.Text}); tw(fallback,.15,{TextColor3=C.Text}); tw(w,.15,{BackgroundTransparency=1}) end)
@@ -578,10 +572,7 @@ function Lib:_buildTitleBar(win)
 			Size=UDim2.fromOffset(18,18),BackgroundTransparency=1,
 			Image="rbxasset://textures/ui/MinimizeIcon.png",
 			ImageColor3=C.White,ScaleType=Enum.ScaleType.Fit,ZIndex=14},w)
-		img:GetPropertyChangedSignal("IsLoaded"):connect(function()
-			if img.IsLoaded then fb.Visible=false end
-		end)
-		if img.IsLoaded then fb.Visible=false end
+		task.defer(function() if img.IsLoaded then fb.Visible=false end end)
 		local btn = new("TextButton",{Text="",BackgroundTransparency=1,Size=UDim2.fromScale(1,1),ZIndex=15,AutoButtonColor=false},w)
 		btn.MouseEnter:Connect(function() tw(img,.12,{ImageColor3=C.White}); tw(fb,.12,{TextColor3=C.White}); tw(w,.12,{BackgroundTransparency=.93}) end)
 		btn.MouseLeave:Connect(function() tw(img,.15,{ImageColor3=C.White}); tw(fb,.15,{TextColor3=C.White}); tw(w,.15,{BackgroundTransparency=1}) end)
@@ -603,10 +594,7 @@ function Lib:_buildTitleBar(win)
 			Size=UDim2.fromOffset(18,18),BackgroundTransparency=1,
 			Image="rbxasset://textures/ui/CloseIcon.png",
 			ImageColor3=C.Red,ScaleType=Enum.ScaleType.Fit,ZIndex=14},w)
-		img:GetPropertyChangedSignal("IsLoaded"):connect(function()
-			if img.IsLoaded then fb.Visible=false end
-		end)
-		if img.IsLoaded then fb.Visible=false end
+		task.defer(function() if img.IsLoaded then fb.Visible=false end end)
 		local btn = new("TextButton",{Text="",BackgroundTransparency=1,Size=UDim2.fromScale(1,1),ZIndex=15,AutoButtonColor=false},w)
 		btn.MouseEnter:Connect(function() tw(img,.12,{ImageColor3=fromHex("ff6666")}); tw(fb,.12,{TextColor3=fromHex("ff6666")}); tw(w,.12,{BackgroundTransparency=.93}) end)
 		btn.MouseLeave:Connect(function() tw(img,.15,{ImageColor3=C.Red}); tw(fb,.15,{TextColor3=C.Red}); tw(w,.15,{BackgroundTransparency=1}) end)
@@ -717,10 +705,7 @@ function Lib:_buildBody(win)
 			BackgroundTransparency=1,AnchorPoint=Vector2.new(0,.5),Position=UDim2.new(0,12,.5,0),
 			Size=UDim2.fromOffset(16,16),TextXAlignment=Enum.TextXAlignment.Center,ZIndex=22,
 		}, searchBar)
-		sIcon:GetPropertyChangedSignal("IsLoaded"):connect(function()
-			if sIcon.IsLoaded then sIconFb.Visible=false end
-		end)
-		if sIcon.IsLoaded then sIconFb.Visible=false end
+		sIconFb.Visible = false
 	end
 
 	local searchBox = new("TextBox",{
@@ -753,8 +738,7 @@ function Lib:_buildBody(win)
 			ImageColor3=C.TextDim,ScaleType=Enum.ScaleType.Fit,ZIndex=23},navUp)
 		local fb=new("TextLabel",{Text="^",Font=Enum.Font.GothamBold,TextSize=11,TextColor3=C.TextDim,
 			BackgroundTransparency=1,Size=UDim2.fromScale(1,1),TextXAlignment=Enum.TextXAlignment.Center,ZIndex=23},navUp)
-		img:GetPropertyChangedSignal("IsLoaded"):connect(function() if img.IsLoaded then fb.Visible=false end end)
-		if img.IsLoaded then fb.Visible=false end
+		task.defer(function() if img.IsLoaded then fb.Visible=false end end)
 	end
 
 	local navDown = new("TextButton",{
@@ -770,8 +754,7 @@ function Lib:_buildBody(win)
 			ImageColor3=C.TextDim,ScaleType=Enum.ScaleType.Fit,ZIndex=23},navDown)
 		local fb=new("TextLabel",{Text="v",Font=Enum.Font.GothamBold,TextSize=11,TextColor3=C.TextDim,
 			BackgroundTransparency=1,Size=UDim2.fromScale(1,1),TextXAlignment=Enum.TextXAlignment.Center,ZIndex=23},navDown)
-		img:GetPropertyChangedSignal("IsLoaded"):connect(function() if img.IsLoaded then fb.Visible=false end end)
-		if img.IsLoaded then fb.Visible=false end
+		task.defer(function() if img.IsLoaded then fb.Visible=false end end)
 	end
 
 	local closeSearchBtn = new("TextButton",{
@@ -786,8 +769,7 @@ function Lib:_buildBody(win)
 			ImageColor3=C.TextDim,ScaleType=Enum.ScaleType.Fit,ZIndex=23},closeSearchBtn)
 		local fb=new("TextLabel",{Text="x",Font=Enum.Font.GothamBold,TextSize=14,TextColor3=C.TextDim,
 			BackgroundTransparency=1,Size=UDim2.fromScale(1,1),TextXAlignment=Enum.TextXAlignment.Center,ZIndex=23},closeSearchBtn)
-		img:GetPropertyChangedSignal("IsLoaded"):connect(function() if img.IsLoaded then fb.Visible=false end end)
-		if img.IsLoaded then fb.Visible=false end
+		task.defer(function() if img.IsLoaded then fb.Visible=false end end)
 		closeSearchBtn.MouseEnter:Connect(function() tw(img,.1,{ImageColor3=C.Red}); tw(fb,.1,{TextColor3=C.Red}) end)
 		closeSearchBtn.MouseLeave:Connect(function() tw(img,.12,{ImageColor3=C.TextDim}); tw(fb,.12,{TextColor3=C.TextDim}) end)
 	end
@@ -1879,23 +1861,37 @@ function Lib:AddCheckbox(pi,label,default,callback)
 		Image="rbxasset://textures/ui/CheckIcon.png",
 		ImageColor3=C.Bg,ScaleType=Enum.ScaleType.Fit,
 		ImageTransparency=state and 0 or 1,ZIndex=2},box)
-	local check=new("TextLabel",{Text="v",Font=Enum.Font.GothamBold,TextSize=13,TextColor3=C.Bg,
+	local check=new("TextLabel",{Text="v",Font=Enum.Font.GothamBold,TextSize=12,TextColor3=C.Bg,
 		BackgroundTransparency=1,Size=UDim2.fromScale(1,1),
-		TextTransparency=state and 0 or 1,TextXAlignment=Enum.TextXAlignment.Center},box)
-	checkImg:GetPropertyChangedSignal("IsLoaded"):connect(function()
-		if checkImg.IsLoaded then check.Visible=false end
-	end)
-	if checkImg.IsLoaded then check.Visible=false end
+		TextTransparency=1,TextXAlignment=Enum.TextXAlignment.Center,ZIndex=3},box)
 
 	new("TextLabel",{Text=label or "",Font=Enum.Font.Gotham,TextSize=13,TextColor3=C.Text,
 		BackgroundTransparency=1,Position=UDim2.fromOffset(32,0),
 		Size=UDim2.new(1,-32,1,0),TextXAlignment=Enum.TextXAlignment.Left},row)
 
+	local checkIconWorks = false
+	checkImg:GetPropertyChangedSignal("IsLoaded"):Connect(function()
+		if checkImg.IsLoaded and checkImg.AbsoluteSize.X > 0 then
+			checkIconWorks = true
+			check.TextTransparency = 1
+		else
+			check.TextTransparency = state and 0 or 1
+		end
+	end)
+	task.defer(function()
+		if not checkIconWorks then
+			check.TextTransparency = state and 0 or 1
+		end
+	end)
+
 	local function apply(v,silent)
 		state=v
 		tw(box,.18,{BackgroundColor3=v and C.White or C.Card3},Enum.EasingStyle.Quart)
 		tw(bStroke,.18,{Color=v and fromHex("aaaaaa") or C.Border2})
-		tw(check,.12,{TextTransparency=v and 0 or 1})
+		tw(checkImg,.12,{ImageTransparency=v and 0 or 1})
+		if not checkIconWorks then
+			tw(check,.12,{TextTransparency=v and 0 or 1})
+		end
 		if not silent and callback then callback(v) end
 	end
 
@@ -2100,10 +2096,7 @@ function Lib:AddDropdown(pi,labelTxt,options,callback)
 	local arrow=new("TextLabel",{Text="v",Font=Enum.Font.GothamBold,TextSize=11,TextColor3=C.TextDim,
 		BackgroundTransparency=1,Size=UDim2.fromScale(1,1),
 		TextXAlignment=Enum.TextXAlignment.Center,ZIndex=52},arrowImg.Parent)
-	arrowImg:GetPropertyChangedSignal("IsLoaded"):connect(function()
-		if arrowImg.IsLoaded then arrow.Visible=false end
-	end)
-	if arrowImg.IsLoaded then arrow.Visible=false end
+	arrow.Visible = false
 
 	local listH=#options*40
 	local optList=new("Frame",{Position=UDim2.fromOffset(0,48),Size=UDim2.new(1,0,0,0),

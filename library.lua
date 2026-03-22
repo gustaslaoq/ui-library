@@ -330,6 +330,7 @@ function Lib:_buildWindow()
 		ClipsDescendants=false,
 	}, self._sg)
 	corner(win,12)
+	stroke(win,C.Border,1)
 	self.Window = win
 
 	local clip = new("Frame",{
@@ -337,7 +338,7 @@ function Lib:_buildWindow()
 		BackgroundTransparency=1,
 		ClipsDescendants=true,
 	}, win)
-	stroke(clip,C.Border,1)
+	corner(clip,12)
 	self._clip = clip
 
 	local function computeScale()

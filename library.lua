@@ -68,37 +68,37 @@ local function vlist(obj, spacing, halign)
 end
 
 local C = {
-	Bg       = fromHex("060606"),
-	Bg2      = fromHex("080808"),
-	Sidebar  = fromHex("050505"),
-	Card     = fromHex("0e0e0e"),
-	Card2    = fromHex("131313"),
-	Card3    = fromHex("191919"),
-	Border   = fromHex("1a1a1a"),
-	Border2  = fromHex("222222"),
-	Border3  = fromHex("2e2e2e"),
-	Text     = fromHex("d8d8d8"),
-	TextDim  = fromHex("666666"),
-	TextOff  = fromHex("2e2e2e"),
-	White    = fromHex("ffffff"),
-	Green    = fromHex("00e87a"),
-	GreenBg  = fromHex("030e08"),
-	Red      = fromHex("e84040"),
-	RedBg    = fromHex("0e0404"),
-	Yellow   = fromHex("f0c030"),
-	YellowBg = fromHex("0e0b02"),
-	Orange   = fromHex("f07020"),
-	Blue     = fromHex("4488ff"),
-	BlueBg   = fromHex("030914"),
-	Purple   = fromHex("aa44ff"),
-	PurpleBg = fromHex("0a0414"),
+    Bg       = fromHex("060606"),
+    Bg2      = fromHex("080808"),
+    Sidebar  = fromHex("050505"),
+    Card     = fromHex("0e0e0e"),
+    Card2    = fromHex("131313"),
+    Card3    = fromHex("191919"),
+    Border   = fromHex("1a1a1a"),
+    Border2  = fromHex("222222"),
+    Border3  = fromHex("2e2e2e"),
+    Text     = fromHex("d8d8d8"),
+    TextDim  = fromHex("666666"),
+    TextOff  = fromHex("2e2e2e"),
+    White    = fromHex("ffffff"),
+    Green    = fromHex("00e87a"),
+    GreenBg  = fromHex("030e08"),
+    Red      = fromHex("e84040"),
+    RedBg    = fromHex("0e0404"),
+    Yellow   = fromHex("f0c030"),
+    YellowBg = fromHex("0e0b02"),
+    Orange   = fromHex("f07020"),
+    Blue     = fromHex("4488ff"),
+    BlueBg   = fromHex("030914"),
+    Purple   = fromHex("aa44ff"),
+    PurpleBg = fromHex("0a0414"),
 }
 
 local function accentOrWhite(lib)
-	if lib and lib.cfg and lib.cfg.AccentColor then
-		return lib.cfg.AccentColor
-	end
-	return C.White
+    if lib and lib.cfg and lib.cfg.AccentColor then
+        return lib.cfg.AccentColor
+    end
+    return C.White
 end
 
 

@@ -109,7 +109,6 @@ local function accentOrWhite(lib)
     return C.White
 end
 
-}
 
 local DefaultConfig = {
 	AccentColor        = nil,

@@ -4198,11 +4198,9 @@ function Lib:_runDemo()
 		end},
 	})
 	self:AddParagraph(5, "API Reference",
-		"ui:Notify(text, style, duration)
-ui:Confirm(title, msg, onYes, onNo)
-ui:SetPageBadge(pi, text)
-ui:OnDestroy(fn)
-AddInputNumber, AddMultiSelect, AddList, AddTag, AddStatusBadge2, AddNotificationCenter"
+		"ui:Notify(text, style, duration)  ui:Confirm(title, msg, onYes, onNo)  " ..
+		"ui:SetPageBadge(pi, text)  ui:OnDestroy(fn)  " ..
+		"AddInputNumber, AddMultiSelect, AddList, AddTag, AddStatusBadge2, AddNotificationCenter"
 	)
 end
 

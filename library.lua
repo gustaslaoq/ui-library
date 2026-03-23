@@ -4322,7 +4322,7 @@ Lib.new = function(cfg)
 	return _origNew(cfg)
 end
 
-;(task and task.defer or spawn)(function()
+task.defer(function()
 	if not _newCalled then
 		pcall(_origNew, nil)
 	end

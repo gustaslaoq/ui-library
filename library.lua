@@ -1095,19 +1095,6 @@ function Lib:SetPage(index)
 			newFrame.Visible = true
 			if nfs then
 				tw(nfs, .3, {Position=UDim2.fromOffset(0,0)}, Enum.EasingStyle.Quint)
-				if not _rm then
-					local children = nfs:GetChildren()
-					for i, child in ipairs(children) do
-						if child:IsA("Frame") or child:IsA("TextLabel") then
-							child.BackgroundTransparency = child.BackgroundTransparency == 1 and 1 or 0.95
-							task.delay(i * 0.018, function()
-								if child and child.Parent then
-									tw(child, .18, {BackgroundTransparency = child:GetAttribute("OrigBGT") or (child.BackgroundColor3 and 0 or 1)}, Enum.EasingStyle.Quint)
-								end
-							end)
-						end
-					end
-				end
 			end
 		end)
 	end

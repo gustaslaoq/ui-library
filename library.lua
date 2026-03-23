@@ -75,70 +75,32 @@ local function vlist(obj, spacing, halign)
 	},obj)
 end
 
-local THEMES = {
-    dark = {
-        Bg="060606",Bg2="080808",Sidebar="050505",
-        Card="0e0e0e",Card2="131313",Card3="191919",
-        Border="1a1a1a",Border2="222222",Border3="2e2e2e",
-        Text="d8d8d8",TextDim="666666",TextOff="2e2e2e",
-    },
-    midnight = {
-        Bg="050812",Bg2="070b18",Sidebar="030610",
-        Card="0d1226",Card2="111730",Card3="161e38",
-        Border="1a2040",Border2="212850",Border3="2a3360",
-        Text="d0d8f0",TextDim="5a6890",TextOff="2a3048",
-    },
-    slate = {
-        Bg="0d0f10",Bg2="111316",Sidebar="0a0c0d",
-        Card="181b1e",Card2="1e2226",Card3="242830",
-        Border="262b30",Border2="2e343c",Border3="3a4248",
-        Text="c8cdd4",TextDim="5a6370",TextOff="2e3540",
-    },
-    solarized = {
-        Bg="001b26",Bg2="002433",Sidebar="001520",
-        Card="00303f",Card2="003a4c",Card3="004458",
-        Border="00485e",Border2="005068",Border3="006070",
-        Text="93a1a1",TextDim="4a6070",TextOff="1a3040",
-    },
-    mocha = {
-        Bg="12100f",Bg2="161210",Sidebar="0f0d0c",
-        Card="1e1a18",Card2="242018",Card3="2a241e",
-        Border="302820",Border2="382e26",Border3="42362c",
-        Text="d4c8bc",TextDim="6a5c50",TextOff="302820",
-    },
+local C = {
+	Bg       = fromHex("060606"),
+	Bg2      = fromHex("080808"),
+	Sidebar  = fromHex("050505"),
+	Card     = fromHex("0e0e0e"),
+	Card2    = fromHex("131313"),
+	Card3    = fromHex("191919"),
+	Border   = fromHex("1a1a1a"),
+	Border2  = fromHex("222222"),
+	Border3  = fromHex("2e2e2e"),
+	Text     = fromHex("d8d8d8"),
+	TextDim  = fromHex("666666"),
+	TextOff  = fromHex("2e2e2e"),
+	White    = fromHex("ffffff"),
+	Green    = fromHex("00e87a"),
+	GreenBg  = fromHex("030e08"),
+	Red      = fromHex("e84040"),
+	RedBg    = fromHex("0e0404"),
+	Yellow   = fromHex("f0c030"),
+	YellowBg = fromHex("0e0b02"),
+	Orange   = fromHex("f07020"),
+	Blue     = fromHex("4488ff"),
+	BlueBg   = fromHex("030914"),
+	Purple   = fromHex("aa44ff"),
+	PurpleBg = fromHex("0a0414"),
 }
-
-local function buildC(themeName)
-    local t = THEMES[themeName] or THEMES.dark
-    return {
-        Bg       = fromHex(t.Bg),
-        Bg2      = fromHex(t.Bg2),
-        Sidebar  = fromHex(t.Sidebar),
-        Card     = fromHex(t.Card),
-        Card2    = fromHex(t.Card2),
-        Card3    = fromHex(t.Card3),
-        Border   = fromHex(t.Border),
-        Border2  = fromHex(t.Border2),
-        Border3  = fromHex(t.Border3),
-        Text     = fromHex(t.Text),
-        TextDim  = fromHex(t.TextDim),
-        TextOff  = fromHex(t.TextOff),
-        White    = fromHex("ffffff"),
-        Green    = fromHex("00e87a"),
-        GreenBg  = fromHex("030e08"),
-        Red      = fromHex("e84040"),
-        RedBg    = fromHex("0e0404"),
-        Yellow   = fromHex("f0c030"),
-        YellowBg = fromHex("0e0b02"),
-        Orange   = fromHex("f07020"),
-        Blue     = fromHex("4488ff"),
-        BlueBg   = fromHex("030914"),
-        Purple   = fromHex("aa44ff"),
-        PurpleBg = fromHex("0a0414"),
-    }
-end
-
-local C = buildC("dark")
 
 local function accentOrWhite(lib)
     if lib and lib.cfg and lib.cfg.AccentColor then
@@ -149,7 +111,8 @@ end
 
 local DefaultConfig = {
 	AccentColor        = nil,
-	Theme              = "dark",
+	Colors             = nil,
+	Colors             = nil,
 	AppName            = "MY APP",
 	AppSubtitle        = "Subtitle",
 	AppVersion         = "1.0",
@@ -205,9 +168,20 @@ function Lib.new(userCfg)
 		for k,v in pairs(userCfg) do self.cfg[k]=v end
 	end
 
-	if self.cfg.Theme and self.cfg.Theme ~= "dark" then
-		local newC = buildC(self.cfg.Theme)
-		for k,v in pairs(newC) do C[k]=v end
+	if self.cfg.Colors and type(self.cfg.Colors) == "table" then
+		for k,v in pairs(self.cfg.Colors) do
+			if C[k] ~= nil and typeof(v) == "Color3" then
+				C[k] = v
+			end
+		end
+	end
+
+	if self.cfg.Colors and type(self.cfg.Colors)=="table" then
+		for k,v in pairs(self.cfg.Colors) do
+			if C[k] ~= nil and type(v)=="userdata" then
+				C[k]=v
+			end
+		end
 	end
 
 	self._pages      = {}
@@ -232,7 +206,6 @@ function Lib.new(userCfg)
 	self._simulateMobile = false
 	self._settingsVisible= false
 	self._kbListening    = false
-	self._currentTheme   = self.cfg.Theme or "dark"
 	self._onDestroyFns   = {}
 	self._settingsFrame  = nil
 	self._settingsScroll = nil
@@ -1533,79 +1506,103 @@ function Lib:Shake(intensity)
 	end)
 end
 
-function Lib:Confirm(title, message, onConfirm, onCancel)
+function Lib:Confirm(title, message, onConfirm, onCancel, opts)
 	local sg = self._sg
 	if not sg then return end
+	opts = opts or {}
+	local confirmText  = opts.ConfirmText  or "Confirm"
+	local cancelText   = opts.CancelText   or "Cancel"
+	local confirmColor = opts.ConfirmColor or C.Red
+	local isDestructive = opts.Destructive ~= false
 
 	local overlay = new("Frame",{
-		Size=UDim2.fromScale(1,1), BackgroundColor3=fromHex("000000"),
-		BackgroundTransparency=0.45, BorderSizePixel=0, ZIndex=900,
+		Size=UDim2.fromScale(1,1), BackgroundColor3=C.Bg,
+		BackgroundTransparency=0.5, BorderSizePixel=0, ZIndex=900,
 	},sg)
 
-	local blur = new("Frame",{
+	local modal = new("Frame",{
 		AnchorPoint=Vector2.new(.5,.5),Position=UDim2.fromScale(.5,.5),
-		Size=UDim2.fromOffset(360,0),AutomaticSize=Enum.AutomaticSize.Y,
-		BackgroundColor3=C.Card2,BorderSizePixel=0,ZIndex=901,
+		Size=UDim2.fromOffset(380,0),AutomaticSize=Enum.AutomaticSize.Y,
+		BackgroundColor3=C.Bg2,BorderSizePixel=0,ZIndex=901,
 	},sg)
-	corner(blur,16)
-	stroke(blur,C.Border2,1)
-	vlist(blur,0)
+	corner(modal,14)
+	stroke(modal,C.Border2,1)
 
-	local header=new("Frame",{Size=UDim2.new(1,0,0,52),BackgroundColor3=C.Card3,BorderSizePixel=0,ZIndex=902},blur)
-	corner(header,16)
-	new("Frame",{Position=UDim2.new(0,0,1,-8),Size=UDim2.new(1,0,0,8),BackgroundColor3=C.Card3,BorderSizePixel=0,ZIndex=902},header)
-	pad(header,0,0,20,20)
+	local accentCol = isDestructive and C.Red or accentOrWhite(self)
+
+	local hdr=new("Frame",{Size=UDim2.new(1,0,0,58),BackgroundColor3=C.Card,BorderSizePixel=0,ZIndex=902},modal)
+	corner(hdr,14)
+	new("Frame",{Position=UDim2.new(0,0,1,-8),Size=UDim2.new(1,0,0,8),BackgroundColor3=C.Card,BorderSizePixel=0,ZIndex=902},hdr)
+	pad(hdr,0,0,20,20)
+	hlist(hdr,14)
+	local iconFrame=new("Frame",{Size=UDim2.fromOffset(30,30),BackgroundColor3=isDestructive and C.RedBg or C.Card3,BorderSizePixel=0,LayoutOrder=0},hdr)
+	corner(iconFrame,999)
+	new("TextLabel",{Text=isDestructive and "!" or "?",Font=Enum.Font.GothamBold,TextSize=14,
+		TextColor3=accentCol,BackgroundTransparency=1,Size=UDim2.fromScale(1,1),
+		TextXAlignment=Enum.TextXAlignment.Center,ZIndex=903},iconFrame)
 	new("TextLabel",{Text=title or "Confirm",Font=Enum.Font.GothamBold,TextSize=15,TextColor3=C.White,
-		BackgroundTransparency=1,Size=UDim2.new(1,0,1,0),TextXAlignment=Enum.TextXAlignment.Left,ZIndex=903},header)
+		BackgroundTransparency=1,Size=UDim2.new(1,-44,1,0),TextXAlignment=Enum.TextXAlignment.Left,ZIndex=903,LayoutOrder=1},hdr)
 
-	local body=new("Frame",{Size=UDim2.new(1,0,0,0),AutomaticSize=Enum.AutomaticSize.Y,
-		BackgroundTransparency=1,BorderSizePixel=0},blur)
-	pad(body,16,16,20,20)
+	new("Frame",{Position=UDim2.fromOffset(0,58),Size=UDim2.new(1,0,0,1),BackgroundColor3=C.Border,BorderSizePixel=0,ZIndex=902},modal)
+
+	local bodyWrap=new("Frame",{Position=UDim2.fromOffset(0,59),Size=UDim2.new(1,0,0,0),
+		AutomaticSize=Enum.AutomaticSize.Y,BackgroundTransparency=1,BorderSizePixel=0,ZIndex=902},modal)
+	pad(bodyWrap,14,14,20,20)
 	new("TextLabel",{Text=message or "",Font=Enum.Font.Gotham,TextSize=13,TextColor3=C.TextDim,
 		BackgroundTransparency=1,Size=UDim2.new(1,0,0,0),AutomaticSize=Enum.AutomaticSize.Y,
-		TextXAlignment=Enum.TextXAlignment.Left,TextWrapped=true},body)
+		TextXAlignment=Enum.TextXAlignment.Left,TextWrapped=true,ZIndex=903},bodyWrap)
 
-	local btnRow=new("Frame",{Size=UDim2.new(1,0,0,52),BackgroundTransparency=1},blur)
-	pad(btnRow,0,0,16,16)
-	hlist(btnRow,10)
+	local btnWrap=new("Frame",{Size=UDim2.new(1,0,0,60),BackgroundTransparency=1,BorderSizePixel=0},modal)
+	pad(btnWrap,0,0,16,16)
+	hlist(btnWrap,10)
 
 	local function closeModal()
-		tw(overlay,.2,{BackgroundTransparency=1},Enum.EasingStyle.Quint)
-		tw(blur,.2,{BackgroundTransparency=1},Enum.EasingStyle.Quint)
+		tw(overlay,.18,{BackgroundTransparency=1},Enum.EasingStyle.Quint)
+		tw(modal,.2,{BackgroundTransparency=1,Position=UDim2.new(.5,0,.5,10)},Enum.EasingStyle.Quint,Enum.EasingDirection.In)
 		task.delay(.22,function()
 			pcall(function() overlay:Destroy() end)
-			pcall(function() blur:Destroy() end)
+			pcall(function() modal:Destroy() end)
 		end)
 	end
 
-	local cancelBtn=new("TextButton",{Text="Cancel",Font=Enum.Font.GothamBold,TextSize=13,
-		TextColor3=C.TextDim,BackgroundColor3=C.Card3,BorderSizePixel=0,
-		Size=UDim2.new(.5,-5,1,0),AutoButtonColor=false,ZIndex=903,LayoutOrder=0},btnRow)
+	local cancelBtn=new("TextButton",{Text=cancelText,Font=Enum.Font.GothamBold,TextSize=13,
+		TextColor3=C.Text,BackgroundColor3=C.Card,BorderSizePixel=0,
+		Size=UDim2.new(.5,-5,1,0),AutoButtonColor=false,ZIndex=903,LayoutOrder=0},btnWrap)
 	corner(cancelBtn,10)
 	stroke(cancelBtn,C.Border2,1)
 	cancelBtn.MouseEnter:Connect(function() tw(cancelBtn,.1,{BackgroundColor3=C.Card2}) end)
-	cancelBtn.MouseLeave:Connect(function() tw(cancelBtn,.12,{BackgroundColor3=C.Card3}) end)
+	cancelBtn.MouseLeave:Connect(function() tw(cancelBtn,.12,{BackgroundColor3=C.Card}) end)
 	cancelBtn.Activated:Connect(function()
 		closeModal()
 		if onCancel then pcall(onCancel) end
 	end)
 
-	local confirmBtn=new("TextButton",{Text="Confirm",Font=Enum.Font.GothamBold,TextSize=13,
-		TextColor3=C.White,BackgroundColor3=C.Red,BorderSizePixel=0,
-		Size=UDim2.new(.5,-5,1,0),AutoButtonColor=false,ZIndex=903,LayoutOrder=1},btnRow)
+	local confirmBtn=new("TextButton",{Text=confirmText,Font=Enum.Font.GothamBold,TextSize=13,
+		TextColor3=C.White,BackgroundColor3=confirmColor,BorderSizePixel=0,
+		Size=UDim2.new(.5,-5,1,0),AutoButtonColor=false,ZIndex=903,LayoutOrder=1},btnWrap)
 	corner(confirmBtn,10)
-	confirmBtn.MouseEnter:Connect(function() tw(confirmBtn,.1,{BackgroundColor3=fromHex("ff5555")}) end)
-	confirmBtn.MouseLeave:Connect(function() tw(confirmBtn,.12,{BackgroundColor3=C.Red}) end)
+	local function lighten(col)
+		return Color3.new(math.min(col.R+0.12,1),math.min(col.G+0.06,1),math.min(col.B+0.06,1))
+	end
+	confirmBtn.MouseEnter:Connect(function() tw(confirmBtn,.1,{BackgroundColor3=lighten(confirmColor)}) end)
+	confirmBtn.MouseLeave:Connect(function() tw(confirmBtn,.12,{BackgroundColor3=confirmColor}) end)
 	confirmBtn.Activated:Connect(function()
 		closeModal()
 		if onConfirm then pcall(onConfirm) end
 	end)
 
+	local closeOnOverlay=new("TextButton",{Text="",BackgroundTransparency=1,
+		Size=UDim2.fromScale(1,1),ZIndex=900,AutoButtonColor=false},overlay)
+	closeOnOverlay.Activated:Connect(function()
+		closeModal()
+		if onCancel then pcall(onCancel) end
+	end)
+
 	overlay.BackgroundTransparency=1
-	blur.BackgroundTransparency=1
-	blur.Position=UDim2.new(.5,0,.5,20)
-	tw(overlay,.25,{BackgroundTransparency=0.45},Enum.EasingStyle.Quint)
-	tw(blur,.3,{BackgroundTransparency=0,Position=UDim2.fromScale(.5,.5)},Enum.EasingStyle.Back,Enum.EasingDirection.Out)
+	modal.BackgroundTransparency=1
+	modal.Position=UDim2.new(.5,0,.5,18)
+	tw(overlay,.22,{BackgroundTransparency=0.5},Enum.EasingStyle.Quint)
+	tw(modal,.3,{BackgroundTransparency=0,Position=UDim2.fromScale(.5,.5)},Enum.EasingStyle.Back,Enum.EasingDirection.Out)
 end
 
 
@@ -1844,37 +1841,6 @@ function Lib:_buildSettingsPanel()
 		BackgroundTransparency=1,Size=UDim2.new(1,0,0,14),
 		TextXAlignment=Enum.TextXAlignment.Left,LayoutOrder=nextLo()},scroll)
 	new("Frame",{Size=UDim2.new(1,0,0,6),BackgroundTransparency=1,LayoutOrder=nextLo()},scroll)
-
-	do
-		local themeRow=new("Frame",{Size=UDim2.new(1,0,0,56),BackgroundColor3=C.Card,BorderSizePixel=0,LayoutOrder=nextLo()},scroll)
-		corner(themeRow,10); stroke(themeRow,C.Border,1)
-		new("TextLabel",{Text="Theme",Font=Enum.Font.Gotham,TextSize=13,TextColor3=C.Text,
-			BackgroundTransparency=1,Position=UDim2.new(0,16,.5,-16),Size=UDim2.new(1,-170,0,18),TextXAlignment=Enum.TextXAlignment.Left},themeRow)
-		new("TextLabel",{Text="Requires restart to apply fully",Font=Enum.Font.Gotham,TextSize=10,TextColor3=C.TextDim,
-			BackgroundTransparency=1,Position=UDim2.new(0,16,.5,4),Size=UDim2.new(1,-170,0,14),TextXAlignment=Enum.TextXAlignment.Left},themeRow)
-		local themeNames={"dark","midnight","slate","solarized","mocha"}
-		local themeOptions={"Dark","Midnight","Slate","Solarized","Mocha"}
-		local currentThemeIdx=1
-		for i,tn in ipairs(themeNames) do if tn==(self._currentTheme or "dark") then currentThemeIdx=i end end
-		local themeBtn=new("TextButton",{
-			Text=themeOptions[currentThemeIdx] or "Dark",Font=Enum.Font.GothamBold,TextSize=11,
-			TextColor3=C.White,BackgroundColor3=C.Card3,BorderSizePixel=0,AutoButtonColor=false,
-			AnchorPoint=Vector2.new(1,.5),Position=UDim2.new(1,-16,.5,0),
-			Size=UDim2.fromOffset(100,30)},themeRow)
-		corner(themeBtn,8); stroke(themeBtn,C.Border2,1)
-		themeBtn.MouseEnter:Connect(function() tw(themeBtn,.1,{BackgroundColor3=C.Card2}) end)
-		themeBtn.MouseLeave:Connect(function() tw(themeBtn,.12,{BackgroundColor3=C.Card3}) end)
-		themeBtn.Activated:Connect(function()
-			currentThemeIdx=(currentThemeIdx%#themeNames)+1
-			local tn=themeNames[currentThemeIdx]
-			self._currentTheme=tn
-			themeBtn.Text=themeOptions[currentThemeIdx]
-			local newC=buildC(tn)
-			for k,v in pairs(newC) do C[k]=v end
-			self:ShowNotification("Theme: "..themeOptions[currentThemeIdx],"info",2,"Display")
-		end)
-	end
-	new("Frame",{Size=UDim2.new(1,0,0,8),BackgroundTransparency=1,LayoutOrder=nextLo()},scroll)
 
 	do
 		local rmRow=new("Frame",{Size=UDim2.new(1,0,0,56),BackgroundColor3=C.Card,BorderSizePixel=0,LayoutOrder=nextLo()},scroll)
@@ -4034,20 +4000,17 @@ end
 
 function Lib:_runDemo()
 	local lp = LocalPlayer
-
 	local function getHum()
 		local char = lp and lp.Character
 		return char and char:FindFirstChildOfClass("Humanoid")
 	end
 
 	self:AddSectionHeader(1, "Dashboard", "Live stats and controls")
-
 	local metrics = self:AddMetricRow(1, {
 		{Label="Walk Speed", Value=16,  Unit="studs/s"},
 		{Label="Health",     Value=100, Unit="HP"},
 		{Label="Jump Power", Value=50,  Unit="power"},
 	})
-
 	task.spawn(function()
 		while self._sg and self._sg.Parent do
 			task.wait(1)
@@ -4061,9 +4024,8 @@ function Lib:_runDemo()
 	end)
 
 	self:AddDivider(1, "Status")
-	local hpBar = self:AddProgressBar(1, "Health", 100, 100)
-	local xpBar = self:AddProgressBar(1, "Experience", 34, 100)
-
+	local hpBar  = self:AddProgressBar(1, "Health", 100, 100)
+	local xpBar  = self:AddProgressBar(1, "Experience", 34, 100)
 	task.spawn(function()
 		local xp = 34
 		while self._sg and self._sg.Parent do
@@ -4075,229 +4037,205 @@ function Lib:_runDemo()
 		end
 	end)
 
-	self:AddDivider(1, "Alerts")
-	self:AddAlert(1, "Welcome!", "This is the SlaoqUILib showcase. Press Ctrl+F to search within any page.", "info")
-	self:AddAlert(1, "Tip", "All pages contain live interactive components. Settings are in the gear icon.", "success")
+	local statusBadge = self:AddStatusBadge2(1, "Macro Status", "offline")
+	self:AddDivider(1, "Quick Info")
+	local statusLbl = self:AddLabel(1, "Status: Idle", "muted")
+	self:AddAlert(1, "Welcome!", "This is the SlaoqUILib showcase. Press Ctrl+F to search.", "info")
+	self:AddButtonRow(1, {
+		{Text="Set Online", Style="success", Width=120, Callback=function()
+			statusBadge:SetState("online")
+			statusLbl:Set("Status: Running")
+			self:SetPageBadge(1, "!")
+		end},
+		{Text="Set Offline", Style="danger", Width=120, Callback=function()
+			statusBadge:SetState("offline")
+			statusLbl:Set("Status: Idle")
+			self:SetPageBadge(1, nil)
+		end},
+		{Text="Confirm Test", Style="ghost", Width=130, Callback=function()
+			self:Confirm(
+				"Delete data?",
+				"This will permanently remove all saved configuration. This action cannot be undone.",
+				function() self:Notify("Data deleted.", "error", 3) end,
+				function() self:Notify("Cancelled.", "info", 2) end
+			)
+		end},
+	})
 
 	self:AddSectionHeader(2, "Player", "Character controls")
-
 	self:AddDivider(2, "Movement")
 	local speedSlider = self:AddSlider(2, "Walk Speed", 0, 100, 16, function(v)
-		local hum = getHum()
-		if hum then hum.WalkSpeed = v end
+		local hum = getHum(); if hum then hum.WalkSpeed=v end
 	end)
 	local jumpSlider = self:AddSlider(2, "Jump Power", 0, 200, 50, function(v)
-		local hum = getHum()
-		if hum then hum.JumpPower = v end
+		local hum = getHum(); if hum then hum.JumpPower=v end
 	end)
-
 	self:AddDivider(2, "Health")
-	self:AddSlider(2, "Max Health", 50, 500, 100, function(v)
-		local hum = getHum()
-		if hum then hum.MaxHealth = v end
+	local maxHpInput = self:AddInputNumber(2, "Max Health", {Min=50,Max=500,Placeholder="100"}, function(v)
+		local hum = getHum(); if hum then hum.MaxHealth=v end
 	end)
 	self:AddButtonRow(2, {
-		{Text="Full Health", Style="success", Width=130, Callback=function()
-			local hum = getHum()
-			if hum then hum.Health = hum.MaxHealth end
-			self:ShowNotification("Health fully restored!", "success", 2.5)
+		{Text="Full Health", Style="success", Width=120, Callback=function()
+			local hum=getHum(); if hum then hum.Health=hum.MaxHealth end
+			self:Notify("Health restored!", "success", 2)
 		end},
-		{Text="Reset Stats", Style="ghost", Width=120, Callback=function()
-			local hum = getHum()
-			if hum then hum.WalkSpeed=16; hum.JumpPower=50; hum.MaxHealth=100; hum.Health=100 end
+		{Text="Reset Stats", Style="ghost", Width=110, Callback=function()
+			local hum=getHum()
+			if hum then hum.WalkSpeed=16;hum.JumpPower=50;hum.MaxHealth=100;hum.Health=100 end
 			if speedSlider then speedSlider:SetValue(16) end
-			if jumpSlider  then jumpSlider:SetValue(50)  end
-			self:ShowNotification("Stats reset to default.", "info", 2.5)
-		end},
-		{Text="Respawn", Style="warning", Width=100, Callback=function()
-			lp:LoadCharacter()
-			self:ShowNotification("Character respawned!", "warning", 2)
+			if jumpSlider then jumpSlider:SetValue(50) end
+			if maxHpInput then maxHpInput:Set(100) end
+			self:Notify("Stats reset.", "info", 2)
 		end},
 	})
-
 	self:AddDivider(2, "Modifiers")
 	self:AddToggle(2, "God Mode", false, function(v)
-		local hum = getHum()
-		if hum then hum.MaxHealth = v and math.huge or 100 end
-		self:ShowNotification(v and "God Mode enabled!" or "God Mode disabled", v and "success" or "info", 2)
-	end)
-	self:AddToggle(2, "Infinite Jump", false, function(v)
-		self:ShowNotification(v and "Infinite Jump enabled!" or "Infinite Jump disabled", v and "success" or "info", 2)
-	end)
+		local hum=getHum(); if hum then hum.MaxHealth=v and math.huge or 100 end
+		self:Notify(v and "God Mode ON" or "God Mode OFF", v and "success" or "info", 2)
+	end, "Enables infinite health")
 	self:AddToggle(2, "Speed Boost (x3)", false, function(v)
-		local hum = getHum()
-		if hum then hum.WalkSpeed = v and 48 or 16 end
-		self:ShowNotification(v and "Speed boost active (48 studs/s)" or "Speed restored.", v and "warning" or "info", 2)
-	end)
+		local hum=getHum(); if hum then hum.WalkSpeed=v and 48 or 16 end
+		self:Notify(v and "Speed boost active" or "Speed restored", v and "warning" or "info", 2)
+	end, "Sets walk speed to 48 studs/s")
 
 	self:AddSectionHeader(3, "Components", "All available UI components")
-
-	self:AddDivider(3, "Labels")
+	self:AddDivider(3, "Labels & Tags")
 	self:AddLabel(3, "Title label", "title")
-	self:AddLabel(3, "Subtitle label", "subtitle")
 	self:AddLabel(3, "Body text - default for content and descriptions.", "body")
 	self:AddLabel(3, "Muted text - secondary information.", "muted")
-	self:AddLabel(3, "Caption text - metadata and footers.", "caption")
+	self:AddTag(3, "INFO", "info")
+	self:AddTag(3, "SUCCESS", "success")
+	self:AddTag(3, "WARNING", "warning")
+	self:AddTag(3, "ERROR", "error")
 
-	self:AddDivider(3, "Rich Text")
-	self:AddRichLabel(3, 'Supports <b>bold</b>, <i>italic</i>, <u>underline</u>, <font color="rgb(0,232,122)">colors</font>, and <font size="16">size changes</font>.')
-	self:AddColorSwatch(3, "Blue",   "4488ff")
-	self:AddColorSwatch(3, "Green",  "00e87a")
-	self:AddColorSwatch(3, "Yellow", "f0c030")
+	self:AddDivider(3, "Status")
+	self:AddStatusBadge2(3, "Server", "online")
+	self:AddStatusBadge2(3, "Webhook", "idle")
 
-	self:AddDivider(3, "Alerts")
-	self:AddAlert(3, "Info",    "Informational message.",  "info")
-	self:AddAlert(3, "Success", "Operation completed.",    "success")
-	self:AddAlert(3, "Warning", "Attention required.",     "warning")
-	self:AddAlert(3, "Error",   "Something went wrong.",   "error")
-
-	self:AddDivider(3, "Progress Bars")
-	local pb1 = self:AddProgressBar(3, "Download", 65, 100)
-	local pb2 = self:AddProgressBar(3, "Storage",  42, 100)
+	self:AddDivider(3, "Lists")
+	local myList = self:AddList(3, "Recent Events", {ItemHeight=32, MaxItems=10, ShowIndex=true})
+	myList:Add("Macro started", C.Green)
+	myList:Add("Biome detected: STARFALL", C.Blue)
+	myList:Add("Webhook sent successfully", C.TextDim)
 	self:AddButtonRow(3, {
-		{Text="Randomize", Style="primary", Width=120, Callback=function()
-			pb1:SetValue(math.random(10,100))
-			pb2:SetValue(math.random(10,100))
+		{Text="Add Item", Style="ghost", Width=100, Callback=function()
+			myList:Add("New event #"..myList:Count()+1, C.TextDim)
+		end},
+		{Text="Clear", Style="danger", Width=90, Callback=function() myList:Clear() end},
+	})
+
+	self:AddDivider(3, "Multi-Select")
+	local ms = self:AddMultiSelect(3, "Select Biomes to Ping", {"RAINY","SNOWY","STARFALL","HELL","WINDY"}, function(selected)
+		local n=0; for _,v in pairs(selected) do if v then n=n+1 end end
+	end)
+	self:AddButtonRow(3, {
+		{Text="Get Selected", Style="primary", Width=130, Callback=function()
+			local sel = ms:GetSelected()
+			self:Notify(#sel.." selected: "..(#sel>0 and sel[1] or "none"), "info", 3)
 		end},
 	})
 
-	self:AddDivider(3, "Spinner")
-	local spinner = self:AddSpinner(3, "Processing request...")
+	self:AddDivider(3, "Progress & Spinner")
+	local pb1 = self:AddProgressBar(3, "Download", 65, 100)
+	local pb2 = self:AddProgressBar(3, "Storage",  42, 100)
+	local spinner = self:AddSpinner(3, "Processing...")
 	self:AddButtonRow(3, {
-		{Text="Start", Style="success", Width=100, Callback=function() spinner:Start() end},
-		{Text="Stop",  Style="danger",  Width=100, Callback=function() spinner:Stop()  end},
+		{Text="Randomize", Style="primary", Width=120, Callback=function()
+			pb1:SetValue(math.random(10,100)); pb2:SetValue(math.random(10,100))
+		end},
+		{Text="Start Spin", Style="success", Width=110, Callback=function() spinner:Start() end},
+		{Text="Stop",       Style="danger",  Width=80,  Callback=function() spinner:Stop()  end},
 	})
-
-	self:AddDivider(3, "Color Picker")
-	self:AddColorPicker(3, "Accent Color", "4488ff", function(color, hex)
-		self:ShowNotification("Applied color: #"..hex, "success", 2, "Color Picker")
-	end)
 
 	self:AddDivider(3, "Notifications")
-	self:AddLabel(3, "External toast (bottom-right corner):", "muted")
 	self:AddButtonRow(3, {
-		{Text="Info",    Style="ghost",   Width=90, Callback=function() self:ShowNotification("Informational message.",  "info",    3, "Info")    end},
-		{Text="Success", Style="success", Width=90, Callback=function() self:ShowNotification("Operation completed!",    "success", 3, "Success") end},
-		{Text="Warning", Style="warning", Width=90, Callback=function() self:ShowNotification("Attention required.",     "warning", 3, "Warning") end},
-		{Text="Error",   Style="danger",  Width=90, Callback=function() self:ShowNotification("Something went wrong.",   "error",   3, "Error")   end},
-	})
-	self:AddLabel(3, "Inline notification (inside UI):", "muted")
-	self:AddButtonRow(3, {
-		{Text="Inline Info",    Style="ghost",   Width=110, Callback=function() self:ShowInlineNotification("Inline info.",    "info",    2.5) end},
-		{Text="Inline Success", Style="success", Width=110, Callback=function() self:ShowInlineNotification("Inline success.", "success", 2.5) end},
-		{Text="Inline Error",   Style="danger",  Width=110, Callback=function() self:ShowInlineNotification("Inline error.",   "error",   2.5) end},
+		{Text="Info",    Style="ghost",   Width=80, Callback=function() self:Notify("Info message",    "info",    2.5) end},
+		{Text="Success", Style="success", Width=80, Callback=function() self:Notify("Success!",        "success", 2.5) end},
+		{Text="Warning", Style="warning", Width=80, Callback=function() self:Notify("Warning.",        "warning", 2.5) end},
+		{Text="Error",   Style="danger",  Width=80, Callback=function() self:Notify("Error occurred.", "error",   2.5) end},
 	})
 	self:AddButtonRow(3, {
-		{Text="Stack 3 Toasts", Style="outline", Width=150, Callback=function()
-			task.spawn(function()
-				self:ShowNotification("First toast",  "info",    4, "Stacked")
-				task.wait(0.35)
-				self:ShowNotification("Second toast", "success", 4, "Stacked")
-				task.wait(0.35)
-				self:ShowNotification("Third toast",  "warning", 4, "Stacked")
-			end)
+		{Text="Confirm Dialog", Style="outline", Width=150, Callback=function()
+			self:Confirm("Are you sure?", "This is a test of the confirm modal system. Click Confirm to proceed or Cancel to dismiss.",
+				function() self:Notify("Confirmed!", "success", 2) end)
 		end},
 		{Text="Shake Window", Style="ghost", Width=130, Callback=function() self:Shake(8) end},
 	})
 
 	self:AddSectionHeader(4, "Inputs", "All interactive input components")
-
-	self:AddDivider(4, "Text")
-	self:AddInput(4, "Text Input", "Type here and press Enter...", function(text, enter)
-		if enter and text ~= "" then
-			self:ShowNotification('Input: "'..text..'"', "info", 3, "Input")
+	self:AddDivider(4, "Text & Numbers")
+	local webhookInput = self:AddInput(4, "Webhook URL", "https://discord.com/api/webhooks/...", function(text, enter)
+		if text ~= "" then
+			webhookInput:SetValid(text:find("discord.com/api/webhooks") ~= nil, text:find("discord.com") and nil or "Invalid URL")
 		end
 	end)
-
-	self:AddDivider(4, "Numbers")
-	self:AddStepper(4, "Quantity", 0, 99, 1, 1, function(v)
-		self:ShowNotification("Quantity: "..v, "info", 1.5)
+	local numInput = self:AddInputNumber(4, "Ping Threshold (Aura Rarity)", {Min=0, Max=999999999, Placeholder="999000000"}, function(v)
+		self:Notify("Threshold: "..v, "info", 1.5)
 	end)
-	self:AddStepper(4, "Precision (step 0.25)", 0, 10, 0, 0.25, function(v)
-		self:ShowNotification("Value: "..v, "info", 1.5)
-	end)
-
 	self:AddDivider(4, "Selection")
-	self:AddDropdown(4, "Choose Framework", {
-		"React","Vue","Angular","Svelte","Solid",
-	}, function(v)
-		self:ShowNotification("Selected: "..v, "success", 2)
+	self:AddDropdown(4, "Select Framework", {"React","Vue","Angular","Svelte","Solid"}, function(v)
+		self:Notify("Selected: "..v, "success", 2)
 	end)
-	self:AddRadioGroup(4, "Theme", {"Dark","Light","System"}, "Dark", function(v)
-		self:ShowNotification("Theme: "..v, "success", 2)
+	local biomeMulti = self:AddMultiSelect(4, "Biomes to Ping", {"RAINY","SNOWY","STARFALL","HELL","WINDY","AURORA","HEAVEN"}, function(sel) end)
+	self:AddRadioGroup(4, "Mode", {"Auto","Manual","Off"}, "Auto", function(v)
+		self:Notify("Mode: "..v, "info", 1.5)
 	end)
-
-	self:AddDivider(4, "Toggles & Checks")
-	self:AddToggle(4, "Dark Mode", true, function(v)
-		self:ShowNotification(v and "Dark mode on" or "Dark mode off", "info", 1.5)
-	end)
-	self:AddCheckbox(4, "Enable notifications", true, function(v)
-		self:ShowNotification(v and "Notifications on" or "Notifications off", v and "success" or "info", 1.5)
-	end)
-	self:AddCheckbox(4, "Auto-save", false, function(v)
-		self:ShowNotification(v and "Auto-save enabled" or "Auto-save disabled", v and "success" or "info", 1.5)
-	end)
-
+	self:AddDivider(4, "Toggles")
+	self:AddToggle(4, "Anti-AFK", true, function(v)
+		self:Notify(v and "Anti-AFK enabled" or "Anti-AFK disabled", v and "success" or "info", 1.5)
+	end, "Prevents idle kick every 10 minutes")
+	self:AddCheckbox(4, "Send startup notification", true, function(v) end)
+	self:AddCheckbox(4, "Auto-rejoin on disconnect", false, function(v) end)
 	self:AddDivider(4, "Keybind")
-	self:AddKeybind(4, "Custom hotkey (click to rebind)", "G", function(key)
-		self:ShowNotification("Keybind set to: "..key, "success", 2)
+	self:AddKeybind(4, "Toggle Interface", "K", function(key)
+		self:Notify("Keybind set to: "..key, "success", 2)
 	end)
 
-	self:AddSectionHeader(5, "Logs", "Real-time event log with color coding")
-	local console = self:AddLogConsole(5, 280)
-
-	console:Log("SlaoqUILib initialized successfully", "SUCCESS")
-	console:Log("Running in demo mode - use Lib.new({...}) in your script", "INFO")
-	console:Log("Player: "..(lp and lp.Name or "Unknown").."  |  UserId: "..(lp and tostring(lp.UserId) or "0"), "INFO")
-	console:Log("Log console: ScrollingFrame-based, auto-scrolls, 60 line buffer", "DEBUG")
-	console:Log("Awaiting events...", "DEBUG")
+	self:AddSectionHeader(5, "Logs", "Real-time event log")
+	local nc = self:AddNotificationCenter(5, {Height=220, MaxItems=40})
+	local console = self:AddLogConsole(5, 200)
+	nc:Push("UI initialized", "success", "System")
+	nc:Push("Demo mode active", "info", "System")
+	console:Log("SlaoqUILib initialized", "SUCCESS")
+	console:Log("Demo mode - use Lib.new({...}) in your script", "INFO")
+	console:Log("Player: "..(lp and lp.Name or "Unknown"), "INFO")
 
 	self:AddButtonRow(5, {
-		{Text="Info",    Style="ghost",   Width=100, Callback=function() console:Log("Informational event logged",   "INFO")    end},
-		{Text="Success", Style="success", Width=100, Callback=function() console:Log("Operation succeeded",          "SUCCESS") end},
-		{Text="Warn",    Style="warning", Width=100, Callback=function() console:Log("Warning detected",             "WARN")    end},
-		{Text="Error",   Style="danger",  Width=100, Callback=function() console:Log("Critical error encountered",   "ERROR")   end},
-	})
-	self:AddButtonRow(5, {
-		{Text="Spam 20 Logs", Style="outline", Width=140, Callback=function()
-			task.spawn(function()
-				local lvls = {"INFO","SUCCESS","WARN","ERROR","DEBUG"}
-				for i = 1, 20 do
-					console:Log("Spam log entry #"..i.." - testing buffer limit", lvls[math.random(1,#lvls)])
-					task.wait(0.05)
-				end
-			end)
+		{Text="Push Event",  Style="ghost",   Width=110, Callback=function()
+			nc:Push("Event #"..math.random(1000), "info", "Demo")
+			console:Log("Event pushed", "INFO")
 		end},
-		{Text="Clear", Style="danger", Width=90, Callback=function()
-			console:Clear()
-			console:Log("Console cleared.", "INFO")
+		{Text="Success",  Style="success", Width=90, Callback=function()
+			nc:Push("Operation succeeded", "success")
+			console:Log("Success", "SUCCESS")
 		end},
-		{Text="Set Online",  Style="success", Width=110, Callback=function()
-			console:SetActive(true);  console:Log("Status changed to ONLINE",  "SUCCESS")
+		{Text="Error",    Style="danger",  Width=80, Callback=function()
+			nc:Push("Error occurred", "error")
+			console:Log("Error", "ERROR")
 		end},
-		{Text="Set Offline", Style="danger",  Width=110, Callback=function()
-			console:SetActive(false); console:Log("Status changed to OFFLINE", "WARN")
+		{Text="Clear All",Style="outline", Width=90, Callback=function()
+			nc:Clear(); console:Clear()
+			console:Log("Cleared.", "INFO")
 		end},
 	})
-	self:AddParagraph(5, "Console API",
-		"console:Log(msg, level)    level: INFO | SUCCESS | WARN | ERROR | SNIPE | DEBUG\n"..
-		"console:Clear()            removes all log entries\n"..
-		"console:SetActive(bool)    toggles the status dot (green = online)"
+	self:AddParagraph(5, "API Reference",
+		"ui:Notify(text, style, duration)
+ui:Confirm(title, msg, onYes, onNo)
+ui:SetPageBadge(pi, text)
+ui:OnDestroy(fn)
+AddInputNumber, AddMultiSelect, AddList, AddTag, AddStatusBadge2, AddNotificationCenter"
 	)
 end
 
+
 function Lib:SaveState()
-	local ok, _ = pcall(function()
+	pcall(function()
 		local win = self.Window
-		local state = {
+		Lib._savedState = {
 			pageIdx = self._pageIdx,
 			offsetX = win and win.Position.X.Offset or 0,
 			offsetY = win and win.Position.Y.Offset or 0,
 		}
-		if setclipboard then
-			
-		end
-		Lib._savedState = state
 	end)
 end
 
@@ -4305,15 +4243,6 @@ function Lib:_loadState()
 	return Lib._savedState
 end
 Lib._savedState = nil
-
-function Lib.Page(name, icon)
-	return {Name=name, Icon=icon}
-end
-
-function Lib.Group(name, pages, defaultOpen)
-	return {Group=name, Pages=pages, DefaultOpen=defaultOpen ~= false}
-end
-
 
 function Lib:AddNotificationCenter(pi, opts)
 	opts = opts or {}
@@ -4352,7 +4281,104 @@ function Lib:AddNotificationCenter(pi, opts)
 
 	local items={}
 	local count=0
+	local styleColors={
+		info   ={C.Blue,  fromHex("030914")},
+		success={C.Green, fromHex("030e08")},
+		warning={C.Yellow,fromHex("0e0b02")},
+		error  ={C.Red,   fromHex("0e0404")},
+		default={C.TextDim,C.Card},
+	}
 
+	self:_gap(s,pi,8)
+	local obj={Frame=wrap}
+	function obj:Push(text, style, label)
+		if #items>=maxItems then
+			if items[1] and items[1].Parent then items[1]:Destroy() end
+			table.remove(items,1)
+		end
+		count=count+1
+		local sc=styleColors[style] or styleColors.default
+		local row=new("Frame",{Size=UDim2.new(1,0,0,0),AutomaticSize=Enum.AutomaticSize.Y,
+			BackgroundColor3=sc[2],BorderSizePixel=0,LayoutOrder=count},scroll)
+		corner(row,8)
+		pad(row,8,6,10,10)
+		if label then
+			new("TextLabel",{Text=label,Font=Enum.Font.GothamBold,TextSize=9,TextColor3=sc[1],
+				BackgroundTransparency=1,Size=UDim2.new(1,0,0,12),TextXAlignment=Enum.TextXAlignment.Left,LayoutOrder=0},row)
+		end
+		new("TextLabel",{Text=tostring(text),Font=Enum.Font.Gotham,TextSize=11,TextColor3=C.Text,
+			BackgroundTransparency=1,Size=UDim2.new(1,0,0,0),AutomaticSize=Enum.AutomaticSize.Y,
+			TextXAlignment=Enum.TextXAlignment.Left,TextWrapped=true,LayoutOrder=1},row)
+		table.insert(items,row)
+		task.defer(function()
+			if scroll and scroll.Parent then scroll.CanvasPosition=Vector2.new(0,math.huge) end
+		end)
+	end
+	function obj:Clear()
+		for _,r in ipairs(items) do if r and r.Parent then r:Destroy() end end
+		items={}
+	end
+	function obj:SetActive(v)
+		tw(dot,.2,{BackgroundColor3=v and C.Green or C.Red})
+	end
+	clearBtn.Activated:Connect(function() obj:Clear() end)
+	return obj
+end
+
+
+function Lib:SaveState()
+	pcall(function()
+		local win = self.Window
+		Lib._savedState = {
+			pageIdx = self._pageIdx,
+			offsetX = win and win.Position.X.Offset or 0,
+			offsetY = win and win.Position.Y.Offset or 0,
+		}
+	end)
+end
+
+function Lib:_loadState()
+	return Lib._savedState
+end
+Lib._savedState = nil
+
+function Lib:AddNotificationCenter(pi, opts)
+	opts = opts or {}
+	local maxItems = opts.MaxItems or 30
+	local height   = opts.Height   or 200
+	local s = self:GetPage(pi); if not s then return end
+
+	local wrap=new("Frame",{Size=UDim2.new(1,0,0,height+34),BackgroundColor3=fromHex("050505"),
+		BorderSizePixel=0,ClipsDescendants=true,LayoutOrder=self:_o(pi)},s)
+	corner(wrap,10)
+	stroke(wrap,C.Border,1)
+
+	local hdr=new("Frame",{Size=UDim2.new(1,0,0,34),BackgroundColor3=C.Card,BorderSizePixel=0},wrap)
+	corner(hdr,10)
+	new("Frame",{Position=UDim2.new(0,0,1,-6),Size=UDim2.new(1,0,0,6),BackgroundColor3=C.Card,BorderSizePixel=0},hdr)
+	pad(hdr,0,0,14,14); hlist(hdr,8)
+	local dot=new("Frame",{Size=UDim2.fromOffset(7,7),BackgroundColor3=C.Green,BorderSizePixel=0,LayoutOrder=0},hdr)
+	corner(dot,4)
+	new("TextLabel",{Text="NOTIFICATIONS",Font=Enum.Font.GothamBold,TextSize=10,TextColor3=C.TextDim,
+		BackgroundTransparency=1,Size=UDim2.new(1,-60,1,0),TextXAlignment=Enum.TextXAlignment.Left,LayoutOrder=1},hdr)
+	local clearBtn=new("TextButton",{Text="Clear",Font=Enum.Font.GothamBold,TextSize=9,TextColor3=C.TextOff,
+		BackgroundTransparency=1,AnchorPoint=Vector2.new(1,.5),Position=UDim2.new(1,0,.5,0),
+		Size=UDim2.fromOffset(36,20),ZIndex=2,AutoButtonColor=false},hdr)
+	clearBtn.MouseEnter:Connect(function() tw(clearBtn,.1,{TextColor3=C.TextDim}) end)
+	clearBtn.MouseLeave:Connect(function() tw(clearBtn,.12,{TextColor3=C.TextOff}) end)
+
+	local scroll=new("ScrollingFrame",{
+		Position=UDim2.fromOffset(0,34),Size=UDim2.new(1,0,1,-34),
+		BackgroundTransparency=1,BorderSizePixel=0,
+		ScrollBarThickness=3,ScrollBarImageColor3=C.Border3,ScrollBarImageTransparency=.4,
+		CanvasSize=UDim2.new(0,0,0,0),AutomaticCanvasSize=Enum.AutomaticSize.Y,
+		ScrollingDirection=Enum.ScrollingDirection.Y,ZIndex=2,
+	},wrap)
+	pad(scroll,4,4,10,10)
+	new("UIListLayout",{SortOrder=Enum.SortOrder.LayoutOrder,Padding=UDim.new(0,3)},scroll)
+
+	local items={}
+	local count=0
 	local styleColors={
 		info   ={C.Blue,  fromHex("030914")},
 		success={C.Green, fromHex("030e08")},
@@ -4384,9 +4410,7 @@ function Lib:AddNotificationCenter(pi, opts)
 			TextXAlignment=Enum.TextXAlignment.Left,TextWrapped=true,LayoutOrder=1},row)
 		table.insert(items,row)
 		task.defer(function()
-			if scroll and scroll.Parent then
-				scroll.CanvasPosition=Vector2.new(0,math.huge)
-			end
+			if scroll and scroll.Parent then scroll.CanvasPosition=Vector2.new(0,math.huge) end
 		end)
 	end
 	function obj:Clear()

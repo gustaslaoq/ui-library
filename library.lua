@@ -168,14 +168,6 @@ function Lib.new(userCfg)
 		for k,v in pairs(userCfg) do self.cfg[k]=v end
 	end
 
-	if self.cfg.Colors and type(self.cfg.Colors) == "table" then
-		for k,v in pairs(self.cfg.Colors) do
-			if C[k] ~= nil and typeof(v) == "Color3" then
-				C[k] = v
-			end
-		end
-	end
-
 	if self.cfg.Colors and type(self.cfg.Colors)=="table" then
 		for k,v in pairs(self.cfg.Colors) do
 			if C[k] ~= nil and type(v)=="userdata" then

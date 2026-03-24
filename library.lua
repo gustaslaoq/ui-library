@@ -2,7 +2,7 @@ local Lib = {}
 Lib.__index = Lib
 
 local Players          = game:GetService("Players")
-local TweenService     = game:GetService("TweenService")
+local TweenService     = game:GetService("TweenService")   
 local UserInputService = game:GetService("UserInputService")
 local RunService       = game:GetService("RunService")
 local CoreGui          = game:GetService("CoreGui")
@@ -18,6 +18,7 @@ local function fromHex(h)
 end
 
 local _rm = false
+local _tweenMap = setmetatable({}, {__mode="k"})
 local function tw(obj, t, props, es, ed)
 	if not obj or not obj.Parent then return end
 	local duration, style, dir
@@ -30,9 +31,22 @@ local function tw(obj, t, props, es, ed)
 		style = es or Enum.EasingStyle.Quint
 		dir = ed or Enum.EasingDirection.Out
 	end
+	local prev = _tweenMap[obj]
+	if prev then
+		pcall(function() prev:Cancel() end)
+	end
 	local ok, tween = pcall(TweenService.Create, TweenService, obj,
 		TweenInfo.new(duration, style, dir), props)
-	if ok and tween then tween:Play() return tween end
+	if ok and tween then
+		_tweenMap[obj] = tween
+		tween.Completed:Connect(function()
+			if _tweenMap[obj] == tween then
+				_tweenMap[obj] = nil
+			end
+		end)
+		tween:Play()
+		return tween
+	end
 end
 
 local function new(class, props, parent)
@@ -245,7 +259,13 @@ function Lib.new(userCfg)
 		self._keyConn = UserInputService.InputBegan:Connect(function(inp, gp)
 			if gp then return end
 			local kc = tostring(inp.KeyCode):gsub("Enum%.KeyCode%.","")
-			if kc == self._toggleKey and not self._kbListening then self:ToggleVisibility() end
+			if kc == self._toggleKey and not self._kbListening then
+				if UserInputService:GetFocusedTextBox() then return end
+				local now = os.clock()
+				if self._toggleBlockedUntil and now < self._toggleBlockedUntil then return end
+				self._toggleBlockedUntil = now + 0.25
+				self:ToggleVisibility()
+			end
 			if kc == "F" and (UserInputService:IsKeyDown(Enum.KeyCode.LeftControl) or UserInputService:IsKeyDown(Enum.KeyCode.RightControl)) then
 				if not self._hidden then self:_openSearch() end
 			end
@@ -951,7 +971,12 @@ function Lib:_buildBody(win)
 	navDown.Activated:Connect(function() self:_searchNavigate(1) end)
 
 	searchBox:GetPropertyChangedSignal("Text"):Connect(function()
-		self:_doSearch(searchBox.Text)
+		local ts = os.clock()
+		self._searchDebounceTS = ts
+		task.delay(0.08, function()
+			if self._searchDebounceTS ~= ts then return end
+			self:_doSearch(searchBox.Text)
+		end)
 	end)
 	searchBox.FocusLost:Connect(function(enter)
 		if enter then self:_doSearch(searchBox.Text) end
@@ -1318,6 +1343,7 @@ function Lib:Minimise()
 	if self._minimised then return end
 	self._minimised = true
 	self._dragActive = false
+	if self._searchOpen then self:_closeSearch() end
 
 	local win  = self.Window
 	local mini = self:_useMiniMode()
@@ -1425,6 +1451,7 @@ function Lib:Hide()
 	if self._hidden then return end
 	self._hidden = true
 	self._dragActive = false
+	if self._searchOpen then self:_closeSearch() end
 	local win = self.Window
 	if not win then return end
 	-- If minimised, restore the full window first so the fade-out looks correct
@@ -2224,8 +2251,11 @@ function Lib:_doSearch(query)
 		return true
 	end
 
+	local processed = 0
 	local function scan(parent)
 		for _, child in ipairs(parent:GetChildren()) do
+			processed = processed + 1
+			if processed > 2000 then return end
 			if child:IsA("TextLabel") or child:IsA("TextButton") then
 				if isSearchable(child) then
 					local txt = child.Text or ""

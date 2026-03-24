@@ -1096,6 +1096,8 @@ end
 function Lib:SetPage(index)
 	local cfg = self.cfg
 	if index == self._pageIdx and not self._settingsVisible then return end
+	self._pageGen = (self._pageGen or 0) + 1
+	local gen = self._pageGen
 	if self._settingsVisible then
 		self._settingsVisible = false
 		if self._settingsFrame then self._settingsFrame.Visible = false end
@@ -1123,6 +1125,7 @@ function Lib:SetPage(index)
 			tw(ofs, .18, {Position=UDim2.new(0,0,0,10)}, Enum.EasingStyle.Quint, Enum.EasingDirection.In)
 		end
 		task.delay(.2, function()
+			if gen ~= self._pageGen then return end
 			if oldFrame and oldFrame.Parent then
 				oldFrame.Visible = false
 				if ofs and ofs.Parent then
@@ -1135,6 +1138,7 @@ function Lib:SetPage(index)
 		local nfs = newFrame:FindFirstChildWhichIsA("ScrollingFrame")
 		newFrame.Visible = false
 		task.delay(fadeDelay, function()
+			if gen ~= self._pageGen then return end
 			if not newFrame or not newFrame.Parent then return end
 			if nfs and nfs.Parent then
 				nfs.Position = UDim2.new(0,0,0,20)
@@ -1142,6 +1146,11 @@ function Lib:SetPage(index)
 			newFrame.Visible = true
 			if nfs then
 				tw(nfs, .3, {Position=UDim2.fromOffset(0,0)}, Enum.EasingStyle.Quint)
+			end
+			if gen == self._pageGen then
+				for i,p in ipairs(self._pages) do
+					if p and p.Frame then p.Frame.Visible = (i == index) end
+				end
 			end
 		end)
 	end
@@ -2076,6 +2085,9 @@ end
 function Lib:_openSettings()
 	if not self._settingsFrame then self:_buildSettingsPanel() end
 
+	self._settingsGen = (self._settingsGen or 0) + 1
+	local gen = self._settingsGen
+
 	if self._settingsVisible then
 		self._settingsVisible = false
 		if self._gearImg then tw(self._gearImg,.15,{ImageColor3=C.Text}) end
@@ -2087,6 +2099,7 @@ function Lib:_openSettings()
 			tw(sfs,.18,{Position=UDim2.new(0,0,0,10)},Enum.EasingStyle.Quint,Enum.EasingDirection.In)
 		end
 		task.delay(.2,function()
+			if gen ~= self._settingsGen then return end
 			if sf then sf.Visible=false end
 			if sfs and sfs.Parent then sfs.Position=UDim2.fromOffset(0,0) end
 			local pg = self._pages[self._pageIdx]
@@ -2126,6 +2139,7 @@ function Lib:_openSettings()
 			tw(ofs,.18,{Position=UDim2.new(0,0,0,10)},Enum.EasingStyle.Quint,Enum.EasingDirection.In)
 		end
 		task.delay(.2,function()
+			if gen ~= self._settingsGen then return end
 			if curFrame and curFrame.Parent then curFrame.Visible=false end
 			if ofs and ofs.Parent then ofs.Position=UDim2.fromOffset(0,0) end
 			if sfs then sfs.Position=UDim2.new(0,0,0,20) end

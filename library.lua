@@ -1604,7 +1604,7 @@ function Lib:Confirm(title, message, onConfirm, onCancel, opts)
 
 	local cam = workspace.CurrentCamera
 	local vp  = cam and cam.ViewportSize or Vector2.new(1280,720)
-	local mw  = math.clamp(math.floor(vp.X * 0.36), 300, 460)
+	local mw  = math.clamp(math.floor(vp.X * 0.30), 280, 400)
 	local modal = new("Frame",{
 		AnchorPoint=Vector2.new(.5,.5),Position=UDim2.new(.5,0,.5,18),
 		Size=UDim2.fromOffset(math.floor(mw*0.9),0),AutomaticSize=Enum.AutomaticSize.Y,
@@ -1621,7 +1621,7 @@ function Lib:Confirm(title, message, onConfirm, onCancel, opts)
 	}, modal)
 	new("UIListLayout",{FillDirection=Enum.FillDirection.Vertical,SortOrder=Enum.SortOrder.LayoutOrder,Padding=UDim.new(0,0)},modal)
 
-	local header=new("Frame",{Size=UDim2.new(1,0,0,60),BackgroundTransparency=1,ZIndex=902,LayoutOrder=0},modal)
+	local header=new("Frame",{Size=UDim2.new(1,0,0,68),BackgroundTransparency=1,ZIndex=902,LayoutOrder=0},modal)
 	pad(header,16,8,16,16)
 	hlist(header,10)
 	local iconWrap=new("Frame",{Size=UDim2.fromOffset(28,28),BackgroundTransparency=1,LayoutOrder=0},header)
@@ -1639,22 +1639,22 @@ function Lib:Confirm(title, message, onConfirm, onCancel, opts)
 	new("Frame",{Position=UDim2.fromOffset(0,56),Size=UDim2.new(1,0,0,1),BackgroundColor3=C.Border,BorderSizePixel=0},modal)
 
 	local body=new("Frame",{Size=UDim2.new(1,0,0,0),AutomaticSize=Enum.AutomaticSize.Y,BackgroundTransparency=1,ZIndex=903,LayoutOrder=1},modal)
-	pad(body,14,16,16,16)
+	pad(body,18,18,18,18)
 
 	local msgLbl=new("TextLabel",{Text=message or "",Font=Enum.Font.Gotham,TextSize=13,TextColor3=C.TextDim,
 		BackgroundTransparency=1,Size=UDim2.new(1,0,0,0),AutomaticSize=Enum.AutomaticSize.Y,
 		TextXAlignment=Enum.TextXAlignment.Left,TextYAlignment=Enum.TextYAlignment.Top,TextWrapped=true},body)
 	-- aumento sutil da altura mínima do corpo
-	new("Frame",{Size=UDim2.new(1,0,0,18),BackgroundTransparency=1},body)
+	new("Frame",{Size=UDim2.new(1,0,0,26),BackgroundTransparency=1},body)
 	new("Frame",{Position=UDim2.new(0,0,1,0),Size=UDim2.new(1,0,0,1),BackgroundColor3=C.Border,BorderSizePixel=0},body)
 
-	local footer=new("Frame",{Size=UDim2.new(1,0,0,56),BackgroundTransparency=1,ZIndex=903,LayoutOrder=2},modal)
-	pad(footer,10,12,16,16)
-	hlist(footer,12)
+	local footer=new("Frame",{Size=UDim2.new(1,0,0,64),BackgroundTransparency=1,ZIndex=903,LayoutOrder=2},modal)
+	pad(footer,12,14,16,16)
+	hlist(footer,14)
 
 	local cancelBtn=new("TextButton",{Text=cancelText,Font=Enum.Font.GothamBold,TextSize=13,
 		TextColor3=C.TextDim,BackgroundColor3=C.Card2,BorderSizePixel=0,
-		Size=UDim2.new(.5,-10,0,40),AutoButtonColor=false,LayoutOrder=0},footer)
+		Size=UDim2.new(.5,-12,0,44),AutoButtonColor=false,LayoutOrder=0},footer)
 	corner(cancelBtn,8)
 	stroke(cancelBtn,C.Border2,1)
 	cancelBtn.MouseEnter:Connect(function() tw(cancelBtn,.1,{TextColor3=C.White,BackgroundColor3=C.Card3}) end)
@@ -1662,7 +1662,7 @@ function Lib:Confirm(title, message, onConfirm, onCancel, opts)
 
 	local confirmBtn=new("TextButton",{Text=confirmText,Font=Enum.Font.GothamBold,TextSize=13,
 		TextColor3=C.White,BackgroundColor3=confirmColor,BorderSizePixel=0,
-		Size=UDim2.new(.5,-10,0,40),AutoButtonColor=false,LayoutOrder=1},footer)
+		Size=UDim2.new(.5,-12,0,44),AutoButtonColor=false,LayoutOrder=1},footer)
 	corner(confirmBtn,8)
 	local function lighten(col)
 		return Color3.new(math.min(col.R+0.15,1),math.min(col.G+0.08,1),math.min(col.B+0.08,1))

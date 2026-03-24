@@ -89,6 +89,30 @@ local function vlist(obj, spacing, halign)
 	},obj)
 end
 
+-- Validation helpers
+local function validateString(v, fallback)
+	if typeof(v) == "string" then return v end
+	return fallback or ""
+end
+local function validateTable(v, fallback)
+	if typeof(v) == "table" then return v end
+	return fallback or {}
+end
+local function validateCallback(v)
+	if typeof(v) == "function" then return v end
+	return nil
+end
+
+-- Safe call helper
+local function safeCall(tag, fn, ...)
+	if typeof(fn) ~= "function" then return end
+	local ok, res = pcall(fn, ...)
+	if not ok then
+		warn(("[SlaoqUILib] callback error%s: %s"):format(tag and (" ("..tag..")") or "", tostring(res)))
+	end
+	return ok, res
+end
+
 local C = {
 	Bg       = fromHex("060606"),
 	Bg2      = fromHex("080808"),
@@ -192,6 +216,9 @@ function Lib.new(userCfg)
 	self._pages      = {}
 	self._navBtns    = {}
 	self._conns      = {}
+	self._tweens     = {}
+	self._tasks      = {}
+	self._debounces  = {}
 	self._ord        = {}
 	self._pageIdx    = 1
 	self._minimised  = false
@@ -261,9 +288,7 @@ function Lib.new(userCfg)
 			local kc = tostring(inp.KeyCode):gsub("Enum%.KeyCode%.","")
 			if kc == self._toggleKey and not self._kbListening then
 				if UserInputService:GetFocusedTextBox() then return end
-				local now = os.clock()
-				if self._toggleBlockedUntil and now < self._toggleBlockedUntil then return end
-				self._toggleBlockedUntil = now + 0.25
+				if not self:_debounce("toggle_key",0.25) then return end
 				self:ToggleVisibility()
 			end
 			if kc == "F" and (UserInputService:IsKeyDown(Enum.KeyCode.LeftControl) or UserInputService:IsKeyDown(Enum.KeyCode.RightControl)) then
@@ -276,6 +301,38 @@ function Lib.new(userCfg)
 	end
 
 	return self
+end
+
+function Lib:_addConnection(conn)
+	if conn then table.insert(self._conns, conn) end
+	return conn
+end
+function Lib:_addTask(threadObj)
+	if threadObj then table.insert(self._tasks, threadObj) end
+	return threadObj
+end
+function Lib:_addTween(tweenObj)
+	if tweenObj then table.insert(self._tweens, tweenObj) end
+	return tweenObj
+end
+function Lib:_safeCall(cb, ...)
+	if validateCallback(cb) then
+		return safeCall(nil, cb, ...)
+	end
+end
+function Lib:_debounce(key, interval)
+	key = tostring(key or "__")
+	local now = os.clock()
+	local untilTs = self._debounces[key]
+	if untilTs and now < untilTs then return false end
+	self._debounces[key] = now + (interval or 0.18)
+	return true
+end
+function Lib:IsVisible()
+	return not self._hidden
+end
+function Lib:IsMinimised()
+	return self._minimised == true
 end
 
 function Lib:_useMiniMode()
@@ -674,7 +731,10 @@ function Lib:_buildTitleBar(win)
 		local btn = new("TextButton",{Text="",BackgroundTransparency=1,Size=UDim2.fromScale(1,1),ZIndex=14,AutoButtonColor=false},w)
 		btn.MouseEnter:Connect(function() tw(img,.12,{ImageColor3=C.White}); tw(w,.12,{BackgroundTransparency=.93}) end)
 		btn.MouseLeave:Connect(function() tw(img,.15,{ImageColor3=C.Text}); tw(w,.15,{BackgroundTransparency=1}) end)
-		btn.Activated:Connect(function() self:_toggleSearch() end)
+		btn.Activated:Connect(function()
+			if not self:_debounce("search_toggle",0.2) then return end
+			self:_toggleSearch()
+		end)
 		self._searchBtnImg = img
 		self._searchBtnFb  = nil
 	end
@@ -688,7 +748,10 @@ function Lib:_buildTitleBar(win)
 		local btn = new("TextButton",{Text="",BackgroundTransparency=1,Size=UDim2.fromScale(1,1),ZIndex=14,AutoButtonColor=false},w)
 		btn.MouseEnter:Connect(function() tw(img,.12,{ImageColor3=C.White}); tw(w,.12,{BackgroundTransparency=.93}) end)
 		btn.MouseLeave:Connect(function() tw(img,.15,{ImageColor3=C.Text}); tw(w,.15,{BackgroundTransparency=1}) end)
-		btn.Activated:Connect(function() self:_openSettings() end)
+		btn.Activated:Connect(function()
+			if not self:_debounce("settings_toggle",0.25) then return end
+			self:_openSettings()
+		end)
 		self._gearImg = img
 		self._gearFb  = nil
 	end
@@ -699,6 +762,7 @@ function Lib:_buildTitleBar(win)
 		b.MouseEnter:Connect(function() tw(b,.12,{TextColor3=C.White,BackgroundColor3=C.Card3,BackgroundTransparency=.88}) end)
 		b.MouseLeave:Connect(function() tw(b,.15,{TextColor3=C.White,BackgroundTransparency=1}) end)
 		b.Activated:Connect(function()
+			if not self:_debounce("min_toggle",0.25) then return end
 			if self._minimised then self:Maximise() else self:Minimise() end
 		end)
 		self._minBtn = b
@@ -721,7 +785,10 @@ function Lib:_buildTitleBar(win)
 				tw(b,.15,{TextColor3=C.TextDim,BackgroundTransparency=1})
 			end
 		end)
-		b.Activated:Connect(function() self:Hide() end)
+		b.Activated:Connect(function()
+			if not self:_debounce("hide_window",0.2) then return end
+			self:Hide()
+		end)
 	end
 
 	do
@@ -845,6 +912,7 @@ function Lib:_buildBody(win)
 			end
 
 			grpBtn.Activated:Connect(function()
+				if not self:_debounce("group_"..tostring(entry.Group),0.2) then return end
 				groupOpen = not groupOpen
 				subContainer.Visible = groupOpen
 				tw(arrow,.2,{Rotation=groupOpen and 0 or -90})
@@ -966,9 +1034,18 @@ function Lib:_buildBody(win)
 	vlist(nh,6)
 	self._notifHolder = nh
 
-	closeSearchBtn.Activated:Connect(function() self:_closeSearch() end)
-	navUp.Activated:Connect(function() self:_searchNavigate(-1) end)
-	navDown.Activated:Connect(function() self:_searchNavigate(1) end)
+	closeSearchBtn.Activated:Connect(function()
+		if not self:_debounce("search_close",0.15) then return end
+		self:_closeSearch()
+	end)
+	navUp.Activated:Connect(function()
+		if not self:_debounce("search_nav",0.12) then return end
+		self:_searchNavigate(-1)
+	end)
+	navDown.Activated:Connect(function()
+		if not self:_debounce("search_nav",0.12) then return end
+		self:_searchNavigate(1)
+	end)
 
 	searchBox:GetPropertyChangedSignal("Text"):Connect(function()
 		local ts = os.clock()
@@ -1073,6 +1150,7 @@ function Lib:_makeNavBtn(page,index,parent,indented)
 		end
 	end)
 	click.Activated:Connect(function()
+		if not self:_debounce("nav_"..tostring(index),0.2) then return end
 		if self._pageIdx == index and not self._settingsVisible then return end
 		self:SetPage(index)
 	end)
@@ -1686,10 +1764,10 @@ function Lib:Confirm(title, message, onConfirm, onCancel, opts)
 	end
 
 	cancelBtn.Activated:Connect(function()
-		closeModal(); if onCancel then pcall(onCancel) end
+		closeModal(); if onCancel then self:_safeCall(onCancel) end
 	end)
 	confirmBtn.Activated:Connect(function()
-		closeModal(); if onConfirm then pcall(onConfirm) end
+		closeModal(); if onConfirm then self:_safeCall(onConfirm) end
 	end)
 
 	local closeOnOverlay=new("TextButton",{
@@ -1697,7 +1775,7 @@ function Lib:Confirm(title, message, onConfirm, onCancel, opts)
 		ZIndex=900,AutoButtonColor=false,
 	},overlay)
 	closeOnOverlay.Activated:Connect(function()
-		closeModal(); if onCancel then pcall(onCancel) end
+		closeModal(); if onCancel then self:_safeCall(onCancel) end
 	end)
 
 	modal.Size = UDim2.fromOffset(mw, 0)
@@ -1713,6 +1791,20 @@ function Lib:OnDestroy(fn)
 end
 
 function Lib:Destroy()
+	self._destroyed = true
+	-- stop tweens tracked globally
+	for obj, twr in pairs(_tweenMap) do
+		pcall(function()
+			if twr then twr:Cancel() end
+		end)
+	end
+	for _,twr in ipairs(self._tweens or {}) do
+		pcall(function() if twr then twr:Cancel() end end)
+	end
+	-- try cancel any tracked tasks
+	for _,th in ipairs(self._tasks or {}) do
+		pcall(function() if task.cancel then task.cancel(th) end end)
+	end
 	for _,fn in ipairs(self._onDestroyFns or {}) do pcall(fn) end
 	for _,c in ipairs(self._conns) do pcall(function() c:Disconnect() end) end
 	if self._keyConn then pcall(function() self._keyConn:Disconnect() end) end
@@ -1728,6 +1820,12 @@ function Lib:Destroy()
 		end
 		task.delay(.31,function() pcall(function() self._sg:Destroy() end) end)
 	end
+	-- clear references
+	self._conns = {}
+	self._tweens = {}
+	self._tasks = {}
+	self._pages = {}
+	self._navBtns = {}
 end
 
 function Lib:_buildToastSystem()
@@ -2083,6 +2181,7 @@ function Lib:_buildSettingsPanel()
 end
 
 function Lib:_openSettings()
+	if not self:_debounce("settings_toggle",0.25) then return end
 	if not self._settingsFrame then self:_buildSettingsPanel() end
 
 	self._settingsGen = (self._settingsGen or 0) + 1
@@ -2494,6 +2593,7 @@ end
 
 function Lib:AddButtonRow(pi,defs)
 	local s=self:GetPage(pi); if not s then return end
+	defs = validateTable(defs, {})
 	local row=new("Frame",{Size=UDim2.new(1,0,0,44),BackgroundTransparency=1,LayoutOrder=self:_o(pi)},s)
 	hlist(row,10)
 
@@ -2509,6 +2609,7 @@ function Lib:AddButtonRow(pi,defs)
 
 	local btns={}
 	for i,def in ipairs(defs) do
+		def = validateTable(def, {})
 		local st=styles[def.Style or "primary"]
 		local w=def.Width or 130
 		local btn=new("TextButton",{Text=def.Text or "",Font=Enum.Font.GothamBold,TextSize=12,
@@ -2523,7 +2624,8 @@ function Lib:AddButtonRow(pi,defs)
 		pcall(function() btn.CursorIcon="rbxasset://SystemCursors/PointingHand" end)
 		if def.Callback then
 			btn.Activated:Connect(function()
-				local ok,_ = pcall(def.Callback)
+				if not self:_debounce("btnrow_"..tostring(i),0.15) then return end
+				local ok = self:_safeCall(def.Callback)
 				if not ok then
 					local orig=st.bg
 					tw(btn,.15,{BackgroundColor3=C.Red})
@@ -2604,7 +2706,7 @@ function Lib:AddToggle(pi,label,default,callback,desc)
 		tw(tStroke,.28,{Color=v and fromHex("aaaaaa") or C.Border2})
 		tw(knob,.28,{BackgroundColor3=v and C.Bg or C.TextDim},Enum.EasingStyle.Quint)
 		tw(knob,.32,{Position=UDim2.new(0,v and 22 or 2,.5,0)},Enum.EasingStyle.Back,Enum.EasingDirection.Out)
-		if not silent and callback then callback(v) end
+		if not silent and callback then self:_safeCall(callback, v) end
 	end
 
 	local click=new("TextButton",{Text="",BackgroundTransparency=1,Size=UDim2.fromScale(1,1),ZIndex=5,AutoButtonColor=false},track)
@@ -2674,7 +2776,7 @@ function Lib:AddCheckbox(pi,label,default,callback)
 		if not checkIconWorks then
 			tw(check,.12,{TextTransparency=v and 0 or 1})
 		end
-		if not silent and callback then callback(v) end
+		if not silent and callback then self:_safeCall(callback, v) end
 	end
 
 	local click=new("TextButton",{Text="",BackgroundTransparency=1,Size=UDim2.fromScale(1,1),ZIndex=5,AutoButtonColor=false},row)
@@ -2718,7 +2820,7 @@ function Lib:AddInput(pi,labelTxt,placeholder,callback,opts)
 	box.Focused:Connect(function() tw(wrap,.16,{BackgroundColor3=C.Card2}); tw(ws,.16,{Color=C.Border3}) end)
 	box.FocusLost:Connect(function(enter)
 		tw(wrap,.18,{BackgroundColor3=C.Card}); tw(ws,.18,{Color=C.Border})
-		if callback then callback(box.Text,enter or UserInputService.TouchEnabled) end
+		if callback then self:_safeCall(callback, box.Text, enter or UserInputService.TouchEnabled) end
 		if removeAfterFocus then box.Text="" end
 	end)
 	wrap.MouseEnter:Connect(function() if not box:IsFocused() then tw(wrap,.15,{BackgroundColor3=C.Card2}) end end)
@@ -2769,7 +2871,7 @@ function Lib:AddInputNumber(pi, labelTxt, opts, callback)
 			if step then n=math.floor(n/step+0.5)*step end
 			box.Text=tostring(n)
 			errLbl.Text=""
-			if callback then callback(n, enter or UserInputService.TouchEnabled) end
+			if callback then self:_safeCall(callback, n, enter or UserInputService.TouchEnabled) end
 		end
 	end)
 	wrap.MouseEnter:Connect(function() if not box:IsFocused() then tw(wrap,.15,{BackgroundColor3=C.Card2}) end end)
@@ -2800,6 +2902,7 @@ end
 
 function Lib:AddMultiSelect(pi, labelTxt, options, callback)
 	local s=self:GetPage(pi); if not s then return end
+	options = validateTable(options, {})
 	local selected = {}
 	for _,opt in ipairs(options) do selected[opt]=false end
 
@@ -2835,16 +2938,22 @@ function Lib:AddMultiSelect(pi, labelTxt, options, callback)
 	vlist(listInner,0)
 
 	local open=false
-	local listH = 1 + #options * 40
+	local listH = 1 + math.max(#options, 1) * 40
 	local toggleBtn=new("TextButton",{Text="",BackgroundTransparency=1,
 		Size=UDim2.fromScale(1,1),ZIndex=52,AutoButtonColor=false},header)
 
 	local function refreshCount()
 		local n=0; for _,v in pairs(selected) do if v then n=n+1 end end
 		countLbl.Text = n==0 and "none" or n.." selected"
-		if callback then callback(selected) end
+		if callback then self:_safeCall(callback, selected) end
 	end
 
+	if #options == 0 then
+		local empty=new("Frame",{Size=UDim2.new(1,0,0,40),BackgroundTransparency=1,LayoutOrder=1},listInner)
+		pad(empty,0,0,16,16)
+		new("TextLabel",{Text="No options",Font=Enum.Font.Gotham,TextSize=12,TextColor3=C.TextDim,
+			BackgroundTransparency=1,Size=UDim2.fromScale(1,1),TextXAlignment=Enum.TextXAlignment.Left},empty)
+	else
 	for i,opt in ipairs(options) do
 		local row=new("Frame",{Size=UDim2.new(1,0,0,40),BackgroundTransparency=1,BorderSizePixel=0,
 			LayoutOrder=i},listInner)
@@ -2871,6 +2980,7 @@ function Lib:AddMultiSelect(pi, labelTxt, options, callback)
 		btn.MouseEnter:Connect(function() tw(row,.1,{BackgroundTransparency=.94}) end)
 		btn.MouseLeave:Connect(function() tw(row,.12,{BackgroundTransparency=1}) end)
 	end
+	end
 
 	-- Arrow chevron indicator on the right side of header
 	local arrowLbl=new("TextLabel",{
@@ -2882,6 +2992,7 @@ function Lib:AddMultiSelect(pi, labelTxt, options, callback)
 	},header)
 
 	toggleBtn.Activated:Connect(function()
+		if not self:_debounce("ms_toggle_"..tostring(labelTxt or ""),0.2) then return end
 		open=not open
 		tw(arrowLbl,.18,{Rotation=open and 180 or 0})
 		if open then
@@ -3094,11 +3205,17 @@ function Lib:AddStepper(pi,label,min,max,default,step,callback)
 				tw(valLbl,.14,{TextTransparency=0})
 			end
 		end)
-		if callback then callback(val) end
+		if callback then self:_safeCall(callback, val) end
 	end
 
-	minusBtn.Activated:Connect(function() update(-step) end)
-	plusBtn.Activated:Connect(function()  update(step)  end)
+	minusBtn.Activated:Connect(function()
+		if not self:_debounce("stepper_"..tostring(label or "").."_-",0.08) then return end
+		update(-step)
+	end)
+	plusBtn.Activated:Connect(function()
+		if not self:_debounce("stepper_"..tostring(label or "").."_+",0.08) then return end
+		update(step)
+	end)
 	row.MouseEnter:Connect(function() tw(row,.15,{BackgroundColor3=C.Card2}) end)
 	row.MouseLeave:Connect(function() tw(row,.18,{BackgroundColor3=C.Card}) end)
 
@@ -3111,7 +3228,11 @@ end
 
 function Lib:AddSlider(pi,label,min,max,default,callback)
 	local s=self:GetPage(pi); if not s then return end
-	min=min or 0; max=max or 100; default=math.clamp(default or min,min,max)
+	min=min or 0; max=max or 100
+	if max < min then max, min = min, max end
+	local range = (max - min)
+	if range == 0 then range = 1 end
+	default=math.clamp(default or min,min,max)
 
 	local wrap=new("Frame",{Size=UDim2.new(1,0,0,66),BackgroundColor3=C.Card,BorderSizePixel=0,LayoutOrder=self:_o(pi)},s)
 	corner(wrap,10)
@@ -3128,10 +3249,10 @@ function Lib:AddSlider(pi,label,min,max,default,callback)
 	local trackBg=new("Frame",{Position=UDim2.fromOffset(0,30),Size=UDim2.new(1,0,0,6),
 		BackgroundColor3=C.Card3,BorderSizePixel=0},wrap)
 	corner(trackBg,3)
-	local fill=new("Frame",{Size=UDim2.fromScale((default-min)/(max-min),1),BackgroundColor3=C.White,BorderSizePixel=0},trackBg)
+	local fill=new("Frame",{Size=UDim2.fromScale((default-min)/(range),1),BackgroundColor3=C.White,BorderSizePixel=0},trackBg)
 	corner(fill,3)
 	local knobSl=new("Frame",{AnchorPoint=Vector2.new(.5,.5),
-		Position=UDim2.new((default-min)/(max-min),0,.5,0),
+		Position=UDim2.new((default-min)/(range),0,.5,0),
 		Size=UDim2.fromOffset(14,14),BackgroundColor3=C.White,BorderSizePixel=0,ZIndex=3},trackBg)
 	corner(knobSl,7)
 
@@ -3143,8 +3264,8 @@ function Lib:AddSlider(pi,label,min,max,default,callback)
 
 	local function updateVal(absX)
 		local rel=math.clamp((absX-trackBg.AbsolutePosition.X)/trackBg.AbsoluteSize.X,0,1)
-		local v=math.floor(min+rel*(max-min)+.5)
-		local pct=(v-min)/(max-min)
+		local v=math.floor(min+rel*(range)+.5)
+		local pct=(v-min)/(range)
 		tw(fill,.06,{Size=UDim2.fromScale(pct,1)})
 		tw(knobSl,.06,{Position=UDim2.new(pct,0,.5,0)})
 		valLbl.Text=tostring(v)
@@ -3159,7 +3280,7 @@ function Lib:AddSlider(pi,label,min,max,default,callback)
 	end)
 	table.insert(self._conns,UserInputService.InputEnded:Connect(function(i)
 		if i.UserInputType==Enum.UserInputType.MouseButton1 or i.UserInputType==Enum.UserInputType.Touch then
-			if dragging and callback then callback(curVal) end
+			if dragging and callback then self:_safeCall(callback, curVal) end
 			dragging=false
 		end
 	end))
@@ -3175,7 +3296,9 @@ function Lib:AddSlider(pi,label,min,max,default,callback)
 	local obj={Frame=wrap,Fill=fill,Knob=knobSl,ValueLabel=valLbl,_min=min,_max=max}
 	function obj:SetValue(v)
 		v=math.clamp(v,self._min,self._max)
-		local pct=(v-self._min)/(self._max-self._min)
+		local denom = (self._max - self._min)
+		if denom == 0 then denom = 1 end
+		local pct=(v-self._min)/denom
 		tw(self.Fill,.15,{Size=UDim2.fromScale(pct,1)})
 		tw(self.Knob,.15,{Position=UDim2.new(pct,0,.5,0)})
 		self.ValueLabel.Text=tostring(v)
@@ -3186,6 +3309,7 @@ end
 
 function Lib:AddDropdown(pi,labelTxt,options,callback)
 	local s=self:GetPage(pi); if not s then return end
+	options = validateTable(options, {})
 	if labelTxt then
 		new("TextLabel",{Text=labelTxt,Font=Enum.Font.GothamBold,TextSize=11,TextColor3=C.TextDim,
 			BackgroundTransparency=1,Size=UDim2.new(1,0,0,18),
@@ -3218,13 +3342,20 @@ function Lib:AddDropdown(pi,labelTxt,options,callback)
 		TextXAlignment=Enum.TextXAlignment.Center,ZIndex=52},arrowImg.Parent)
 	arrow.Visible = false
 
-	local listH=#options*40
+	local listH=math.max(#options,1)*40
 	local optList=new("Frame",{Position=UDim2.fromOffset(0,48),Size=UDim2.new(1,0,0,0),
 		BackgroundColor3=C.Card2,BorderSizePixel=0,ClipsDescendants=true,ZIndex=60,Visible=false},wrapper)
 	corner(optList,10)
 	stroke(optList,C.Border2,1)
 	new("UIListLayout",{SortOrder=Enum.SortOrder.LayoutOrder,Padding=UDim.new(0,0)},optList)
 
+	if #options == 0 then
+		local ob=new("TextButton",{Text="No options",Font=Enum.Font.Gotham,TextSize=13,TextColor3=C.TextDim,
+			BackgroundColor3=C.Card2,BackgroundTransparency=1,BorderSizePixel=0,
+			Size=UDim2.new(1,0,0,40),AutoButtonColor=false,LayoutOrder=1,ZIndex=61,
+			TextXAlignment=Enum.TextXAlignment.Left},optList)
+		pad(ob,0,0,16,16)
+	else
 	for i,opt in ipairs(options) do
 		local ob=new("TextButton",{Text=opt,Font=Enum.Font.Gotham,TextSize=13,TextColor3=C.Text,
 			BackgroundColor3=C.Card2,BackgroundTransparency=1,BorderSizePixel=0,
@@ -3239,14 +3370,16 @@ function Lib:AddDropdown(pi,labelTxt,options,callback)
 			tw(arrow,.18,{Rotation=0})
 			tw(arrowImg,.18,{Rotation=0})
 			task.delay(.2,function() if optList then optList.Visible=false end end)
-			if callback then callback(opt) end
+			if callback then self:_safeCall(callback, opt) end
 		end)
+	end
 	end
 
 	btn.MouseEnter:Connect(function() tw(btn,.14,{BackgroundColor3=C.Card2}) end)
 	btn.MouseLeave:Connect(function() tw(btn,.16,{BackgroundColor3=C.Card}) end)
 	pcall(function() btn.CursorIcon="rbxasset://SystemCursors/PointingHand" end)
 	btn.Activated:Connect(function()
+		if not self:_debounce("dd_toggle_"..tostring(labelTxt or ""),0.2) then return end
 		open=not open; optList.Visible=true
 		if open then
 			tw(optList,.28,{Size=UDim2.new(1,0,0,listH)},Enum.EasingStyle.Back,Enum.EasingDirection.Out)
@@ -3264,6 +3397,7 @@ end
 
 function Lib:AddRadioGroup(pi,label,options,default,callback)
 	local s=self:GetPage(pi); if not s then return end
+	options = validateTable(options, {})
 	local selected=default or (options[1] or "")
 
 	if label then
@@ -3279,6 +3413,16 @@ function Lib:AddRadioGroup(pi,label,options,default,callback)
 	stroke(wrap,C.Border,1)
 
 	local items={}
+	if #options == 0 then
+		local wrap=new("Frame",{Size=UDim2.new(1,0,0,44),BackgroundColor3=C.Card,BorderSizePixel=0,LayoutOrder=self:_o(pi)},s)
+		corner(wrap,10)
+		stroke(wrap,C.Border,1)
+		pad(wrap,0,0,16,16)
+		new("TextLabel",{Text="No options",Font=Enum.Font.Gotham,TextSize=13,TextColor3=C.TextDim,
+			BackgroundTransparency=1,Size=UDim2.new(1,0,1,0),TextXAlignment=Enum.TextXAlignment.Left},wrap)
+		self:_gap(s,pi,6)
+		return {Frame=wrap, GetSelected=function() return "" end}
+	end
 	for i,opt in ipairs(options) do
 		local isLast=i==#options
 		local row=new("Frame",{Size=UDim2.new(1,0,0,44),BackgroundTransparency=1,LayoutOrder=i},wrap)
@@ -3317,7 +3461,7 @@ function Lib:AddRadioGroup(pi,label,options,default,callback)
 				tw(v.Label,.2,{TextColor3=a and C.White or C.Text})
 			end
 			selected=opt
-			if callback then callback(opt) end
+			if callback then self:_safeCall(callback, opt) end
 		end)
 	end
 
@@ -3426,7 +3570,7 @@ function Lib:AddColorPicker(pi,label,default,callback)
 		local function commitColor()
 			preview.BackgroundColor3=currentColor
 			if hexBox then hexBox.Text=toHex(currentColor) end
-			if callback then callback(currentColor,toHex(currentColor)) end
+			if callback then self:_safeCall(callback, currentColor, toHex(currentColor)) end
 		end
 
 		local svBox=new("Frame",{
@@ -3581,7 +3725,7 @@ function Lib:AddColorPicker(pi,label,default,callback)
 					svCursor.Position=UDim2.new(sat,0,1-val,0)
 					hexBox.Text=h
 					preview.BackgroundColor3=col
-					if callback then callback(col,h) end
+					if callback then self:_safeCall(callback, col, h) end
 				end
 			else
 				hexBox.Text=toHex(currentColor)
@@ -4032,6 +4176,8 @@ end
 
 function Lib:AddTable(pi,headers,rows)
 	local s=self:GetPage(pi); if not s then return end
+	headers = validateTable(headers, {})
+	rows    = validateTable(rows, {})
 	local cols=#headers
 	local rowH=36
 
@@ -4073,7 +4219,10 @@ function Lib:AddTable(pi,headers,rows)
 	end
 
 	makeRow(headers,true,0)
-	for i,row in ipairs(rows) do makeRow(row,false,i) end
+	for i,row in ipairs(rows) do
+		row = validateTable(row, {})
+		makeRow(row,false,i)
+	end
 
 	self:_gap(s,pi,10)
 	local obj={Frame=wrap}
@@ -4118,7 +4267,7 @@ function Lib:AddKeybind(pi,label,default,callback)
 		local name=tostring(kc):gsub("Enum.KeyCode.","")
 		currentKey=name; keyBtn.Text=name; listening=false
 		tw(keyBtn,.15,{BackgroundColor3=C.Card3})
-		if callback then callback(name) end
+		if callback then self:_safeCall(callback, name) end
 	end))
 	row.MouseEnter:Connect(function() tw(row,.15,{BackgroundColor3=C.Card2}) end)
 	row.MouseLeave:Connect(function() tw(row,.18,{BackgroundColor3=C.Card}) end)

@@ -112,7 +112,6 @@ end
 local DefaultConfig = {
 	AccentColor        = nil,
 	Colors             = nil,
-	Colors             = nil,
 	AppName            = "MY APP",
 	AppSubtitle        = "Subtitle",
 	AppVersion         = "1.0",
@@ -190,7 +189,7 @@ function Lib.new(userCfg)
 	self._minFb      = nil
 	self._tbFiller   = nil
 	self._tbBorder   = nil
-	self._toggleKey      = "K"
+	self._toggleKey      = (userCfg and userCfg.ToggleKey) or "K"
 	self._toasts         = {}
 	self._toastCount     = 0
 	self._hidden         = false
@@ -263,7 +262,8 @@ function Lib:_useMiniMode()
 	if self._simulateMobile then return true end
 	local cam = workspace.CurrentCamera
 	local vp  = cam and cam.ViewportSize or Vector2.new(1920,1080)
-	return UserInputService.TouchEnabled or vp.X < 500
+	local bp = (self.cfg and self.cfg.MiniModeBreakpoint) or 700
+	return UserInputService.TouchEnabled or vp.X < bp
 end
 
 function Lib:_runSplash()
@@ -476,10 +476,21 @@ function Lib:_buildWindow()
 	self._doScale   = doScale
 	self._computeScale = computeScale
 
-	table.insert(self._conns,
-		workspace.CurrentCamera:GetPropertyChangedSignal("ViewportSize"):Connect(function()
-			if not self._minimised then doScale() end
+	do
+		local camConn
+		local function connectCam()
+			if camConn then pcall(function() camConn:Disconnect() end) end
+			local cam = workspace.CurrentCamera
+			if not cam then return end
+			camConn = cam:GetPropertyChangedSignal("ViewportSize"):Connect(function()
+				if not self._minimised then doScale() end
+			end)
+		end
+		connectCam()
+		table.insert(self._conns, workspace:GetPropertyChangedSignal("CurrentCamera"):Connect(function()
+			task.defer(function() connectCam(); if not self._minimised then doScale() end end)
 		end))
+	end
 
 	self:_buildTitleBar(clip)
 	self:_buildBody(clip)
@@ -598,9 +609,9 @@ function Lib:_buildTitleBar(win)
 	self._tbBorderLine = new("Frame",{Position=UDim2.new(0,0,1,-1),Size=UDim2.new(1,0,0,1),BackgroundColor3=C.Border,BorderSizePixel=0,ZIndex=10},tb)
 	self.TitleBar = tb
 
-	local left = new("Frame",{Size=UDim2.new(1,-180,1,0),BackgroundTransparency=1,ZIndex=11},tb)
-	pad(left,0,0,14,0)
-	hlist(left,10)
+	local left = new("Frame",{Size=UDim2.new(1,-188,1,0),BackgroundTransparency=1,ZIndex=11},tb)
+	pad(left,0,0,16,0)
+	hlist(left,8)
 
 	local logoMini = new("Frame",{Size=UDim2.fromOffset(26,26),BackgroundTransparency=1,BorderSizePixel=0,LayoutOrder=0},left)
 	if cfg.LogoImage ~= "" then
@@ -623,7 +634,7 @@ function Lib:_buildTitleBar(win)
 		BackgroundTransparency=1,Size=UDim2.fromOffset(0,22),AutomaticSize=Enum.AutomaticSize.X,ZIndex=12},ver)
 
 	local right = new("Frame",{AnchorPoint=Vector2.new(1,0),Position=UDim2.new(1,0,0,0),
-		Size=UDim2.fromOffset(180,44),BackgroundTransparency=1,ZIndex=11},tb)
+		Size=UDim2.fromOffset(188,44),BackgroundTransparency=1,ZIndex=11},tb)
 	hlist(right,0)
 
 	local function mkBtn(sym,hc,cb,lo)
@@ -666,7 +677,7 @@ function Lib:_buildTitleBar(win)
 	do
 		local b = new("TextButton",{Text="-",Font=Enum.Font.GothamBold,TextSize=18,TextColor3=C.White,
 			BackgroundTransparency=1,Size=UDim2.fromOffset(44,44),ZIndex=12,AutoButtonColor=false,LayoutOrder=2},right)
-		b.MouseEnter:Connect(function() tw(b,.12,{TextColor3=C.White,BackgroundTransparency=.93}) end)
+		b.MouseEnter:Connect(function() tw(b,.12,{TextColor3=C.White,BackgroundColor3=C.Card3,BackgroundTransparency=.88}) end)
 		b.MouseLeave:Connect(function() tw(b,.15,{TextColor3=C.White,BackgroundTransparency=1}) end)
 		b.Activated:Connect(function()
 			if self._minimised then self:Maximise() else self:Minimise() end
@@ -696,10 +707,16 @@ function Lib:_buildTitleBar(win)
 
 	do
 		local drag = false
+		local dragged = false
 		local ds, wsX, wsY
+		local DRAG_DEADZONE = 4
 		tb.InputBegan:Connect(function(i)
 			if i.UserInputType==Enum.UserInputType.MouseButton1 or i.UserInputType==Enum.UserInputType.Touch then
+				-- Skip drag when clicking button area on the right (last 196px = 4×44 + 20 margin)
+				local relX = i.Position.X - tb.AbsolutePosition.X
+				if relX > tb.AbsoluteSize.X - 196 then return end
 				drag = true
+				dragged = false
 				ds = i.Position
 				wsX = self.Window.Position.X.Offset
 				wsY = self.Window.Position.Y.Offset
@@ -715,6 +732,10 @@ function Lib:_buildTitleBar(win)
 			if not drag then return end
 			if i.UserInputType~=Enum.UserInputType.MouseMovement and i.UserInputType~=Enum.UserInputType.Touch then return end
 			local d = i.Position - ds
+			if not dragged then
+				if math.abs(d.X) < DRAG_DEADZONE and math.abs(d.Y) < DRAG_DEADZONE then return end
+				dragged = true
+			end
 			local nx = wsX + d.X
 			local ny = wsY + d.Y
 			self.Window.Position = UDim2.new(0.5, nx, 0.5, ny)
@@ -837,7 +858,7 @@ function Lib:_buildBody(win)
 
 	local searchBox = new("TextBox",{
 		AnchorPoint=Vector2.new(0,.5),Position=UDim2.new(0,36,.5,0),
-		Size=UDim2.new(1,-220,0,30),
+		Size=UDim2.new(1,-60,0,30),
 		Text="",PlaceholderText="Search in page... (Ctrl+F)",
 		Font=Enum.Font.Gotham,TextSize=13,
 		TextColor3=C.Text,PlaceholderColor3=C.TextOff,
@@ -849,13 +870,13 @@ function Lib:_buildBody(win)
 		AnchorPoint=Vector2.new(1,.5),Position=UDim2.new(1,-118,.5,0),
 		Size=UDim2.fromOffset(58,30),
 		Text="",Font=Enum.Font.Gotham,TextSize=11,TextColor3=C.TextDim,
-		BackgroundTransparency=1,TextXAlignment=Enum.TextXAlignment.Right,ZIndex=22,
+		BackgroundTransparency=1,TextXAlignment=Enum.TextXAlignment.Right,ZIndex=22,Visible=false,
 	}, searchBar)
 
 	local navUp = new("TextButton",{
 		AnchorPoint=Vector2.new(1,.5),Position=UDim2.new(1,-84,.5,0),
 		Size=UDim2.fromOffset(26,26),
-		Text="",BackgroundColor3=C.Card3,BorderSizePixel=0,AutoButtonColor=false,ZIndex=22,
+		Text="",BackgroundColor3=C.Card3,BorderSizePixel=0,AutoButtonColor=false,ZIndex=22,Visible=false,
 	}, searchBar)
 	corner(navUp,6)
 	do
@@ -871,7 +892,7 @@ function Lib:_buildBody(win)
 	local navDown = new("TextButton",{
 		AnchorPoint=Vector2.new(1,.5),Position=UDim2.new(1,-54,.5,0),
 		Size=UDim2.fromOffset(26,26),
-		Text="",BackgroundColor3=C.Card3,BorderSizePixel=0,AutoButtonColor=false,ZIndex=22,
+		Text="",BackgroundColor3=C.Card3,BorderSizePixel=0,AutoButtonColor=false,ZIndex=22,Visible=false,
 	}, searchBar)
 	corner(navDown,6)
 	do
@@ -963,17 +984,21 @@ function Lib:_makeNavBtn(page,index,parent,indented)
 			Size=UDim2.fromOffset(20,20),BackgroundTransparency=1,ZIndex=6},frame)
 		local img = new("ImageLabel",{Size=UDim2.fromScale(1,1),BackgroundTransparency=1,
 			Image="rbxassetid://"..iconId,ImageColor3=C.TextDim,ScaleType=Enum.ScaleType.Fit,ZIndex=6},iconFrame)
-		task.defer(function()
-			if not img.IsLoaded then
+		do
+			local loaded = false
+			img:GetPropertyChangedSignal("IsLoaded"):Connect(function()
+				if img.IsLoaded then loaded = true end
+			end)
+			task.delay(2, function()
+				if loaded or not img.Parent then return end
+				-- Image failed to load after 2s - show letter fallback
 				img.Image = ""
-				local fb = new("TextLabel",{Text=string.upper(string.sub(page.Name,1,1)),
+				new("TextLabel",{Text=string.upper(string.sub(page.Name,1,1)),
 					Font=Enum.Font.GothamBold,TextSize=10,TextColor3=C.TextDim,
 					BackgroundTransparency=1,Size=UDim2.fromScale(1,1),
 					TextXAlignment=Enum.TextXAlignment.Center,ZIndex=7},iconFrame)
-				dot.Visible = false
-				_ = fb
-			end
-		end)
+			end)
+		end
 		dot = {
 			_img=img,
 			_frame=iconFrame,
@@ -1029,7 +1054,7 @@ function Lib:_makeNavBtn(page,index,parent,indented)
 		if self._pageIdx == index and not self._settingsVisible then return end
 		self:SetPage(index)
 	end)
-	self._navBtns[index] = {Frame=frame,Bg=bg,Lbl=lbl,Dot=dot,HasIcon=hasIcon,SetDotColor=setDotColor,SetDotSize=setDotSize}
+	self._navBtns[index] = {Frame=frame,Bg=bg,Lbl=lbl,Dot=dot,HasIcon=hasIcon,SetDotColor=setDotColor,SetDotSize=setDotSize,_dotX=dotX}
 end
 
 function Lib:_initPages()
@@ -1040,7 +1065,7 @@ function Lib:_initPages()
 			CanvasSize=UDim2.new(0,0,0,0),AutomaticCanvasSize=Enum.AutomaticSize.Y,
 			ElasticBehavior=Enum.ElasticBehavior.Never},frame)
 		new("UIListLayout",{SortOrder=Enum.SortOrder.LayoutOrder,Padding=UDim.new(0,0)},scroll)
-		pad(scroll,24,24,24,24)
+		pad(scroll,28,28,26,26)
 		self._pages[i] = {Frame=frame,Scroll=scroll}
 		self._ord[i]   = 0
 	end
@@ -1073,7 +1098,7 @@ function Lib:SetPage(index)
 		fadeDelay = 0.2
 		local ofs = oldFrame:FindFirstChildWhichIsA("ScrollingFrame")
 		if ofs then
-			tw(ofs, .18, {Position=UDim2.new(0,0,0,10), GroupTransparency=nil}, Enum.EasingStyle.Quint, Enum.EasingDirection.In)
+			tw(ofs, .18, {Position=UDim2.new(0,0,0,10)}, Enum.EasingStyle.Quint, Enum.EasingDirection.In)
 		end
 		task.delay(.2, function()
 			if oldFrame and oldFrame.Parent then
@@ -1101,7 +1126,7 @@ function Lib:SetPage(index)
 	local nb = self._navBtns[index]
 	if nb then
 		tw(nb.Lbl,cfg.TweenSpeed,{TextColor3=C.White})
-		tw(nb.Bg,cfg.TweenSpeed,{BackgroundTransparency=.88})
+		tw(nb.Bg,cfg.TweenSpeed,{BackgroundTransparency=.76})
 		if nb.SetDotColor then nb.SetDotColor(accentOrWhite(self)) else tw(nb.Dot,cfg.TweenSpeed,{BackgroundColor3=accentOrWhite(self),Size=UDim2.fromOffset(7,7)}) end
 		self:_animBar(nb.Frame)
 	end
@@ -1130,20 +1155,31 @@ function Lib:_setCollapsed(collapsed)
 	if self._sideNameLbl then self._sideNameLbl.Visible = not collapsed end
 	if self._sideSubLbl  then self._sideSubLbl.Visible  = not collapsed end
 	for _,nb in ipairs(self._navBtns) do
-		if nb then
-			if nb.Lbl then nb.Lbl.Visible = not collapsed end
-			if nb.Frame then
-				local fw = collapsed and 44 or nil
-				if fw then
-					nb.Frame.Size = UDim2.new(1,0,0,40)
-				end
+		if not nb then continue end
+		local rowH = UserInputService.TouchEnabled and 48 or 40
+		if nb.Lbl then nb.Lbl.Visible = not collapsed end
+		if nb.Frame then
+			nb.Frame.Size = UDim2.new(1, 0, 0, rowH)
+		end
+		-- Reposition dot/icon: centre when collapsed, restore original X when expanded
+		if collapsed then
+			if nb.HasIcon and nb.Dot and nb.Dot._frame then
+				nb.Dot._frame.AnchorPoint = Vector2.new(.5, .5)
+				nb.Dot._frame.Position = UDim2.new(.5, 0, .5, 0)
+				nb.Dot._frame.Size = UDim2.fromOffset(20, 20)
+			elseif nb.Dot and type(nb.Dot) ~= "table" then
+				nb.Dot.AnchorPoint = Vector2.new(.5, .5)
+				tw(nb.Dot, .15, {Size=UDim2.fromOffset(8,8), Position=UDim2.new(.5,0,.5,0)})
 			end
-			if nb.Dot then
-				if collapsed then
-					tw(nb.Dot,.15,{Size=UDim2.fromOffset(8,8)})
-				else
-					tw(nb.Dot,.15,{Size=UDim2.fromOffset(6,6)})
-				end
+		else
+			local ox = nb._dotX or 22
+			if nb.HasIcon and nb.Dot and nb.Dot._frame then
+				nb.Dot._frame.AnchorPoint = Vector2.new(.5, .5)
+				nb.Dot._frame.Position = UDim2.new(0, ox, .5, 0)
+				nb.Dot._frame.Size = UDim2.fromOffset(20, 20)
+			elseif nb.Dot and type(nb.Dot) ~= "table" then
+				nb.Dot.AnchorPoint = Vector2.new(.5, .5)
+				tw(nb.Dot, .15, {Size=UDim2.fromOffset(6,6), Position=UDim2.new(0,ox,.5,0)})
 			end
 		end
 	end
@@ -1254,6 +1290,16 @@ function Lib:_ensurePill()
 
 	pill.MouseEnter:Connect(function() tw(pill,.15,{BackgroundTransparency=0.05}) end)
 	pill.MouseLeave:Connect(function() tw(pill,.18,{BackgroundTransparency=0.18}) end)
+	pillBtn.InputBegan:Connect(function(i)
+		if i.UserInputType == Enum.UserInputType.Touch then
+			tw(pill,.08,{BackgroundTransparency=0.0})
+		end
+	end)
+	pillBtn.InputEnded:Connect(function(i)
+		if i.UserInputType == Enum.UserInputType.Touch then
+			tw(pill,.2,{BackgroundTransparency=0.18})
+		end
+	end)
 
 	self._mobilePill = pill
 end
@@ -1370,14 +1416,18 @@ function Lib:Hide()
 	self._dragActive = false
 	local win = self.Window
 	if not win then return end
+	-- If minimised, restore full window first so fade-out looks correct
 	if self._minimised then
 		self._minimised = false
-		
-		if self._minFb  then self._minFb.Text  = "-" end
+		if self._minFb then self._minFb.Text = "-" end
 		if self._body then self._body.Visible = true end
 		win.BackgroundColor3 = C.Bg
 		if self._tbFiller then self._tbFiller.Visible = true end
 		if self._tbBorderLine then self._tbBorderLine.Visible = true end
+		local tw2, th2
+		if self._computeScale then tw2, th2 = self._computeScale()
+		else tw2, th2 = self.cfg.WindowWidth, self.cfg.WindowHeight end
+		win.Size = UDim2.fromOffset(tw2, th2)
 	end
 	local ws = win.AbsoluteSize
 	tw(win, .25, {
@@ -1998,7 +2048,7 @@ function Lib:_openSettings()
 			end
 			if nb then
 				tw(nb.Lbl,self.cfg.TweenSpeed,{TextColor3=C.White})
-				tw(nb.Bg,self.cfg.TweenSpeed,{BackgroundTransparency=.88})
+				tw(nb.Bg,self.cfg.TweenSpeed,{BackgroundTransparency=.76})
 				if nb.SetDotColor then nb.SetDotColor(accentOrWhite(self)) else tw(nb.Dot,self.cfg.TweenSpeed,{BackgroundColor3=accentOrWhite(self),Size=UDim2.fromOffset(7,7)}) end
 				self:_animBar(nb.Frame)
 			end
@@ -2176,6 +2226,7 @@ function Lib:_doSearch(query)
 	else
 		self._searchIdx = 1
 		if self._searchResultLbl then
+			self._searchResultLbl.Visible = true
 			self._searchResultLbl.Text = "1/" .. total
 			tw(self._searchResultLbl, .1, {TextColor3=C.Green})
 		end
@@ -2235,7 +2286,7 @@ function Lib:GetPage(i)
 end
 
 function Lib:_gap(s,pi,h)
-	new("Frame",{Size=UDim2.new(1,0,0,h or 8),BackgroundTransparency=1,LayoutOrder=self:_o(pi)},s)
+	new("Frame",{Size=UDim2.new(1,0,0,h or 10),BackgroundTransparency=1,LayoutOrder=self:_o(pi)},s)
 end
 
 function Lib:Notify(text, style, duration, title)
@@ -2285,7 +2336,7 @@ function Lib:AddSectionHeader(pi,title,sub)
 			TextXAlignment=Enum.TextXAlignment.Left,LayoutOrder=self:_o(pi)},s)
 	end
 	new("Frame",{Size=UDim2.new(1,0,0,1),BackgroundColor3=C.Border,BorderSizePixel=0,LayoutOrder=self:_o(pi)},s)
-	self:_gap(s,pi,16)
+	self:_gap(s,pi,20)
 end
 
 function Lib:AddMetricRow(pi,cards)

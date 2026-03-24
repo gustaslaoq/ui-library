@@ -477,12 +477,11 @@ function Lib:_buildWindow()
 	self._computeScale = computeScale
 
 	do
-		local camConn
 		local function connectCam()
-			if camConn then pcall(function() camConn:Disconnect() end) end
+			if self._viewportConn then pcall(function() self._viewportConn:Disconnect() end) end
 			local cam = workspace.CurrentCamera
 			if not cam then return end
-			camConn = cam:GetPropertyChangedSignal("ViewportSize"):Connect(function()
+			self._viewportConn = cam:GetPropertyChangedSignal("ViewportSize"):Connect(function()
 				if not self._minimised then doScale() end
 			end)
 		end
@@ -1670,6 +1669,8 @@ function Lib:Destroy()
 	for _,fn in ipairs(self._onDestroyFns or {}) do pcall(fn) end
 	for _,c in ipairs(self._conns) do pcall(function() c:Disconnect() end) end
 	if self._keyConn then pcall(function() self._keyConn:Disconnect() end) end
+	if self._pillCamConn then pcall(function() self._pillCamConn:Disconnect() end) end
+	if self._viewportConn then pcall(function() self._viewportConn:Disconnect() end) end
 	if self._sg and self._sg.Parent then
 		if self.Window then
 			local ws = self.Window.AbsoluteSize
@@ -2281,7 +2282,7 @@ function Lib:_doSearch(query)
 		end
 		if nu then nu.Visible = total > 1 end
 		if nd then nd.Visible = total > 1 end
-		self:_searchNavigate(1)   -- scroll to first hit immediately
+		self:_searchNavigate(0)
 	end
 end
 
@@ -3090,12 +3091,19 @@ function Lib:AddSlider(pi,label,min,max,default,callback)
 		if callback then callback(v) end
 	end
 
-	interact.MouseButton1Down:Connect(function(x) dragging=true; updateVal(x) end)
+	interact.InputBegan:Connect(function(i)
+		if i.UserInputType==Enum.UserInputType.MouseButton1 or i.UserInputType==Enum.UserInputType.Touch then
+			dragging=true
+			updateVal(i.Position.X)
+		end
+	end)
 	table.insert(self._conns,UserInputService.InputEnded:Connect(function(i)
-		if i.UserInputType==Enum.UserInputType.MouseButton1 then dragging=false end
+		if i.UserInputType==Enum.UserInputType.MouseButton1 or i.UserInputType==Enum.UserInputType.Touch then dragging=false end
 	end))
 	table.insert(self._conns,UserInputService.InputChanged:Connect(function(i)
-		if dragging and i.UserInputType==Enum.UserInputType.MouseMovement then updateVal(i.Position.X) end
+		if dragging and (i.UserInputType==Enum.UserInputType.MouseMovement or i.UserInputType==Enum.UserInputType.Touch) then
+			updateVal(i.Position.X)
+		end
 	end))
 	wrap.MouseEnter:Connect(function() tw(wrap,.15,{BackgroundColor3=C.Card2}) end)
 	wrap.MouseLeave:Connect(function() tw(wrap,.18,{BackgroundColor3=C.Card}) end)
@@ -3165,6 +3173,7 @@ function Lib:AddDropdown(pi,labelTxt,options,callback)
 			selected=opt; selLbl.Text=opt; open=false
 			tw(optList,.18,{Size=UDim2.new(1,0,0,0)},Enum.EasingStyle.Quint,Enum.EasingDirection.In)
 			tw(arrow,.18,{Rotation=0})
+			tw(arrowImg,.18,{Rotation=0})
 			task.delay(.2,function() if optList then optList.Visible=false end end)
 			if callback then callback(opt) end
 		end)
@@ -3177,10 +3186,10 @@ function Lib:AddDropdown(pi,labelTxt,options,callback)
 		open=not open; optList.Visible=true
 		if open then
 			tw(optList,.28,{Size=UDim2.new(1,0,0,listH)},Enum.EasingStyle.Back,Enum.EasingDirection.Out)
-			tw(arrow,.2,{Rotation=180})
+			tw(arrow,.2,{Rotation=180}); tw(arrowImg,.2,{Rotation=180})
 		else
 			tw(optList,.18,{Size=UDim2.new(1,0,0,0)},Enum.EasingStyle.Quint,Enum.EasingDirection.In)
-			tw(arrow,.2,{Rotation=0})
+			tw(arrow,.2,{Rotation=0}); tw(arrowImg,.2,{Rotation=0})
 			task.delay(.2,function() if optList then optList.Visible=false end end)
 		end
 	end)
@@ -3400,12 +3409,17 @@ function Lib:AddColorPicker(pi,label,default,callback)
 			applyColor()
 		end
 
-		svInteract.MouseButton1Down:Connect(function(x,y) svDragging=true; updateSV(x,y) end)
+		svInteract.InputBegan:Connect(function(i)
+			if i.UserInputType==Enum.UserInputType.MouseButton1 or i.UserInputType==Enum.UserInputType.Touch then
+				svDragging=true
+				updateSV(i.Position.X,i.Position.Y)
+			end
+		end)
 		local c1=UserInputService.InputEnded:Connect(function(i)
-			if i.UserInputType==Enum.UserInputType.MouseButton1 then svDragging=false end
+			if i.UserInputType==Enum.UserInputType.MouseButton1 or i.UserInputType==Enum.UserInputType.Touch then svDragging=false end
 		end)
 		local c2=UserInputService.InputChanged:Connect(function(i)
-			if svDragging and i.UserInputType==Enum.UserInputType.MouseMovement then
+			if svDragging and (i.UserInputType==Enum.UserInputType.MouseMovement or i.UserInputType==Enum.UserInputType.Touch) then
 				updateSV(i.Position.X,i.Position.Y)
 			end
 		end)
@@ -3453,12 +3467,17 @@ function Lib:AddColorPicker(pi,label,default,callback)
 			applyColor()
 		end
 
-		hueInteract.MouseButton1Down:Connect(function(x) hueDragging=true; updateHue(x) end)
+		hueInteract.InputBegan:Connect(function(i)
+			if i.UserInputType==Enum.UserInputType.MouseButton1 or i.UserInputType==Enum.UserInputType.Touch then
+				hueDragging=true
+				updateHue(i.Position.X)
+			end
+		end)
 		local c3=UserInputService.InputEnded:Connect(function(i)
-			if i.UserInputType==Enum.UserInputType.MouseButton1 then hueDragging=false end
+			if i.UserInputType==Enum.UserInputType.MouseButton1 or i.UserInputType==Enum.UserInputType.Touch then hueDragging=false end
 		end)
 		local c4=UserInputService.InputChanged:Connect(function(i)
-			if hueDragging and i.UserInputType==Enum.UserInputType.MouseMovement then
+			if hueDragging and (i.UserInputType==Enum.UserInputType.MouseMovement or i.UserInputType==Enum.UserInputType.Touch) then
 				updateHue(i.Position.X)
 			end
 		end)

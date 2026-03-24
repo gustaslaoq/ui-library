@@ -1619,16 +1619,9 @@ function Lib:Confirm(title, message, onConfirm, onCancel, opts)
 		},
 		Rotation=90,
 	}, modal)
-	local shadow = new("Frame",{
-		AnchorPoint=Vector2.new(.5,.5),
-		Position=UDim2.fromScale(.5,.5),
-		Size=UDim2.new(1,18,1,18),
-		BackgroundColor3=fromHex("000000"),BackgroundTransparency=1,BorderSizePixel=0,
-		ZIndex=900,
-	}, modal)
-	corner(shadow,16)
+	new("UIListLayout",{FillDirection=Enum.FillDirection.Vertical,SortOrder=Enum.SortOrder.LayoutOrder,Padding=UDim.new(0,0)},modal)
 
-	local header=new("Frame",{Size=UDim2.new(1,0,0,56),BackgroundTransparency=1,ZIndex=902},modal)
+	local header=new("Frame",{Size=UDim2.new(1,0,0,56),BackgroundTransparency=1,ZIndex=902,LayoutOrder=0},modal)
 	pad(header,16,8,16,16)
 	hlist(header,10)
 	local iconWrap=new("Frame",{Size=UDim2.fromOffset(28,28),BackgroundTransparency=1,LayoutOrder=0},header)
@@ -1645,7 +1638,7 @@ function Lib:Confirm(title, message, onConfirm, onCancel, opts)
 		BackgroundTransparency=1,Size=UDim2.new(1,0,0,14),TextXAlignment=Enum.TextXAlignment.Left},titleCol)
 	new("Frame",{Position=UDim2.fromOffset(0,56),Size=UDim2.new(1,0,0,1),BackgroundColor3=C.Border,BorderSizePixel=0},modal)
 
-	local body=new("Frame",{Position=UDim2.fromOffset(0,57),Size=UDim2.new(1,0,0,0),AutomaticSize=Enum.AutomaticSize.Y,BackgroundTransparency=1,ZIndex=903},modal)
+	local body=new("Frame",{Size=UDim2.new(1,0,0,0),AutomaticSize=Enum.AutomaticSize.Y,BackgroundTransparency=1,ZIndex=903,LayoutOrder=1},modal)
 	pad(body,12,12,16,16)
 
 	local msgLbl=new("TextLabel",{Text=message or "",Font=Enum.Font.Gotham,TextSize=13,TextColor3=C.TextDim,
@@ -1653,7 +1646,7 @@ function Lib:Confirm(title, message, onConfirm, onCancel, opts)
 		TextXAlignment=Enum.TextXAlignment.Left,TextYAlignment=Enum.TextYAlignment.Top,TextWrapped=true},body)
 	new("Frame",{Position=UDim2.new(0,0,1,0),Size=UDim2.new(1,0,0,1),BackgroundColor3=C.Border,BorderSizePixel=0},body)
 
-	local footer=new("Frame",{Size=UDim2.new(1,0,0,54),BackgroundTransparency=1,ZIndex=903},modal)
+	local footer=new("Frame",{Size=UDim2.new(1,0,0,54),BackgroundTransparency=1,ZIndex=903,LayoutOrder=2},modal)
 	pad(footer,8,12,16,16)
 	hlist(footer,10)
 
@@ -1678,7 +1671,6 @@ function Lib:Confirm(title, message, onConfirm, onCancel, opts)
 	local function closeModal()
 		tw(overlay,.2,{BackgroundTransparency=1},Enum.EasingStyle.Quint)
 		tw(modal,.2,{BackgroundTransparency=1,Position=UDim2.new(.5,0,.5,28)},Enum.EasingStyle.Quint,Enum.EasingDirection.In)
-		tw(shadow,.2,{BackgroundTransparency=1},Enum.EasingStyle.Quint,Enum.EasingDirection.In)
 		task.delay(.22,function() pcall(function() container:Destroy() end) end)
 	end
 
@@ -1697,9 +1689,9 @@ function Lib:Confirm(title, message, onConfirm, onCancel, opts)
 		closeModal(); if onCancel then pcall(onCancel) end
 	end)
 
+	modal.Size = UDim2.fromOffset(mw, 0)
 	tw(overlay,.22,{BackgroundTransparency=0.45},Enum.EasingStyle.Quint)
-	tw(modal,.3,{BackgroundTransparency=0,Size=UDim2.fromOffset(mw,0),Position=UDim2.fromScale(.5,.5)},Enum.EasingStyle.Back,Enum.EasingDirection.Out)
-	tw(shadow,.3,{BackgroundTransparency=0.6},Enum.EasingStyle.Quint)
+	tw(modal,.3,{BackgroundTransparency=0,Position=UDim2.fromScale(.5,.5)},Enum.EasingStyle.Back,Enum.EasingDirection.Out)
 end
 
 

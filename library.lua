@@ -153,9 +153,9 @@ function Lib.new(userCfg)
 		self.cfg.AppVersion  = "5.0"
 		self.cfg.Pages = {
 			{Name="Dashboard"},
-			{Name="Player"},
-			{Name="Components"},
 			{Name="Inputs"},
+			{Name="Components"},
+			{Name="Buttons"},
 			{Name="Logs"},
 		}
 		self.cfg.SplashTasks = {
@@ -2835,7 +2835,7 @@ function Lib:AddStatusBadge2(pi, label, state)
 	stroke(row,C.Border,1)
 	pad(row,0,0,16,16)
 	new("TextLabel",{Text=label or "Status",Font=Enum.Font.Gotham,TextSize=13,TextColor3=C.Text,
-		BackgroundTransparency=1,Size=UDim2.new(1,-100,.8,0),TextXAlignment=Enum.TextXAlignment.Left},row)
+		BackgroundTransparency=1,Size=UDim2.new(1,-110,1,0),TextXAlignment=Enum.TextXAlignment.Left},row)
 	local dot=new("Frame",{AnchorPoint=Vector2.new(1,.5),Position=UDim2.new(1,-44,.5,0),
 		Size=UDim2.fromOffset(8,8),BackgroundColor3=stateColors[state or "offline"] or C.TextDim,BorderSizePixel=0},row)
 	corner(dot,4)
@@ -4300,10 +4300,12 @@ function Lib:AddNotificationCenter(pi, opts)
 		local row=new("Frame",{Size=UDim2.new(1,0,0,0),AutomaticSize=Enum.AutomaticSize.Y,
 			BackgroundColor3=sc[2],BorderSizePixel=0,LayoutOrder=count},scroll)
 		corner(row,8)
-		pad(row,8,6,10,10)
+		pad(row,6,6,10,10)
+		vlist(row,2)
 		if label then
-			new("TextLabel",{Text=label,Font=Enum.Font.GothamBold,TextSize=9,TextColor3=sc[1],
-				BackgroundTransparency=1,Size=UDim2.new(1,0,0,12),TextXAlignment=Enum.TextXAlignment.Left,LayoutOrder=0},row)
+			new("TextLabel",{Text=string.upper(label),Font=Enum.Font.GothamBold,TextSize=9,TextColor3=sc[1],
+				BackgroundTransparency=1,Size=UDim2.new(1,0,0,13),
+				TextXAlignment=Enum.TextXAlignment.Left,LayoutOrder=0},row)
 		end
 		new("TextLabel",{Text=tostring(text),Font=Enum.Font.Gotham,TextSize=11,TextColor3=C.Text,
 			BackgroundTransparency=1,Size=UDim2.new(1,0,0,0),AutomaticSize=Enum.AutomaticSize.Y,

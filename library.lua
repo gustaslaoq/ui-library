@@ -928,9 +928,7 @@ function Lib:_buildBody(win)
 	self._searchHighlights = {}
 	self._searchIdx       = 0
 
-	self._searchBar    = searchBar
-	self._searchBox    = searchBox
-	self._searchResultLbl = resultLbl
+	-- (assignments above are canonical; no duplicate needed)
 
 	local pagesWrap = new("Frame",{
 		Position=UDim2.fromOffset(0,0),Size=UDim2.fromScale(1,1),
@@ -1254,7 +1252,20 @@ function Lib:_ensurePill()
 		end
 	end
 
-	table.insert(self._conns, workspace.CurrentCamera:GetPropertyChangedSignal("ViewportSize"):Connect(function()
+	-- Safe camera connection — CurrentCamera can be nil at load time
+	local function connectPillCam()
+		local cam = workspace.CurrentCamera
+		if not cam then return end
+		if self._pillCamConn then
+			pcall(function() self._pillCamConn:Disconnect() end)
+		end
+		self._pillCamConn = cam:GetPropertyChangedSignal("ViewportSize"):Connect(function()
+			task.defer(clampPill)
+		end)
+	end
+	connectPillCam()
+	table.insert(self._conns, workspace:GetPropertyChangedSignal("CurrentCamera"):Connect(function()
+		task.defer(connectPillCam)
 		task.defer(clampPill)
 	end))
 
@@ -1332,13 +1343,14 @@ function Lib:Minimise()
 				win.BackgroundTransparency=0
 			end
 		end)
-		local cam=workspace.CurrentCamera
-		local vp=cam and cam.ViewportSize or Vector2.new(1920,1080)
-		local pw=180
-		pill.Visible=true
-		pill.Position=UDim2.new(0,math.floor(vp.X*0.5),0,-60)
-		pill.BackgroundTransparency=1
-		tw(pill,.38,{Position=UDim2.new(0,math.floor(vp.X*0.5),0,24),BackgroundTransparency=0.18},Enum.EasingStyle.Back,Enum.EasingDirection.Out)
+		if pill then
+			local cam=workspace.CurrentCamera
+			local vp=cam and cam.ViewportSize or Vector2.new(1920,1080)
+			pill.Visible=true
+			pill.Position=UDim2.new(0,math.floor(vp.X*0.5),0,-60)
+			pill.BackgroundTransparency=1
+			tw(pill,.38,{Position=UDim2.new(0,math.floor(vp.X*0.5),0,24),BackgroundTransparency=0.18},Enum.EasingStyle.Back,Enum.EasingDirection.Out)
+		end
 	else
 		self._preMinSize = {W=win.AbsoluteSize.X, H=win.AbsoluteSize.Y}
 		if self._tbFiller then self._tbFiller.Visible = false end
@@ -1416,11 +1428,11 @@ function Lib:Hide()
 	self._dragActive = false
 	local win = self.Window
 	if not win then return end
-	-- If minimised, restore full window first so fade-out looks correct
+	-- If minimised, restore the full window first so the fade-out looks correct
 	if self._minimised then
 		self._minimised = false
 		if self._minFb then self._minFb.Text = "-" end
-		if self._body then self._body.Visible = true end
+		if self._body then self._body.Visible = true end   -- restore body before fading
 		win.BackgroundColor3 = C.Bg
 		if self._tbFiller then self._tbFiller.Visible = true end
 		if self._tbBorderLine then self._tbBorderLine.Visible = true end
@@ -2136,12 +2148,23 @@ function Lib:_clearHighlights()
 		end)
 	end
 	self._searchHighlights = {}
+	-- Reset search UI state completely
+	if self._searchResultLbl then
+		self._searchResultLbl.Text = ""
+		self._searchResultLbl.Visible = false
+	end
+	if self._searchNavUp   then self._searchNavUp.Visible   = false end
+	if self._searchNavDown then self._searchNavDown.Visible = false end
 end
 
 function Lib:_searchNavigate(dir)
 	local hits = self._searchHitObjs
 	if not hits or #hits == 0 then return end
-	self._searchIdx = self._searchIdx + dir
+	-- When called with dir=1 right after _doSearch set _searchIdx=1,
+	-- avoid advancing to index 2 immediately.
+	if dir ~= 0 then
+		self._searchIdx = self._searchIdx + dir
+	end
 	if self._searchIdx < 1 then self._searchIdx = #hits end
 	if self._searchIdx > #hits then self._searchIdx = 1 end
 	local obj = hits[self._searchIdx]
@@ -2162,7 +2185,10 @@ function Lib:_doSearch(query)
 	self._searchIdx = 0
 	self._searchHitObjs = {}
 	if not query or query == "" then
-		if self._searchResultLbl then self._searchResultLbl.Text = "" end
+		if self._searchResultLbl then
+			self._searchResultLbl.Text = ""
+			self._searchResultLbl.Visible = false
+		end
 		local nu = self._searchNavUp
 		local nd = self._searchNavDown
 		if nu then nu.Visible = false end
@@ -2177,32 +2203,54 @@ function Lib:_doSearch(query)
 	local highlights = {}
 	local hitObjs = {}
 
+	local function isSearchable(child)
+		local txt = child.Text or ""
+		-- Skip blank, single-char UI symbols (-, +, x, v, ^, …)
+		if #txt <= 1 then return false end
+		-- Skip text that is purely ellipsis or control tokens
+		if txt == "..." or txt == ".." then return false end
+		-- Skip number-only labels (counters, step values, percentages)
+		if txt:match("^%s*%-?%d+%s*$") then return false end
+		if txt:match("^%d+%s*/%s*%d+$") then return false end
+		if txt:match("^%d+%%$") then return false end
+		-- Skip labels that look like section headers / category caps (e.g. "CONSOLE", "INFO")
+		-- but only if very short — real content can also be uppercase
+		if #txt <= 12 and txt == txt:upper() and not txt:find(" ") then return false end
+		-- Skip RichText elements — modifying them would corrupt markup
+		if child.RichText then return false end
+		-- Opt-out via attribute
+		if child:GetAttribute("SearchExclude") then return false end
+		return true
+	end
+
 	local function scan(parent)
 		for _, child in ipairs(parent:GetChildren()) do
 			if child:IsA("TextLabel") or child:IsA("TextButton") then
-				local txt = child.Text or ""
-				if txt ~= "" and txt:lower():find(qLower, 1, true) then
-					local wasRich = child.RichText
-					local escaped = txt:gsub("&","&amp;"):gsub("<","&lt;"):gsub(">","&gt;")
-					local result = ""
-					local i = 1
-					while i <= #escaped do
-						local s, e = escaped:lower():find(qLower, i, true)
-						if s then
-							result = result .. escaped:sub(i, s-1)
-							result = result .. '<font color="rgb(255,210,0)"><b>' .. escaped:sub(s,e) .. '</b></font>'
-							i = e + 1
-						else
-							result = result .. escaped:sub(i)
-							break
+				if isSearchable(child) then
+					local txt = child.Text or ""
+					if txt ~= "" and txt:lower():find(qLower, 1, true) then
+						local wasRich = child.RichText
+						local escaped = txt:gsub("&","&amp;"):gsub("<","&lt;"):gsub(">","&gt;")
+						local result = ""
+						local i = 1
+						while i <= #escaped do
+							local s, e = escaped:lower():find(qLower, i, true)
+							if s then
+								result = result .. escaped:sub(i, s-1)
+								result = result .. '<font color="rgb(255,210,0)"><b>' .. escaped:sub(s,e) .. '</b></font>'
+								i = e + 1
+							else
+								result = result .. escaped:sub(i)
+								break
+							end
 						end
+						table.insert(highlights, {obj=child, original=txt, wasRich=wasRich})
+						table.insert(hitObjs, child)
+						pcall(function()
+							child.RichText = true
+							child.Text = result
+						end)
 					end
-					table.insert(highlights, {obj=child, original=txt, wasRich=wasRich})
-					table.insert(hitObjs, child)
-					pcall(function()
-						child.RichText = true
-						child.Text = result
-					end)
 				end
 			end
 			scan(child)
@@ -2218,6 +2266,7 @@ function Lib:_doSearch(query)
 	local nd = self._searchNavDown
 	if total == 0 then
 		if self._searchResultLbl then
+			self._searchResultLbl.Visible = true
 			self._searchResultLbl.Text = "no results"
 			tw(self._searchResultLbl, .1, {TextColor3=C.Red})
 		end
@@ -2232,7 +2281,7 @@ function Lib:_doSearch(query)
 		end
 		if nu then nu.Visible = total > 1 end
 		if nd then nd.Visible = total > 1 end
-		self:_searchNavigate(0)
+		self:_searchNavigate(1)   -- scroll to first hit immediately
 	end
 end
 
@@ -2702,18 +2751,25 @@ function Lib:AddMultiSelect(pi, labelTxt, options, callback)
 		BackgroundColor3=C.Card,BorderSizePixel=0,LayoutOrder=self:_o(pi),ClipsDescendants=false},s)
 	corner(wrapper,10)
 	stroke(wrapper,C.Border,1)
+	-- Stack header and expandable list vertically — critical for no-overlap
+	new("UIListLayout",{
+		FillDirection=Enum.FillDirection.Vertical,
+		SortOrder=Enum.SortOrder.LayoutOrder,
+		Padding=UDim.new(0,0),
+	},wrapper)
 
-	local header=new("Frame",{Size=UDim2.new(1,0,0,44),BackgroundTransparency=1},wrapper)
+	local header=new("Frame",{Size=UDim2.new(1,0,0,44),BackgroundTransparency=1,LayoutOrder=0},wrapper)
 	pad(header,0,0,16,16)
 	new("TextLabel",{Text=labelTxt or "Select",Font=Enum.Font.Gotham,TextSize=13,TextColor3=C.Text,
 		BackgroundTransparency=1,Size=UDim2.new(1,-56,1,0),TextXAlignment=Enum.TextXAlignment.Left},header)
 
-	local countLbl=new("TextLabel",{Text="0 selected",Font=Enum.Font.Gotham,TextSize=11,TextColor3=C.TextDim,
+	local countLbl=new("TextLabel",{Text="none",Font=Enum.Font.Gotham,TextSize=11,TextColor3=C.TextDim,
 		BackgroundTransparency=1,AnchorPoint=Vector2.new(1,.5),Position=UDim2.new(1,-8,.5,0),
 		Size=UDim2.fromOffset(80,20),TextXAlignment=Enum.TextXAlignment.Right},header)
 
 	local listFrame=new("Frame",{Size=UDim2.new(1,0,0,0),AutomaticSize=Enum.AutomaticSize.Y,
-		BackgroundTransparency=1,BorderSizePixel=0,Visible=false},wrapper)
+		BackgroundTransparency=1,BorderSizePixel=0,Visible=false,LayoutOrder=1},wrapper)
+	-- Separator inside listFrame uses explicit position (no UIListLayout on listFrame itself)
 	new("Frame",{Size=UDim2.new(1,-32,0,1),AnchorPoint=Vector2.new(.5,0),Position=UDim2.new(.5,0,0,0),
 		BackgroundColor3=C.Border2,BorderSizePixel=0},listFrame)
 	local listInner=new("Frame",{
@@ -2759,9 +2815,23 @@ function Lib:AddMultiSelect(pi, labelTxt, options, callback)
 		btn.MouseLeave:Connect(function() tw(row,.12,{BackgroundTransparency=1}) end)
 	end
 
+	-- Arrow chevron indicator on the right side of header
+	local arrowLbl=new("TextLabel",{
+		Text="v",Font=Enum.Font.GothamBold,TextSize=11,TextColor3=C.TextDim,
+		BackgroundTransparency=1,
+		AnchorPoint=Vector2.new(1,.5),Position=UDim2.new(1,-6,.5,0),
+		Size=UDim2.fromOffset(18,18),TextXAlignment=Enum.TextXAlignment.Center,
+		ZIndex=53,
+	},header)
+
 	toggleBtn.Activated:Connect(function()
 		open=not open
-		listFrame.Visible=open
+		tw(arrowLbl,.18,{Rotation=open and 180 or 0})
+		if open then
+			listFrame.Visible=true
+		else
+			task.delay(.19,function() if not open and listFrame and listFrame.Parent then listFrame.Visible=false end end)
+		end
 	end)
 	header.MouseEnter:Connect(function() tw(wrapper,.15,{BackgroundColor3=C.Card2}) end)
 	header.MouseLeave:Connect(function() tw(wrapper,.18,{BackgroundColor3=C.Card}) end)
@@ -2796,10 +2866,18 @@ function Lib:AddList(pi, labelTxt, opts)
 		BackgroundColor3=C.Card,BorderSizePixel=0,LayoutOrder=self:_o(pi)},s)
 	corner(wrap,10)
 	stroke(wrap,C.Border,1)
+	-- UIListLayout ensures header and listFrame stack vertically, never overlap
+	new("UIListLayout",{
+		FillDirection=Enum.FillDirection.Vertical,
+		SortOrder=Enum.SortOrder.LayoutOrder,
+		Padding=UDim.new(0,0),
+	},wrap)
 
 	if labelTxt then
-		local hdr=new("Frame",{Size=UDim2.new(1,0,0,34),BackgroundColor3=C.Card3,BorderSizePixel=0},wrap)
+		local hdr=new("Frame",{Size=UDim2.new(1,0,0,34),BackgroundColor3=C.Card3,BorderSizePixel=0,
+			LayoutOrder=0},wrap)
 		corner(hdr,10)
+		-- Square off bottom corners via filler so card corners don't clip content
 		new("Frame",{Position=UDim2.new(0,0,1,-6),Size=UDim2.new(1,0,0,6),BackgroundColor3=C.Card3,BorderSizePixel=0},hdr)
 		pad(hdr,0,0,16,16)
 		new("TextLabel",{Text=labelTxt,Font=Enum.Font.GothamBold,TextSize=11,TextColor3=C.TextDim,
@@ -2807,7 +2885,7 @@ function Lib:AddList(pi, labelTxt, opts)
 	end
 
 	local listFrame=new("Frame",{Size=UDim2.new(1,0,0,0),AutomaticSize=Enum.AutomaticSize.Y,
-		BackgroundTransparency=1,BorderSizePixel=0},wrap)
+		BackgroundTransparency=1,BorderSizePixel=0,LayoutOrder=1},wrap)
 	vlist(listFrame,0)
 
 	self:_gap(s,pi,8)
@@ -3472,9 +3550,17 @@ function Lib:AddCard(pi,title,subtitle)
 		BackgroundColor3=C.Card,BorderSizePixel=0,LayoutOrder=self:_o(pi)},s)
 	corner(card,10)
 	stroke(card,C.Border,1)
+	-- Stack header and inner content via layout — eliminates overlap regardless of header height
+	new("UIListLayout",{
+		FillDirection=Enum.FillDirection.Vertical,
+		SortOrder=Enum.SortOrder.LayoutOrder,
+		Padding=UDim.new(0,0),
+	},card)
 
 	if title then
-		local hdr=new("Frame",{Size=UDim2.new(1,0,0,subtitle and 54 or 42),BackgroundColor3=C.Card2,BorderSizePixel=0},card)
+		local hdrH = subtitle and 54 or 42
+		local hdr=new("Frame",{Size=UDim2.new(1,0,0,hdrH),BackgroundColor3=C.Card2,BorderSizePixel=0,
+			LayoutOrder=0},card)
 		corner(hdr,10)
 		new("Frame",{Position=UDim2.new(0,0,1,-11),Size=UDim2.new(1,0,0,11),BackgroundColor3=C.Card2,BorderSizePixel=0},hdr)
 		new("Frame",{Position=UDim2.new(0,0,1,0),Size=UDim2.new(1,0,0,1),BackgroundColor3=C.Border,BorderSizePixel=0},hdr)
@@ -3489,7 +3575,8 @@ function Lib:AddCard(pi,title,subtitle)
 		end
 	end
 
-	local inner=new("Frame",{Size=UDim2.new(1,0,0,0),AutomaticSize=Enum.AutomaticSize.Y,BackgroundTransparency=1},card)
+	local inner=new("Frame",{Size=UDim2.new(1,0,0,0),AutomaticSize=Enum.AutomaticSize.Y,
+		BackgroundTransparency=1,LayoutOrder=1},card)
 	pad(inner,14,14,16,16)
 	new("UIListLayout",{SortOrder=Enum.SortOrder.LayoutOrder,Padding=UDim.new(0,8)},inner)
 	self:_gap(s,pi,10)
@@ -3604,8 +3691,10 @@ function Lib:AddSpinner(pi,label)
 
 	local spinning=true
 	local angle=0
+	local _gen=0  -- generation counter prevents stale loops on Start()/Stop() cycles
+	_gen=_gen+1; local myGen=_gen
 	task.spawn(function()
-		while spinning and row and row.Parent do
+		while spinning and myGen==_gen and row and row.Parent do
 			angle=(angle+8)%360
 			ballHolder.Rotation=angle
 			task.wait(0.033)
@@ -3616,14 +3705,16 @@ function Lib:AddSpinner(pi,label)
 	local obj={Frame=row,_spinning=true}
 	function obj:Stop()
 		spinning=false; obj._spinning=false
+		_gen=_gen+1
 		tw(ball,.3,{BackgroundColor3=C.Border3})
 	end
 	function obj:Start()
 		if obj._spinning then return end
 		obj._spinning=true; spinning=true
+		_gen=_gen+1; local g=_gen
 		tw(ball,.3,{BackgroundColor3=C.White})
 		task.spawn(function()
-			while spinning and row and row.Parent do
+			while spinning and g==_gen and row and row.Parent do
 				angle=(angle+8)%360
 				ballHolder.Rotation=angle
 				task.wait(0.033)
@@ -4386,7 +4477,7 @@ end
 function Lib:SaveState()
 	pcall(function()
 		local win = self.Window
-		Lib._savedState = {
+		self._savedState = {
 			pageIdx = self._pageIdx,
 			offsetX = win and win.Position.X.Offset or 0,
 			offsetY = win and win.Position.Y.Offset or 0,
@@ -4395,9 +4486,8 @@ function Lib:SaveState()
 end
 
 function Lib:_loadState()
-	return Lib._savedState
+	return self._savedState
 end
-Lib._savedState = nil
 
 
 local function processHexColors(text)

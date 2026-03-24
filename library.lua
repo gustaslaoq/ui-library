@@ -149,7 +149,7 @@ function Lib.new(userCfg)
 	if isDemo then
 		self.cfg.AppName     = "SlaoqUILib"
 		self.cfg.AppSubtitle = "Component Showcase"
-		self.cfg.AppVersion  = "5.0"
+		self.cfg.AppVersion  = "1.0"
 		self.cfg.Pages = {
 			{Name="Dashboard"},
 			{Name="Inputs"},
@@ -2768,7 +2768,7 @@ function Lib:AddMultiSelect(pi, labelTxt, options, callback)
 		BackgroundTransparency=1,AnchorPoint=Vector2.new(1,.5),Position=UDim2.new(1,-8,.5,0),
 		Size=UDim2.fromOffset(80,20),TextXAlignment=Enum.TextXAlignment.Right},header)
 
-	local listFrame=new("Frame",{Size=UDim2.new(1,0,0,0),AutomaticSize=Enum.AutomaticSize.Y,
+	local listFrame=new("Frame",{Size=UDim2.new(1,0,0,0),AutomaticSize=Enum.AutomaticSize.None,
 		BackgroundTransparency=1,BorderSizePixel=0,Visible=false,LayoutOrder=1},wrapper)
 	-- Separator inside listFrame uses explicit position (no UIListLayout on listFrame itself)
 	new("Frame",{Size=UDim2.new(1,-32,0,1),AnchorPoint=Vector2.new(.5,0),Position=UDim2.new(.5,0,0,0),
@@ -2780,6 +2780,7 @@ function Lib:AddMultiSelect(pi, labelTxt, options, callback)
 	vlist(listInner,0)
 
 	local open=false
+	local listH = 1 + #options * 40
 	local toggleBtn=new("TextButton",{Text="",BackgroundTransparency=1,
 		Size=UDim2.fromScale(1,1),ZIndex=52,AutoButtonColor=false},header)
 
@@ -2830,7 +2831,10 @@ function Lib:AddMultiSelect(pi, labelTxt, options, callback)
 		tw(arrowLbl,.18,{Rotation=open and 180 or 0})
 		if open then
 			listFrame.Visible=true
+			listFrame.Size=UDim2.new(1,0,0,0)
+			tw(listFrame,.28,{Size=UDim2.new(1,0,0,listH)},Enum.EasingStyle.Back,Enum.EasingDirection.Out)
 		else
+			tw(listFrame,.18,{Size=UDim2.new(1,0,0,0)},Enum.EasingStyle.Quint,Enum.EasingDirection.In)
 			task.delay(.19,function() if not open and listFrame and listFrame.Parent then listFrame.Visible=false end end)
 		end
 	end)
@@ -3077,6 +3081,7 @@ function Lib:AddSlider(pi,label,min,max,default,callback)
 	corner(knobSl,7)
 
 	local dragging=false
+	local curVal = default
 	local interact=new("TextButton",{Text="",BackgroundTransparency=1,
 		Size=UDim2.new(1,0,1,14),Position=UDim2.fromOffset(0,-7),ZIndex=4,AutoButtonColor=false},trackBg)
 	pcall(function() interact.CursorIcon="rbxasset://SystemCursors/PointingHand" end)
@@ -3088,7 +3093,7 @@ function Lib:AddSlider(pi,label,min,max,default,callback)
 		tw(fill,.06,{Size=UDim2.fromScale(pct,1)})
 		tw(knobSl,.06,{Position=UDim2.new(pct,0,.5,0)})
 		valLbl.Text=tostring(v)
-		if callback then callback(v) end
+		curVal = v
 	end
 
 	interact.InputBegan:Connect(function(i)
@@ -3098,7 +3103,10 @@ function Lib:AddSlider(pi,label,min,max,default,callback)
 		end
 	end)
 	table.insert(self._conns,UserInputService.InputEnded:Connect(function(i)
-		if i.UserInputType==Enum.UserInputType.MouseButton1 or i.UserInputType==Enum.UserInputType.Touch then dragging=false end
+		if i.UserInputType==Enum.UserInputType.MouseButton1 or i.UserInputType==Enum.UserInputType.Touch then
+			if dragging and callback then callback(curVal) end
+			dragging=false
+		end
 	end))
 	table.insert(self._conns,UserInputService.InputChanged:Connect(function(i)
 		if dragging and (i.UserInputType==Enum.UserInputType.MouseMovement or i.UserInputType==Enum.UserInputType.Touch) then
@@ -3116,6 +3124,7 @@ function Lib:AddSlider(pi,label,min,max,default,callback)
 		tw(self.Fill,.15,{Size=UDim2.fromScale(pct,1)})
 		tw(self.Knob,.15,{Position=UDim2.new(pct,0,.5,0)})
 		self.ValueLabel.Text=tostring(v)
+		curVal = v
 	end
 	return obj
 end
@@ -4160,7 +4169,7 @@ function Lib:_runDemo()
 
 	self:AddMetricRow(1, {
 		{Label="Components", Value=22, Unit="available"},
-		{Label="Version",    Value="5", Unit="slaoqUILib"},
+		{Label="Version",    Value="1", Unit="slaoqUILib"},
 		{Label="Pages",      Value=5,  Unit="in demo"},
 	})
 
@@ -4374,7 +4383,7 @@ function Lib:_runDemo()
 	-- PAGE 5: LOGS ────────────────────────────────────────────────
 	self:AddSectionHeader(5, "Logs", "Real-time output console")
 	local console = self:AddLogConsole(5, 260)
-	console:Log("SlaoqUILib v5 initialized", "SUCCESS")
+	console:Log("SlaoqUILib v1 initialized", "SUCCESS")
 	console:Log("Demo mode active", "INFO")
 	console:Log("All components loaded", "DEBUG")
 	console:Log("Ready for use", "INFO")

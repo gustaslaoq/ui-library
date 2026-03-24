@@ -1588,71 +1588,86 @@ function Lib:Confirm(title, message, onConfirm, onCancel, opts)
 		BorderSizePixel=0,ZIndex=900,
 	},sg)
 
-	local overlay = new("Frame",{
-		Size=UDim2.fromScale(1,1),BackgroundColor3=fromHex("000000"),
-		BackgroundTransparency=1,BorderSizePixel=0,ZIndex=900,
-	},container)
+	local overlay = new("Frame",{Size=UDim2.fromScale(1,1),BackgroundColor3=fromHex("000000"),
+		BackgroundTransparency=1,BorderSizePixel=0,ZIndex=900},container)
+	local ovGrad = new("UIGradient",{
+		Color = ColorSequence.new{
+			ColorSequenceKeypoint.new(0, Color3.new(0,0,0)),
+			ColorSequenceKeypoint.new(1, Color3.new(0,0,0)),
+		},
+		Transparency = NumberSequence.new{
+			NumberSequenceKeypoint.new(0, 0.7),
+			NumberSequenceKeypoint.new(1, 0.7),
+		},
+		Rotation=90,
+	}, overlay)
 
+	local cam = workspace.CurrentCamera
+	local vp  = cam and cam.ViewportSize or Vector2.new(1280,720)
+	local mw  = math.clamp(math.floor(vp.X * 0.42), 320, 520)
 	local modal = new("Frame",{
-		AnchorPoint=Vector2.new(.5,.5),
-		Position=UDim2.new(.5,0,.5,22),
-		Size=UDim2.fromOffset(400,200),
-		BackgroundColor3=C.Card,BorderSizePixel=0,ZIndex=901,
-		BackgroundTransparency=1,
+		AnchorPoint=Vector2.new(.5,.5),Position=UDim2.new(.5,0,.5,18),
+		Size=UDim2.fromOffset(math.floor(mw*0.9),0),AutomaticSize=Enum.AutomaticSize.Y,
+		BackgroundColor3=C.Card,BorderSizePixel=0,ZIndex=901,BackgroundTransparency=1,
 	},container)
-	corner(modal,12)
+	corner(modal,14)
 	stroke(modal,C.Border2,1)
+	local modalGrad = new("UIGradient",{
+		Color = ColorSequence.new{
+			ColorSequenceKeypoint.new(0, C.Card),
+			ColorSequenceKeypoint.new(1, C.Card2),
+		},
+		Rotation=90,
+	}, modal)
+	local shadow = new("Frame",{
+		AnchorPoint=Vector2.new(.5,.5),
+		Position=UDim2.fromScale(.5,.5),
+		Size=UDim2.new(1,18,1,18),
+		BackgroundColor3=fromHex("000000"),BackgroundTransparency=1,BorderSizePixel=0,
+		ZIndex=900,
+	}, modal)
+	corner(shadow,16)
 
-	local stripe=new("Frame",{
-		Size=UDim2.new(1,0,0,3),BackgroundColor3=accentCol,
-		BorderSizePixel=0,ZIndex=902,
-	},modal)
-	corner(stripe,12)
-	new("Frame",{
-		Position=UDim2.new(0,0,1,-3),Size=UDim2.new(1,0,0,3),
-		BackgroundColor3=accentCol,BorderSizePixel=0,ZIndex=902,
-	},stripe)
+	local header=new("Frame",{Size=UDim2.new(1,0,0,56),BackgroundTransparency=1,ZIndex=902},modal)
+	pad(header,16,8,16,16)
+	hlist(header,10)
+	local iconWrap=new("Frame",{Size=UDim2.fromOffset(28,28),BackgroundTransparency=1,LayoutOrder=0},header)
+	local icon=new("Frame",{Size=UDim2.fromScale(1,1),BackgroundColor3=accentCol,BorderSizePixel=0},iconWrap)
+	corner(icon,8)
+	new("Frame",{Position=UDim2.new(0,0,1,0),Size=UDim2.new(1,0,0,1),BackgroundColor3=fromHex("000000"),BackgroundTransparency=.9,BorderSizePixel=0},icon)
+	local iconLbl=new("TextLabel",{Text=isDestructive and "!" or "i",Font=Enum.Font.GothamBold,TextSize=16,TextColor3=C.Bg,
+		BackgroundTransparency=1,Size=UDim2.fromScale(1,1),TextXAlignment=Enum.TextXAlignment.Center},icon)
+	local titleCol=new("Frame",{Size=UDim2.new(1,-28,1,0),BackgroundTransparency=1,LayoutOrder=1},header)
+	vlist(titleCol,4)
+	new("TextLabel",{Text=title or "Confirm",Font=Enum.Font.GothamBold,TextSize=16,TextColor3=C.White,
+		BackgroundTransparency=1,Size=UDim2.new(1,0,0,18),TextXAlignment=Enum.TextXAlignment.Left},titleCol)
+	new("TextLabel",{Text=isDestructive and "This action may affect your session" or "Please review and confirm the action",Font=Enum.Font.Gotham,TextSize=11,TextColor3=C.TextDim,
+		BackgroundTransparency=1,Size=UDim2.new(1,0,0,14),TextXAlignment=Enum.TextXAlignment.Left},titleCol)
+	new("Frame",{Position=UDim2.fromOffset(0,56),Size=UDim2.new(1,0,0,1),BackgroundColor3=C.Border,BorderSizePixel=0},modal)
 
-	local titleLbl=new("TextLabel",{
-		Text=title or "Confirm",Font=Enum.Font.GothamBold,TextSize=15,TextColor3=C.White,
-		BackgroundTransparency=1,
-		Position=UDim2.fromOffset(20,16),
-		Size=UDim2.new(1,-40,0,22),
-		TextXAlignment=Enum.TextXAlignment.Left,ZIndex=903,
-	},modal)
+	local body=new("Frame",{Position=UDim2.fromOffset(0,57),Size=UDim2.new(1,0,0,0),AutomaticSize=Enum.AutomaticSize.Y,BackgroundTransparency=1,ZIndex=903},modal)
+	pad(body,12,12,16,16)
 
-	local sep=new("Frame",{
-		Position=UDim2.fromOffset(0,46),Size=UDim2.new(1,0,0,1),
-		BackgroundColor3=C.Border,BorderSizePixel=0,ZIndex=902,
-	},modal)
+	local msgLbl=new("TextLabel",{Text=message or "",Font=Enum.Font.Gotham,TextSize=13,TextColor3=C.TextDim,
+		BackgroundTransparency=1,Size=UDim2.new(1,0,0,0),AutomaticSize=Enum.AutomaticSize.Y,
+		TextXAlignment=Enum.TextXAlignment.Left,TextYAlignment=Enum.TextYAlignment.Top,TextWrapped=true},body)
+	new("Frame",{Position=UDim2.new(0,0,1,0),Size=UDim2.new(1,0,0,1),BackgroundColor3=C.Border,BorderSizePixel=0},body)
 
-	local msgLbl=new("TextLabel",{
-		Text=message or "",Font=Enum.Font.Gotham,TextSize=13,TextColor3=C.TextDim,
-		BackgroundTransparency=1,
-		Position=UDim2.fromOffset(20,56),
-		Size=UDim2.new(1,-40,0,72),
-		TextXAlignment=Enum.TextXAlignment.Left,
-		TextYAlignment=Enum.TextYAlignment.Top,
-		TextWrapped=true,ZIndex=903,
-	},modal)
+	local footer=new("Frame",{Size=UDim2.new(1,0,0,54),BackgroundTransparency=1,ZIndex=903},modal)
+	pad(footer,8,12,16,16)
+	hlist(footer,10)
 
-	local cancelBtn=new("TextButton",{
-		Text=cancelText,Font=Enum.Font.GothamBold,TextSize=13,
+	local cancelBtn=new("TextButton",{Text=cancelText,Font=Enum.Font.GothamBold,TextSize=13,
 		TextColor3=C.TextDim,BackgroundColor3=C.Card2,BorderSizePixel=0,
-		Position=UDim2.new(0,16,1,-54),Size=UDim2.new(.5,-21,0,38),
-		AutoButtonColor=false,ZIndex=903,
-	},modal)
+		Size=UDim2.new(.5,-10,0,40),AutoButtonColor=false,LayoutOrder=0},footer)
 	corner(cancelBtn,8)
 	stroke(cancelBtn,C.Border2,1)
 	cancelBtn.MouseEnter:Connect(function() tw(cancelBtn,.1,{TextColor3=C.White,BackgroundColor3=C.Card3}) end)
 	cancelBtn.MouseLeave:Connect(function() tw(cancelBtn,.12,{TextColor3=C.TextDim,BackgroundColor3=C.Card2}) end)
 
-	local confirmBtn=new("TextButton",{
-		Text=confirmText,Font=Enum.Font.GothamBold,TextSize=13,
+	local confirmBtn=new("TextButton",{Text=confirmText,Font=Enum.Font.GothamBold,TextSize=13,
 		TextColor3=C.White,BackgroundColor3=confirmColor,BorderSizePixel=0,
-		Position=UDim2.new(.5,5,1,-54),Size=UDim2.new(.5,-21,0,38),
-		AutoButtonColor=false,ZIndex=903,
-	},modal)
+		Size=UDim2.new(.5,-10,0,40),AutoButtonColor=false,LayoutOrder=1},footer)
 	corner(confirmBtn,8)
 	local function lighten(col)
 		return Color3.new(math.min(col.R+0.15,1),math.min(col.G+0.08,1),math.min(col.B+0.08,1))
@@ -1662,7 +1677,8 @@ function Lib:Confirm(title, message, onConfirm, onCancel, opts)
 
 	local function closeModal()
 		tw(overlay,.2,{BackgroundTransparency=1},Enum.EasingStyle.Quint)
-		tw(modal,.18,{BackgroundTransparency=1,Position=UDim2.new(.5,0,.5,12)},Enum.EasingStyle.Quint,Enum.EasingDirection.In)
+		tw(modal,.2,{BackgroundTransparency=1,Position=UDim2.new(.5,0,.5,28)},Enum.EasingStyle.Quint,Enum.EasingDirection.In)
+		tw(shadow,.2,{BackgroundTransparency=1},Enum.EasingStyle.Quint,Enum.EasingDirection.In)
 		task.delay(.22,function() pcall(function() container:Destroy() end) end)
 	end
 
@@ -1681,8 +1697,9 @@ function Lib:Confirm(title, message, onConfirm, onCancel, opts)
 		closeModal(); if onCancel then pcall(onCancel) end
 	end)
 
-	tw(overlay,.22,{BackgroundTransparency=0.55},Enum.EasingStyle.Quint)
-	tw(modal,.3,{BackgroundTransparency=0,Position=UDim2.fromScale(.5,.5)},Enum.EasingStyle.Back,Enum.EasingDirection.Out)
+	tw(overlay,.22,{BackgroundTransparency=0.45},Enum.EasingStyle.Quint)
+	tw(modal,.3,{BackgroundTransparency=0,Size=UDim2.fromOffset(mw,0),Position=UDim2.fromScale(.5,.5)},Enum.EasingStyle.Back,Enum.EasingDirection.Out)
+	tw(shadow,.3,{BackgroundTransparency=0.6},Enum.EasingStyle.Quint)
 end
 
 
@@ -2017,9 +2034,9 @@ function Lib:_buildSettingsPanel()
 		stroke(unloadRow,fromHex("3a0808"),1)
 		pad(unloadRow,0,0,16,16)
 		new("TextLabel",{Text="Unload Script",Font=Enum.Font.GothamBold,TextSize=13,TextColor3=C.Red,
-			BackgroundTransparency=1,Position=UDim2.new(0,16,.5,-16),Size=UDim2.new(1,-140,0,18),TextXAlignment=Enum.TextXAlignment.Left},unloadRow)
+			BackgroundTransparency=1,Position=UDim2.new(0,0,.5,-16),Size=UDim2.new(1,-140,0,18),TextXAlignment=Enum.TextXAlignment.Left},unloadRow)
 		new("TextLabel",{Text="Completely removes the interface",Font=Enum.Font.Gotham,TextSize=10,TextColor3=fromHex("884444"),
-			BackgroundTransparency=1,Position=UDim2.new(0,16,.5,4),Size=UDim2.new(1,-140,0,13),TextXAlignment=Enum.TextXAlignment.Left},unloadRow)
+			BackgroundTransparency=1,Position=UDim2.new(0,0,.5,4),Size=UDim2.new(1,-140,0,13),TextXAlignment=Enum.TextXAlignment.Left},unloadRow)
 		local unloadBtn=new("TextButton",{
 			Text="UNLOAD",Font=Enum.Font.GothamBold,TextSize=11,TextColor3=C.White,
 			BackgroundColor3=C.Red,BorderSizePixel=0,AutoButtonColor=false,

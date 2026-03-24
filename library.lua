@@ -4045,41 +4045,43 @@ function Lib:HideElement(obj)
 end
 
 function Lib:_runDemo()
-	-- PAGE 1: OVERVIEW ------------------------------------------
-	self:AddSectionHeader(1, "Overview", "Live component showcase")
+	-- PAGE 1: DASHBOARD ─────────────────────────────────────────
+	self:AddSectionHeader(1, "Dashboard", "Live component showcase")
 
 	self:AddMetricRow(1, {
-		{Label="Components", Value=20, Unit="available"},
+		{Label="Components", Value=22, Unit="available"},
 		{Label="Version",    Value="5", Unit="slaoqUILib"},
 		{Label="Pages",      Value=5,  Unit="in demo"},
 	})
 
 	self:AddDivider(1, "Status")
 	local statusBadge = self:AddStatusBadge2(1, "Demo Status", "idle")
-	local statusLbl   = self:AddLabel(1, "No action yet", "muted")
+	local statuslbl   = self:AddLabel(1, "No action yet.", "muted")
 	local hpBar = self:AddProgressBar(1, "Sample Progress A", 68, 100)
 	local xpBar = self:AddProgressBar(1, "Sample Progress B", 33, 100)
 
 	self:AddDivider(1, "Notification Center")
-	local nc = self:AddNotificationCenter(1, {Height=170, MaxItems=25})
+	local nc = self:AddNotificationCenter(1, {Height=160, MaxItems=25})
 	nc:Push("Library loaded successfully", "success", "System")
-	nc:Push("Demo mode active -- use Lib.new({...}) for your script", "info", "System")
+	nc:Push("Demo mode. Use Lib.new({...}) for your script.", "info", "System")
 
 	self:AddDivider(1, "Controls")
 	self:AddButtonRow(1, {
 		{Text="Online",  Style="success", Width=100, Callback=function()
 			statusBadge:SetState("online")
-			statuslbl_update = "Status: Online"
+			statuslbl:Set("Status set to Online")
 			nc:Push("Status set to Online", "success", "Status")
 			self:Notify("Now Online", "success", 2)
 		end},
 		{Text="Idle",    Style="ghost",   Width=100, Callback=function()
 			statusBadge:SetState("idle")
+			statuslbl:Set("Status set to Idle")
 			nc:Push("Status set to Idle", "info", "Status")
 			self:Notify("Now Idle", "info", 2)
 		end},
 		{Text="Offline", Style="danger",  Width=100, Callback=function()
 			statusBadge:SetState("offline")
+			statuslbl:Set("Status set to Offline")
 			nc:Push("Status set to Offline", "error", "Status")
 			self:Notify("Now Offline", "error", 2)
 		end},
@@ -4087,41 +4089,34 @@ function Lib:_runDemo()
 	self:AddButtonRow(1, {
 		{Text="Confirm Dialog", Style="outline", Width=140, Callback=function()
 			self:Confirm("Confirm Action",
-				"This is a test of the confirm modal system. Click Confirm to proceed or Cancel to dismiss.",
-				function() self:Notify("Confirmed!", "success", 2); nc:Push("User confirmed action","success","Modal") end,
+				"This is a test of the confirm modal system.",
+				function() self:Notify("Confirmed!", "success", 2); nc:Push("User confirmed","success","Modal") end,
 				function() self:Notify("Cancelled", "info", 2) end
 			)
 		end},
-		{Text="Custom Confirm", Style="ghost", Width=140, Callback=function()
-			self:Confirm("Save Changes",
-				"Do you want to save your current settings before continuing?",
-				function() self:Notify("Saved!", "success", 2) end,
-				nil,
-				{ConfirmText="Save", CancelText="Discard", ConfirmColor=C.Blue, Destructive=false}
-			)
+		{Text="Shake Window", Style="ghost", Width=140, Callback=function()
+			self:Shake(8)
 		end},
 	})
-	self:AddAlert(1, "Info", "Press Ctrl+F to search any page.", "info")
-	self:AddAlert(1, "Tip",  "Open Settings (gear icon) to configure the library.", "success")
+	self:AddAlert(1, "Tip", "Press Ctrl+F to search any page. Use the gear icon for settings.", "info")
 
-	-- PAGE 2: INPUTS ------------------------------------------
+	-- PAGE 2: INPUTS ─────────────────────────────────────────────
 	self:AddSectionHeader(2, "Inputs", "Text, numbers and selections")
 
 	self:AddDivider(2, "Text")
-	local inp1 = self:AddInput(2, "Text Input", "Type something and press Enter...", function(text, enter)
+	self:AddInput(2, "Text Input", "Type something and press Enter...", function(text, enter)
 		if enter and text ~= "" then
-			self:Notify('Input: "'..text..'"', "info", 3)
+			self:Notify("Input: \"" .. text .. "\"", "info", 3)
 		end
 	end)
-	inp1:SetValid(true, "")
-	self:AddInput(2, "Multi-line Input", "Supports multiple lines of text...", function(t) end,
+	self:AddInput(2, "Multi-line Input", "Supports multiple lines...", function() end,
 		{MultiLine=true})
 
 	self:AddDivider(2, "Numbers")
-	local numInp = self:AddInputNumber(2, "Number Input", {Min=0, Max=1000, Step=5, Placeholder="0-1000"}, function(n, enter)
+	self:AddInputNumber(2, "Number Input (0–1000)", {Min=0, Max=1000, Step=5, Placeholder="Enter a number..."}, function(n, enter)
 		if enter then self:Notify("Value: "..tostring(n), "info", 2) end
 	end)
-	self:AddStepper(2, "Stepper", 1, 20, 5, 1, function(v)
+	self:AddStepper(2, "Stepper (1–20)", 1, 20, 5, 1, function(v)
 		self:Notify("Stepper: "..tostring(v), "info", 1.5)
 	end)
 
@@ -4134,15 +4129,15 @@ function Lib:_runDemo()
 		if n>0 then self:Notify(n.." item(s) selected","info",1.5) end
 	end)
 
-	self:AddDivider(2, "Radio & Colour")
+	self:AddDivider(2, "Radio & Color")
 	self:AddRadioGroup(2, "Radio Group", {"Choice A","Choice B","Choice C"}, "Choice A", function(v)
 		self:Notify("Radio: "..v, "success", 2)
 	end)
-	self:AddColorPicker(2, "Accent Color", Color3.fromRGB(68,136,255), function(col, hex)
+	self:AddColorPicker(2, "Color Picker", Color3.fromRGB(68,136,255), function(col, hex)
 		self:Notify("Color: #"..hex, "info", 2)
 	end)
 
-	self:AddDivider(2, "Toggles")
+	self:AddDivider(2, "Toggles & Checkbox")
 	self:AddToggle(2, "Simple Toggle", false, function(v)
 		self:Notify(v and "Enabled" or "Disabled", v and "success" or "info", 1.5)
 	end)
@@ -4153,22 +4148,27 @@ function Lib:_runDemo()
 		self:Notify(v and "Checked" or "Unchecked", "info", 1.5)
 	end)
 
-	-- PAGE 3: COMPONENTS ----------------------------------------
+	-- PAGE 3: COMPONENTS ─────────────────────────────────────────
 	self:AddSectionHeader(3, "Components", "Visual elements and displays")
 
 	self:AddDivider(3, "Labels")
-	self:AddLabel(3, "Title style", "title")
-	self:AddLabel(3, "Subtitle style", "subtitle")
-	self:AddLabel(3, "Body style -- default for most text.", "body")
-	self:AddLabel(3, "Muted style -- secondary or helper text.", "muted")
-	self:AddLabel(3, "Caption style", "caption")
+	self:AddLabel(3, "Title style label", "title")
+	self:AddLabel(3, "Subtitle style label", "subtitle")
+	self:AddLabel(3, "Body style — default for most text.", "body")
+	self:AddLabel(3, "Muted style — secondary or helper text.", "muted")
+	self:AddLabel(3, "Caption style label", "caption")
 
-	self:AddDivider(3, "Tags")
-	self:AddTag(3, "info", "info")
-	self:AddTag(3, "success", "success")
-	self:AddTag(3, "warning", "warning")
-	self:AddTag(3, "error", "error")
-	self:AddTag(3, "muted", "muted")
+	self:AddDivider(3, "Badges & Tags")
+	self:AddBadge(3, "Default",  "default")
+	self:AddBadge(3, "Success",  "success")
+	self:AddBadge(3, "Error",    "error")
+	self:AddBadge(3, "Warning",  "warning")
+	self:AddBadge(3, "Info",     "info")
+	self:AddBadge(3, "Purple",   "purple")
+	self:AddTag(3, "tag: info",    "info")
+	self:AddTag(3, "tag: success", "success")
+	self:AddTag(3, "tag: warning", "warning")
+	self:AddTag(3, "tag: error",   "error")
 
 	self:AddDivider(3, "Alerts")
 	self:AddAlert(3, "Information", "Here is some useful info for the user.", "info")
@@ -4176,7 +4176,7 @@ function Lib:_runDemo()
 	self:AddAlert(3, "Warning", "Something requires your attention.", "warning")
 	self:AddAlert(3, "Error", "Something went wrong. Please try again.", "error")
 
-	self:AddDivider(3, "Progress")
+	self:AddDivider(3, "Progress Bars")
 	local pb1 = self:AddProgressBar(3, "Download Progress", 72, 100)
 	local pb2 = self:AddProgressBar(3, "Storage Used", 45, 100)
 	self:AddButtonRow(3, {
@@ -4184,12 +4184,8 @@ function Lib:_runDemo()
 			pb1:SetValue(math.random(10,100))
 			pb2:SetValue(math.random(10,100))
 		end},
-		{Text="Fill", Style="success", Width=90, Callback=function()
-			pb1:SetValue(100); pb2:SetValue(100)
-		end},
-		{Text="Reset", Style="ghost", Width=90, Callback=function()
-			pb1:SetValue(0); pb2:SetValue(0)
-		end},
+		{Text="Fill",  Style="success", Width=90, Callback=function() pb1:SetValue(100); pb2:SetValue(100) end},
+		{Text="Reset", Style="ghost",   Width=90, Callback=function() pb1:SetValue(0);   pb2:SetValue(0)   end},
 	})
 
 	self:AddDivider(3, "Spinner")
@@ -4199,39 +4195,45 @@ function Lib:_runDemo()
 		{Text="Stop",  Style="danger",  Width=90, Callback=function() spinner:Stop()  end},
 	})
 
+	self:AddDivider(3, "Paragraph")
+	self:AddParagraph(3, "What is SlaoqUILib?",
+		"A lightweight, modular UI library for Roblox scripts. Drop it in, call Lib.new({...}), " ..
+		"then build pages using AddToggle, AddSlider, AddDropdown, AddLogConsole and more.")
+
 	self:AddDivider(3, "Dynamic List")
 	local dlist = self:AddList(3, "Item Log", {MaxItems=15, ItemHeight=32})
 	local dcount = 0
 	self:AddButtonRow(3, {
-		{Text="Add Item",  Style="primary", Width=110, Callback=function()
+		{Text="Add Item", Style="primary", Width=110, Callback=function()
 			dcount = dcount + 1
 			local cols = {C.Blue, C.Green, C.Yellow, C.Red, C.Purple, C.Orange}
-			dlist:Add("Item #"..dcount.." added at "..os.date("%H:%M:%S"), cols[(dcount-1)%#cols+1])
+			dlist:Add("Item #"..dcount.." — "..os.date("%H:%M:%S"), cols[(dcount-1)%#cols+1])
 		end},
-		{Text="Clear",    Style="ghost",   Width=90,  Callback=function()
+		{Text="Clear", Style="ghost", Width=90, Callback=function()
 			dlist:Clear(); dcount=0
 		end},
 	})
 
-	-- PAGE 4: BUTTONS ------------------------------------------
+	-- PAGE 4: BUTTONS ─────────────────────────────────────────────
 	self:AddSectionHeader(4, "Buttons", "All button styles and states")
 
-	self:AddDivider(4, "Primary Styles")
+	self:AddDivider(4, "All Styles")
 	self:AddButtonRow(4, {
 		{Text="Primary",  Style="primary", Width=110},
 		{Text="Success",  Style="success", Width=110},
 		{Text="Danger",   Style="danger",  Width=110},
 	})
 	self:AddButtonRow(4, {
-		{Text="Ghost",    Style="ghost",   Width=110},
-		{Text="Outline",  Style="outline", Width=110},
-		{Text="Warning",  Style="warning", Width=110},
+		{Text="Ghost",   Style="ghost",   Width=110},
+		{Text="Outline", Style="outline", Width=110},
+		{Text="Warning", Style="warning", Width=110},
 	})
 
 	self:AddDivider(4, "Loading State")
 	local loadBtn = self:AddButton(4, "Click to Load", "primary", nil)
 	if loadBtn then
 		loadBtn.Button.Activated:Connect(function()
+			if loadBtn._loading then return end
 			loadBtn:SetLoading(true)
 			task.delay(2.5, function()
 				loadBtn:SetLoading(false)
@@ -4241,38 +4243,40 @@ function Lib:_runDemo()
 	end
 
 	self:AddDivider(4, "Keybind")
-	self:AddKeybind(4, "Hotkey", "None", function(key)
+	self:AddKeybind(4, "Custom Hotkey", "None", function(key)
 		self:Notify("Hotkey set to: "..key, "info", 2)
 	end)
 
-	self:AddDivider(4, "Slider")
-	self:AddSlider(4, "Value A", 0, 100, 50, function(v)
+	self:AddDivider(4, "Sliders")
+	self:AddSlider(4, "Value A (0–100)", 0, 100, 50, function(v)
 		self:Notify("Slider A: "..tostring(v), "info", 1)
 	end)
-	self:AddSlider(4, "Value B", -50, 50, 0, function(v) end)
+	self:AddSlider(4, "Value B (−50–50)", -50, 50, 0, function() end)
 
-	self:AddDivider(4, "Button Row Widths")
+	self:AddDivider(4, "Toast Notifications")
 	self:AddButtonRow(4, {
-		{Text="Narrow", Style="ghost",   Width=80},
-		{Text="Medium", Style="primary", Width=120},
-		{Text="Wide",   Style="outline", Width=160},
+		{Text="Info",    Style="ghost",   Width=90, Callback=function() self:Notify("Info toast",    "info",    2.5) end},
+		{Text="Success", Style="success", Width=90, Callback=function() self:Notify("Success toast", "success", 2.5) end},
+		{Text="Warning", Style="warning", Width=90, Callback=function() self:Notify("Warning toast", "warning", 2.5) end},
+		{Text="Error",   Style="danger",  Width=90, Callback=function() self:Notify("Error toast",   "error",   2.5) end},
 	})
 
-	-- PAGE 5: LOGS ------------------------------------------
+	-- PAGE 5: LOGS ────────────────────────────────────────────────
 	self:AddSectionHeader(5, "Logs", "Real-time output console")
-	local console = self:AddLogConsole(5, 280)
+	local console = self:AddLogConsole(5, 260)
 	console:Log("SlaoqUILib v5 initialized", "SUCCESS")
 	console:Log("Demo mode active", "INFO")
 	console:Log("All components loaded", "DEBUG")
+	console:Log("Ready for use", "INFO")
 
 	self:AddButtonRow(5, {
-		{Text="Info",    Style="ghost",   Width=90, Callback=function() console:Log("Info message","INFO")    end},
-		{Text="Success", Style="success", Width=90, Callback=function() console:Log("Success","SUCCESS") end},
-		{Text="Warning", Style="warning", Width=90, Callback=function() console:Log("Warning event","WARN")    end},
-		{Text="Error",   Style="danger",  Width=90, Callback=function() console:Log("Error occurred","ERROR")   end},
+		{Text="Info",    Style="ghost",   Width=90, Callback=function() console:Log("Info message",   "INFO")    end},
+		{Text="Success", Style="success", Width=90, Callback=function() console:Log("Success",        "SUCCESS") end},
+		{Text="Warning", Style="warning", Width=90, Callback=function() console:Log("Warning event",  "WARN")    end},
+		{Text="Error",   Style="danger",  Width=90, Callback=function() console:Log("Error occurred", "ERROR")   end},
 	})
 	self:AddButtonRow(5, {
-		{Text="Spam 10 logs", Style="outline", Width=130, Callback=function()
+		{Text="Spam 10", Style="outline", Width=110, Callback=function()
 			task.spawn(function()
 				local levels={"INFO","SUCCESS","WARN","ERROR","DEBUG"}
 				for i=1,10 do
@@ -4283,17 +4287,19 @@ function Lib:_runDemo()
 		end},
 		{Text="Clear", Style="danger", Width=90, Callback=function()
 			console:Clear()
-			console:Log("Console cleared","INFO")
+			console:Log("Console cleared", "INFO")
 		end},
 	})
 
-	self:AddParagraph(5, "API Reference",
-		"ui:Notify(text, style, duration)  |  ui:Confirm(title, msg, onYes, onNo)  |  " ..
-		"ui:SetPageBadge(pi, text)  |  ui:OnDestroy(fn)  |  " ..
-		"AddInputNumber, AddMultiSelect, AddList, AddTag, AddStatusBadge2, AddNotificationCenter"
-	)
+	self:AddDivider(5, "API Quick Reference")
+	self:AddParagraph(5, "Core Methods",
+		"Notify · Confirm · Shake · Show / Hide · SetPageBadge · OnDestroy · Destroy")
+	self:AddParagraph(5, "Components",
+		"AddToggle · AddCheckbox · AddSlider · AddStepper · AddDropdown · AddRadioGroup · " ..
+		"AddColorPicker · AddInput · AddInputNumber · AddMultiSelect · AddList · " ..
+		"AddProgressBar · AddLogConsole · AddNotificationCenter · " ..
+		"AddBadge · AddTag · AddAlert · AddCard · AddTable · AddKeybind · AddSpinner")
 end
-
 function Lib:AddNotificationCenter(pi, opts)
 	opts = opts or {}
 	local maxItems = opts.MaxItems or 30

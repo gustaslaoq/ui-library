@@ -3047,24 +3047,26 @@ function Lib:AddMultiSelect(pi, labelTxt, options, callback)
 		row:SetAttribute("AriaRole","option")
 		row:SetAttribute("AriaLabel", tostring(opt))
 		pad(row,0,0,16,16)
+		local hv=new("Frame",{BackgroundColor3=C.Card2,BackgroundTransparency=1,Size=UDim2.new(1,-2,1,-2),Position=UDim2.fromOffset(1,1),BorderSizePixel=0,ZIndex=52},row)
+		corner(hv,8)
 		local optLbl=new("TextLabel",{Text=tostring(opt),Font=Enum.Font.Gotham,TextSize=13,TextColor3=C.Text,
 			BackgroundTransparency=1,Position=UDim2.fromOffset(0,0),
-			Size=UDim2.new(1,0,1,0),TextXAlignment=Enum.TextXAlignment.Left},row)
+			Size=UDim2.new(1,0,1,0),TextXAlignment=Enum.TextXAlignment.Left,ZIndex=53},row)
 		local btn=new("TextButton",{Text="",BackgroundTransparency=1,Size=UDim2.fromScale(1,1),
-			ZIndex=53,AutoButtonColor=false},row)
+			ZIndex=54,AutoButtonColor=false},row)
 		btn.Activated:Connect(function()
 			selected[opt]=not selected[opt]
 			local v=selected[opt]
-			tw(row,.18,{BackgroundTransparency=v and .84 or 1})
+			tw(hv,.18,{BackgroundTransparency=v and .2 or 1})
 			refreshCount()
 		end)
 		btn.MouseEnter:Connect(function()
-			if not selected[opt] then tw(row,.2,{BackgroundTransparency=.84}) end
+			if not selected[opt] then tw(hv,.2,{BackgroundTransparency=.2}) end
 		end)
 		btn.MouseLeave:Connect(function()
-			if not selected[opt] then tw(row,.22,{BackgroundTransparency=1}) end
+			if not selected[opt] then tw(hv,.22,{BackgroundTransparency=1}) end
 		end)
-		optionRows[i]={Row=row,Label=optLbl,Key=opt}
+		optionRows[i]={Row=row,Label=optLbl,Hv=hv,Key=opt}
 	end
 	end
 
@@ -3087,7 +3089,7 @@ function Lib:AddMultiSelect(pi, labelTxt, options, callback)
 			tw(listFrame,.28,{Size=UDim2.new(1,0,0,listH)},Enum.EasingStyle.Back,Enum.EasingDirection.Out)
 			for _,entry in ipairs(optionRows) do
 				local v=selected[entry.Key]
-				entry.Row.BackgroundTransparency = v and .84 or 1
+				if entry.Hv then entry.Hv.BackgroundTransparency = v and .2 or 1 end
 			end
 		else
 			tw(listFrame,.22,{Size=UDim2.new(1,0,0,0)},Enum.EasingStyle.Quint,Enum.EasingDirection.In)
@@ -3442,39 +3444,38 @@ function Lib:AddDropdown(pi,labelTxt,options,callback)
 	corner(optList,10)
 	stroke(optList,C.Border2,1)
 	new("UIListLayout",{SortOrder=Enum.SortOrder.LayoutOrder,Padding=UDim.new(0,0)},optList)
+	-- separator superior para consistência com multi-select
+	new("Frame",{Size=UDim2.new(1,-32,0,1),AnchorPoint=Vector2.new(.5,0),Position=UDim2.new(.5,0,0,0),
+		BackgroundColor3=C.Border2,BorderSizePixel=0},optList)
 	wrapper:SetAttribute("AriaRole","listbox")
 	wrapper:SetAttribute("AriaLabel", validateString(labelTxt,"Dropdown"))
 	optList:SetAttribute("AriaRole","list")
 
-	local optionButtons = {}
+	local optionRows = {}
 	local highlightedIndex = 0
 	local function isSelectedOpt(i)
 		return options[i] == selected
 	end
-	local function applyBaseState(i, btnOpt)
-		if isSelectedOpt(i) then
-			btnOpt.BackgroundTransparency = 0.9
-		else
-			btnOpt.BackgroundTransparency = 1
-		end
+	local function applyBaseState(i, row)
+		local hv = row and row._hv
+		if not hv then return end
+		hv.BackgroundTransparency = isSelectedOpt(i) and 0.1 or 1
 	end
 	local function setHighlight(idx)
-		for i,btnOpt in ipairs(optionButtons) do
+		for i,row in ipairs(optionRows) do
+			local hv = row and row._hv
+			if not hv then continue end
 			if i == idx then
-				tw(btnOpt,.18,{BackgroundTransparency=.84})
+				tw(hv,.18,{BackgroundTransparency=.2})
 			else
-				if isSelectedOpt(i) then
-					tw(btnOpt,.18,{BackgroundTransparency=.9})
-				else
-					tw(btnOpt,.18,{BackgroundTransparency=1})
-				end
+				tw(hv,.18,{BackgroundTransparency=isSelectedOpt(i) and .1 or 1})
 			end
 		end
 		highlightedIndex = idx
 	end
 	local function updateSelectedVisual()
-		for i,btnOpt in ipairs(optionButtons) do
-			applyBaseState(i, btnOpt)
+		for i,row in ipairs(optionRows) do
+			applyBaseState(i, row)
 		end
 	end
 	local keyConnOpen = nil
@@ -3487,19 +3488,22 @@ function Lib:AddDropdown(pi,labelTxt,options,callback)
 		pad(ob,0,0,16,16)
 	else
 	for i,opt in ipairs(options) do
-		local ob=new("TextButton",{Text=opt,Font=Enum.Font.Gotham,TextSize=13,TextColor3=C.Text,
-			BackgroundColor3=C.Card,BackgroundTransparency=1,BorderSizePixel=0,
-			Size=UDim2.new(1,0,0,40),AutoButtonColor=false,LayoutOrder=i,ZIndex=61,
-			TextXAlignment=Enum.TextXAlignment.Left},optList)
-		ob:SetAttribute("AriaRole","option")
-		ob:SetAttribute("AriaLabel", tostring(opt))
-		pad(ob,0,0,16,16)
-		ob.MouseEnter:Connect(function() tw(ob,.2,{BackgroundTransparency=.84}) end)
-		ob.MouseLeave:Connect(function() tw(ob,.22,{BackgroundTransparency=1}) end)
-		ob.Activated:Connect(function()
+		local row=new("Frame",{Size=UDim2.new(1,0,0,40),BackgroundTransparency=1,BorderSizePixel=0,LayoutOrder=i,ZIndex=61},optList)
+		local hv=new("Frame",{BackgroundColor3=C.Card2,BackgroundTransparency=1,Size=UDim2.new(1,-2,1,-2),Position=UDim2.fromOffset(1,1),BorderSizePixel=0,ZIndex=60},row)
+		corner(hv,8)
+		new("TextLabel",{Text=opt,Font=Enum.Font.Gotham,TextSize=13,TextColor3=C.Text,
+			BackgroundTransparency=1,Size=UDim2.new(1,-16,1,0),Position=UDim2.fromOffset(16,0),
+			TextXAlignment=Enum.TextXAlignment.Left,ZIndex=61},row)
+		row:SetAttribute("AriaRole","option")
+		row:SetAttribute("AriaLabel", tostring(opt))
+		local btnOpt=new("TextButton",{Text="",BackgroundTransparency=1,Size=UDim2.fromScale(1,1),AutoButtonColor=false,ZIndex=62},row)
+		btnOpt.MouseEnter:Connect(function() tw(hv,.18,{BackgroundTransparency=.2}) end)
+		btnOpt.MouseLeave:Connect(function()
+			if options[i]==selected then tw(hv,.18,{BackgroundTransparency=.1}) else tw(hv,.2,{BackgroundTransparency=1}) end
+		end)
+		btnOpt.Activated:Connect(function()
 			selected=opt; selLbl.Text=opt; open=false
-			tw(ob,.18,{BackgroundTransparency=.84})
-			task.delay(0.35, function() if ob and ob.Parent then tw(ob,.2,{BackgroundTransparency=1}) end end)
+			tw(hv,.16,{BackgroundTransparency=.1})
 			tw(optList,.22,{Size=UDim2.new(1,0,0,0)},Enum.EasingStyle.Quint,Enum.EasingDirection.In)
 			tw(arrow,.18,{Rotation=0})
 			tw(arrowImg,.18,{Rotation=0})
@@ -3507,7 +3511,8 @@ function Lib:AddDropdown(pi,labelTxt,options,callback)
 			if callback then self:_safeCall(callback, opt) end
 			if keyConnOpen then pcall(function() keyConnOpen:Disconnect() end) end
 		end)
-		optionButtons[i] = ob
+		row._hv = hv
+		optionRows[i] = row
 	end
 	end
 
@@ -3520,7 +3525,7 @@ function Lib:AddDropdown(pi,labelTxt,options,callback)
 		if open then
 			tw(optList,.28,{Size=UDim2.new(1,0,0,listH)},Enum.EasingStyle.Back,Enum.EasingDirection.Out)
 			tw(arrow,.2,{Rotation=180}); tw(arrowImg,.2,{Rotation=180})
-			if #optionButtons > 0 then
+			if #optionRows > 0 then
 				updateSelectedVisual()
 				setHighlight(1)
 				if keyConnOpen then pcall(function() keyConnOpen:Disconnect() end) end
@@ -3528,14 +3533,17 @@ function Lib:AddDropdown(pi,labelTxt,options,callback)
 					if gp then return end
 					if not open then return end
 					if i.KeyCode == Enum.KeyCode.Down then
-						local nx = math.clamp(highlightedIndex+1,1,#optionButtons)
+						local nx = math.clamp(highlightedIndex+1,1,#optionRows)
 						setHighlight(nx)
 					elseif i.KeyCode == Enum.KeyCode.Up then
-						local nx = math.clamp(highlightedIndex-1,1,#optionButtons)
+						local nx = math.clamp(highlightedIndex-1,1,#optionRows)
 						setHighlight(nx)
 					elseif i.KeyCode == Enum.KeyCode.Return or i.KeyCode == Enum.KeyCode.KeypadEnter then
-						local ob = optionButtons[highlightedIndex]
-						if ob then ob:Activate() end
+						local row = optionRows[highlightedIndex]
+						if row then
+							local b = row:FindFirstChildWhichIsA("TextButton")
+							if b then b:Activate() end
+						end
 					elseif i.KeyCode == Enum.KeyCode.Escape then
 						open=false
 						tw(optList,.22,{Size=UDim2.new(1,0,0,0)},Enum.EasingStyle.Quint,Enum.EasingDirection.In)

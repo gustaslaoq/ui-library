@@ -2260,7 +2260,6 @@ function Lib:_openSettings()
 	if self._settingsVisible then
 		self._settingsVisible = false
 		if self._gearImg then tw(self._gearImg,.15,{ImageColor3=C.Text}) end
-		if self._bar then self._bar.Visible = true end
 		local sf = self._settingsFrame
 		local sfs = sf and sf:FindFirstChildWhichIsA("ScrollingFrame")
 		local nb = self._navBtns[self._pageIdx]
@@ -2990,6 +2989,8 @@ function Lib:AddMultiSelect(pi, labelTxt, options, callback)
 	local wrapper=new("Frame",{Size=UDim2.new(1,0,0,0),AutomaticSize=Enum.AutomaticSize.Y,
 		BackgroundColor3=C.Card,BorderSizePixel=0,LayoutOrder=self:_o(pi),ClipsDescendants=false},s)
 	wrapper:SetAttribute("ComponentId", self:_nextCompId("MultiSelect"))
+	wrapper:SetAttribute("AriaRole","listbox")
+	wrapper:SetAttribute("AriaLabel", validateString(labelTxt,"MultiSelect"))
 	corner(wrapper,10)
 	stroke(wrapper,C.Border,1)
 	-- Stack header and expandable list vertically — critical for no-overlap
@@ -3005,11 +3006,11 @@ function Lib:AddMultiSelect(pi, labelTxt, options, callback)
 		BackgroundTransparency=1,Size=UDim2.new(1,-56,1,0),TextXAlignment=Enum.TextXAlignment.Left},header)
 
 	local countLbl=new("TextLabel",{Text="none",Font=Enum.Font.Gotham,TextSize=11,TextColor3=C.TextDim,
-		BackgroundTransparency=1,AnchorPoint=Vector2.new(1,.5),Position=UDim2.new(1,-8,.5,0),
-		Size=UDim2.fromOffset(80,20),TextXAlignment=Enum.TextXAlignment.Right},header)
+		BackgroundTransparency=1,AnchorPoint=Vector2.new(1,.5),Position=UDim2.new(1,-28,.5,0),
+		Size=UDim2.new(.8,-40,0,20),TextXAlignment=Enum.TextXAlignment.Right,TextTruncate=Enum.TextTruncate.AtEnd},header)
 
 	local listFrame=new("Frame",{Size=UDim2.new(1,0,0,0),AutomaticSize=Enum.AutomaticSize.None,
-		BackgroundTransparency=1,BorderSizePixel=0,Visible=false,LayoutOrder=1},wrapper)
+		BackgroundColor3=C.Card,BorderSizePixel=0,Visible=false,LayoutOrder=1,ClipsDescendants=true},wrapper)
 	-- Separator inside listFrame uses explicit position (no UIListLayout on listFrame itself)
 	new("Frame",{Size=UDim2.new(1,-32,0,1),AnchorPoint=Vector2.new(.5,0),Position=UDim2.new(.5,0,0,0),
 		BackgroundColor3=C.Border2,BorderSizePixel=0},listFrame)
@@ -3025,11 +3026,15 @@ function Lib:AddMultiSelect(pi, labelTxt, options, callback)
 		Size=UDim2.fromScale(1,1),ZIndex=52,AutoButtonColor=false},header)
 
 	local function refreshCount()
-		local n=0; for _,v in pairs(selected) do if v then n=n+1 end end
-		countLbl.Text = n==0 and "none" or n.." selected"
+		local labels={}
+		for opt,v in pairs(selected) do if v then labels[#labels+1]=tostring(opt) end end
+		table.sort(labels)
+		local joined = (#labels==0) and "none" or table.concat(labels,", ")
+		countLbl.Text = joined
 		if callback then self:_safeCall(callback, selected) end
 	end
 
+	local optionRows={}
 	if #options == 0 then
 		local empty=new("Frame",{Size=UDim2.new(1,0,0,40),BackgroundTransparency=1,LayoutOrder=1},listInner)
 		pad(empty,0,0,16,16)
@@ -3039,6 +3044,8 @@ function Lib:AddMultiSelect(pi, labelTxt, options, callback)
 	for i,opt in ipairs(options) do
 		local row=new("Frame",{Size=UDim2.new(1,0,0,40),BackgroundTransparency=1,BorderSizePixel=0,
 			LayoutOrder=i},listInner)
+		row:SetAttribute("AriaRole","option")
+		row:SetAttribute("AriaLabel", tostring(opt))
 		pad(row,0,0,16,16)
 		local chkBox=new("Frame",{Size=UDim2.fromOffset(18,18),BackgroundColor3=selected[opt] and C.White or C.Card3,
 			BorderSizePixel=0,AnchorPoint=Vector2.new(0,.5),Position=UDim2.new(0,0,.5,0)},row)
@@ -3047,7 +3054,7 @@ function Lib:AddMultiSelect(pi, labelTxt, options, callback)
 		local chkMark=new("TextLabel",{Text=string.char(226,156,147),Font=Enum.Font.GothamBold,TextSize=11,
 			TextColor3=C.Bg,BackgroundTransparency=1,Size=UDim2.fromScale(1,1),
 			TextXAlignment=Enum.TextXAlignment.Center,TextTransparency=selected[opt] and 0 or 1},chkBox)
-		new("TextLabel",{Text=tostring(opt),Font=Enum.Font.Gotham,TextSize=13,TextColor3=C.Text,
+		local optLbl=new("TextLabel",{Text=tostring(opt),Font=Enum.Font.Gotham,TextSize=13,TextColor3=C.Text,
 			BackgroundTransparency=1,Position=UDim2.fromOffset(28,0),
 			Size=UDim2.new(1,-28,1,0),TextXAlignment=Enum.TextXAlignment.Left},row)
 		local btn=new("TextButton",{Text="",BackgroundTransparency=1,Size=UDim2.fromScale(1,1),
@@ -3057,10 +3064,16 @@ function Lib:AddMultiSelect(pi, labelTxt, options, callback)
 			local v=selected[opt]
 			tw(chkBox,.15,{BackgroundColor3=v and C.White or C.Card3})
 			tw(chkMark,.12,{TextTransparency=v and 0 or 1})
+			tw(row,.18,{BackgroundTransparency=v and .84 or 1})
 			refreshCount()
 		end)
-		btn.MouseEnter:Connect(function() tw(row,.1,{BackgroundTransparency=.94}) end)
-		btn.MouseLeave:Connect(function() tw(row,.12,{BackgroundTransparency=1}) end)
+		btn.MouseEnter:Connect(function()
+			if not selected[opt] then tw(row,.2,{BackgroundTransparency=.84}) end
+		end)
+		btn.MouseLeave:Connect(function()
+			if not selected[opt] then tw(row,.22,{BackgroundTransparency=1}) end
+		end)
+		optionRows[i]={Row=row,Label=optLbl,Box=chkBox,Mark=chkMark,Key=opt}
 	end
 	end
 
@@ -3081,8 +3094,12 @@ function Lib:AddMultiSelect(pi, labelTxt, options, callback)
 			listFrame.Visible=true
 			listFrame.Size=UDim2.new(1,0,0,0)
 			tw(listFrame,.28,{Size=UDim2.new(1,0,0,listH)},Enum.EasingStyle.Back,Enum.EasingDirection.Out)
+			for _,entry in ipairs(optionRows) do
+				local v=selected[entry.Key]
+				entry.Row.BackgroundTransparency = v and .84 or 1
+			end
 		else
-			tw(listFrame,.18,{Size=UDim2.new(1,0,0,0)},Enum.EasingStyle.Quint,Enum.EasingDirection.In)
+			tw(listFrame,.22,{Size=UDim2.new(1,0,0,0)},Enum.EasingStyle.Quint,Enum.EasingDirection.In)
 			task.delay(.19,function() if not open and listFrame and listFrame.Parent then listFrame.Visible=false end end)
 		end
 	end)
@@ -3430,34 +3447,57 @@ function Lib:AddDropdown(pi,labelTxt,options,callback)
 
 	local listH=math.max(#options,1)*40
 	local optList=new("Frame",{Position=UDim2.fromOffset(0,48),Size=UDim2.new(1,0,0,0),
-		BackgroundColor3=C.Card2,BorderSizePixel=0,ClipsDescendants=true,ZIndex=60,Visible=false},wrapper)
+		BackgroundColor3=C.Card,BorderSizePixel=0,ClipsDescendants=true,ZIndex=60,Visible=false},wrapper)
 	corner(optList,10)
 	stroke(optList,C.Border2,1)
 	new("UIListLayout",{SortOrder=Enum.SortOrder.LayoutOrder,Padding=UDim.new(0,0)},optList)
+	wrapper:SetAttribute("AriaRole","listbox")
+	wrapper:SetAttribute("AriaLabel", validateString(labelTxt,"Dropdown"))
+	optList:SetAttribute("AriaRole","list")
+
+	local optionButtons = {}
+	local highlightedIndex = 0
+	local function setHighlight(idx)
+		for i,btnOpt in ipairs(optionButtons) do
+			if i == idx then
+				tw(btnOpt,.18,{BackgroundTransparency=.84})
+			else
+				tw(btnOpt,.18,{BackgroundTransparency=1})
+			end
+		end
+		highlightedIndex = idx
+	end
+	local keyConnOpen = nil
 
 	if #options == 0 then
 		local ob=new("TextButton",{Text="No options",Font=Enum.Font.Gotham,TextSize=13,TextColor3=C.TextDim,
-			BackgroundColor3=C.Card2,BackgroundTransparency=1,BorderSizePixel=0,
+			BackgroundColor3=C.Card,BackgroundTransparency=1,BorderSizePixel=0,
 			Size=UDim2.new(1,0,0,40),AutoButtonColor=false,LayoutOrder=1,ZIndex=61,
 			TextXAlignment=Enum.TextXAlignment.Left},optList)
 		pad(ob,0,0,16,16)
 	else
 	for i,opt in ipairs(options) do
 		local ob=new("TextButton",{Text=opt,Font=Enum.Font.Gotham,TextSize=13,TextColor3=C.Text,
-			BackgroundColor3=C.Card2,BackgroundTransparency=1,BorderSizePixel=0,
+			BackgroundColor3=C.Card,BackgroundTransparency=1,BorderSizePixel=0,
 			Size=UDim2.new(1,0,0,40),AutoButtonColor=false,LayoutOrder=i,ZIndex=61,
 			TextXAlignment=Enum.TextXAlignment.Left},optList)
+		ob:SetAttribute("AriaRole","option")
+		ob:SetAttribute("AriaLabel", tostring(opt))
 		pad(ob,0,0,16,16)
-		ob.MouseEnter:Connect(function() tw(ob,.1,{BackgroundTransparency=.84}) end)
-		ob.MouseLeave:Connect(function() tw(ob,.12,{BackgroundTransparency=1}) end)
+		ob.MouseEnter:Connect(function() tw(ob,.2,{BackgroundTransparency=.84}) end)
+		ob.MouseLeave:Connect(function() tw(ob,.22,{BackgroundTransparency=1}) end)
 		ob.Activated:Connect(function()
 			selected=opt; selLbl.Text=opt; open=false
-			tw(optList,.18,{Size=UDim2.new(1,0,0,0)},Enum.EasingStyle.Quint,Enum.EasingDirection.In)
+			tw(ob,.18,{BackgroundTransparency=.84})
+			task.delay(0.35, function() if ob and ob.Parent then tw(ob,.2,{BackgroundTransparency=1}) end end)
+			tw(optList,.22,{Size=UDim2.new(1,0,0,0)},Enum.EasingStyle.Quint,Enum.EasingDirection.In)
 			tw(arrow,.18,{Rotation=0})
 			tw(arrowImg,.18,{Rotation=0})
 			task.delay(.2,function() if optList then optList.Visible=false end end)
 			if callback then self:_safeCall(callback, opt) end
+			if keyConnOpen then pcall(function() keyConnOpen:Disconnect() end) end
 		end)
+		optionButtons[i] = ob
 	end
 	end
 
@@ -3470,10 +3510,35 @@ function Lib:AddDropdown(pi,labelTxt,options,callback)
 		if open then
 			tw(optList,.28,{Size=UDim2.new(1,0,0,listH)},Enum.EasingStyle.Back,Enum.EasingDirection.Out)
 			tw(arrow,.2,{Rotation=180}); tw(arrowImg,.2,{Rotation=180})
+			if #optionButtons > 0 then
+				setHighlight(1)
+				if keyConnOpen then pcall(function() keyConnOpen:Disconnect() end) end
+				keyConnOpen = UserInputService.InputBegan:Connect(function(i, gp)
+					if gp then return end
+					if not open then return end
+					if i.KeyCode == Enum.KeyCode.Down then
+						local nx = math.clamp(highlightedIndex+1,1,#optionButtons)
+						setHighlight(nx)
+					elseif i.KeyCode == Enum.KeyCode.Up then
+						local nx = math.clamp(highlightedIndex-1,1,#optionButtons)
+						setHighlight(nx)
+					elseif i.KeyCode == Enum.KeyCode.Return or i.KeyCode == Enum.KeyCode.KeypadEnter then
+						local ob = optionButtons[highlightedIndex]
+						if ob then ob:Activate() end
+					elseif i.KeyCode == Enum.KeyCode.Escape then
+						open=false
+						tw(optList,.22,{Size=UDim2.new(1,0,0,0)},Enum.EasingStyle.Quint,Enum.EasingDirection.In)
+						tw(arrow,.2,{Rotation=0}); tw(arrowImg,.2,{Rotation=0})
+						task.delay(.2,function() if optList then optList.Visible=false end end)
+						if keyConnOpen then pcall(function() keyConnOpen:Disconnect() end) end
+					end
+				end)
+			end
 		else
-			tw(optList,.18,{Size=UDim2.new(1,0,0,0)},Enum.EasingStyle.Quint,Enum.EasingDirection.In)
+			tw(optList,.22,{Size=UDim2.new(1,0,0,0)},Enum.EasingStyle.Quint,Enum.EasingDirection.In)
 			tw(arrow,.2,{Rotation=0}); tw(arrowImg,.2,{Rotation=0})
 			task.delay(.2,function() if optList then optList.Visible=false end end)
+			if keyConnOpen then pcall(function() keyConnOpen:Disconnect() end) end
 		end
 	end)
 

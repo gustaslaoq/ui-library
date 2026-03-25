@@ -3456,26 +3456,29 @@ function Lib:AddDropdown(pi,labelTxt,options,callback)
 	local function isSelectedOpt(i)
 		return options[i] == selected
 	end
-	local function applyBaseState(i, row)
-		local hv = row and row._hv
+	local function applyBaseState(i)
+		local entry = optionRows[i]
+		local hv = entry and entry.Hv
 		if not hv then return end
 		hv.BackgroundTransparency = isSelectedOpt(i) and 0.1 or 1
 	end
 	local function setHighlight(idx)
-		for i,row in ipairs(optionRows) do
-			local hv = row and row._hv
-			if not hv then continue end
+		for i,entry in ipairs(optionRows) do
+			local hv = entry and entry.Hv
+			if not hv then
+			else
 			if i == idx then
 				tw(hv,.18,{BackgroundTransparency=.2})
 			else
 				tw(hv,.18,{BackgroundTransparency=isSelectedOpt(i) and .1 or 1})
 			end
+			end
 		end
 		highlightedIndex = idx
 	end
 	local function updateSelectedVisual()
-		for i,row in ipairs(optionRows) do
-			applyBaseState(i, row)
+		for i,_ in ipairs(optionRows) do
+			applyBaseState(i)
 		end
 	end
 	local keyConnOpen = nil
@@ -3511,8 +3514,7 @@ function Lib:AddDropdown(pi,labelTxt,options,callback)
 			if callback then self:_safeCall(callback, opt) end
 			if keyConnOpen then pcall(function() keyConnOpen:Disconnect() end) end
 		end)
-		row._hv = hv
-		optionRows[i] = row
+		optionRows[i] = {Row=row, Hv=hv}
 	end
 	end
 
@@ -3539,9 +3541,9 @@ function Lib:AddDropdown(pi,labelTxt,options,callback)
 						local nx = math.clamp(highlightedIndex-1,1,#optionRows)
 						setHighlight(nx)
 					elseif i.KeyCode == Enum.KeyCode.Return or i.KeyCode == Enum.KeyCode.KeypadEnter then
-						local row = optionRows[highlightedIndex]
-						if row then
-							local b = row:FindFirstChildWhichIsA("TextButton")
+						local entry = optionRows[highlightedIndex]
+						if entry and entry.Row then
+							local b = entry.Row:FindFirstChildWhichIsA("TextButton")
 							if b then b:Activate() end
 						end
 					elseif i.KeyCode == Enum.KeyCode.Escape then

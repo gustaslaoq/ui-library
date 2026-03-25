@@ -3005,7 +3005,7 @@ function Lib:AddMultiSelect(pi, labelTxt, options, callback)
 	new("TextLabel",{Text=labelTxt or "Select",Font=Enum.Font.Gotham,TextSize=13,TextColor3=C.Text,
 		BackgroundTransparency=1,Size=UDim2.new(1,-56,1,0),TextXAlignment=Enum.TextXAlignment.Left},header)
 
-	local countLbl=new("TextLabel",{Text="none",Font=Enum.Font.Gotham,TextSize=11,TextColor3=C.TextDim,
+	local countLbl=new("TextLabel",{Text="none",Font=Enum.Font.Gotham,TextSize=13,TextColor3=C.Text,
 		BackgroundTransparency=1,AnchorPoint=Vector2.new(1,.5),Position=UDim2.new(1,-28,.5,0),
 		Size=UDim2.new(.8,-40,0,20),TextXAlignment=Enum.TextXAlignment.Right,TextTruncate=Enum.TextTruncate.AtEnd},header)
 
@@ -3047,23 +3047,14 @@ function Lib:AddMultiSelect(pi, labelTxt, options, callback)
 		row:SetAttribute("AriaRole","option")
 		row:SetAttribute("AriaLabel", tostring(opt))
 		pad(row,0,0,16,16)
-		local chkBox=new("Frame",{Size=UDim2.fromOffset(18,18),BackgroundColor3=selected[opt] and C.White or C.Card3,
-			BorderSizePixel=0,AnchorPoint=Vector2.new(0,.5),Position=UDim2.new(0,0,.5,0)},row)
-		corner(chkBox,4)
-		stroke(chkBox,selected[opt] and fromHex("aaaaaa") or C.Border2,1)
-		local chkMark=new("TextLabel",{Text=string.char(226,156,147),Font=Enum.Font.GothamBold,TextSize=11,
-			TextColor3=C.Bg,BackgroundTransparency=1,Size=UDim2.fromScale(1,1),
-			TextXAlignment=Enum.TextXAlignment.Center,TextTransparency=selected[opt] and 0 or 1},chkBox)
 		local optLbl=new("TextLabel",{Text=tostring(opt),Font=Enum.Font.Gotham,TextSize=13,TextColor3=C.Text,
-			BackgroundTransparency=1,Position=UDim2.fromOffset(28,0),
-			Size=UDim2.new(1,-28,1,0),TextXAlignment=Enum.TextXAlignment.Left},row)
+			BackgroundTransparency=1,Position=UDim2.fromOffset(0,0),
+			Size=UDim2.new(1,0,1,0),TextXAlignment=Enum.TextXAlignment.Left},row)
 		local btn=new("TextButton",{Text="",BackgroundTransparency=1,Size=UDim2.fromScale(1,1),
 			ZIndex=53,AutoButtonColor=false},row)
 		btn.Activated:Connect(function()
 			selected[opt]=not selected[opt]
 			local v=selected[opt]
-			tw(chkBox,.15,{BackgroundColor3=v and C.White or C.Card3})
-			tw(chkMark,.12,{TextTransparency=v and 0 or 1})
 			tw(row,.18,{BackgroundTransparency=v and .84 or 1})
 			refreshCount()
 		end)
@@ -3073,7 +3064,7 @@ function Lib:AddMultiSelect(pi, labelTxt, options, callback)
 		btn.MouseLeave:Connect(function()
 			if not selected[opt] then tw(row,.22,{BackgroundTransparency=1}) end
 		end)
-		optionRows[i]={Row=row,Label=optLbl,Box=chkBox,Mark=chkMark,Key=opt}
+		optionRows[i]={Row=row,Label=optLbl,Key=opt}
 	end
 	end
 
@@ -3457,15 +3448,34 @@ function Lib:AddDropdown(pi,labelTxt,options,callback)
 
 	local optionButtons = {}
 	local highlightedIndex = 0
+	local function isSelectedOpt(i)
+		return options[i] == selected
+	end
+	local function applyBaseState(i, btnOpt)
+		if isSelectedOpt(i) then
+			btnOpt.BackgroundTransparency = 0.9
+		else
+			btnOpt.BackgroundTransparency = 1
+		end
+	end
 	local function setHighlight(idx)
 		for i,btnOpt in ipairs(optionButtons) do
 			if i == idx then
 				tw(btnOpt,.18,{BackgroundTransparency=.84})
 			else
-				tw(btnOpt,.18,{BackgroundTransparency=1})
+				if isSelectedOpt(i) then
+					tw(btnOpt,.18,{BackgroundTransparency=.9})
+				else
+					tw(btnOpt,.18,{BackgroundTransparency=1})
+				end
 			end
 		end
 		highlightedIndex = idx
+	end
+	local function updateSelectedVisual()
+		for i,btnOpt in ipairs(optionButtons) do
+			applyBaseState(i, btnOpt)
+		end
 	end
 	local keyConnOpen = nil
 
@@ -3511,6 +3521,7 @@ function Lib:AddDropdown(pi,labelTxt,options,callback)
 			tw(optList,.28,{Size=UDim2.new(1,0,0,listH)},Enum.EasingStyle.Back,Enum.EasingDirection.Out)
 			tw(arrow,.2,{Rotation=180}); tw(arrowImg,.2,{Rotation=180})
 			if #optionButtons > 0 then
+				updateSelectedVisual()
 				setHighlight(1)
 				if keyConnOpen then pcall(function() keyConnOpen:Disconnect() end) end
 				keyConnOpen = UserInputService.InputBegan:Connect(function(i, gp)

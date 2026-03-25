@@ -811,7 +811,7 @@ function Lib:_buildTitleBar(win)
 	do
 		local b = new("TextButton",{Text="-",Font=Enum.Font.GothamBold,TextSize=18,TextColor3=C.White,
 			BackgroundTransparency=1,Size=UDim2.fromOffset(44,44),ZIndex=12,AutoButtonColor=false,LayoutOrder=2},right)
-		b.MouseEnter:Connect(function() tw(b,.12,{TextColor3=C.White,BackgroundColor3=C.Card3,BackgroundTransparency=.88}) end)
+		b.MouseEnter:Connect(function() tw(b,.12,{TextColor3=C.White,BackgroundTransparency=.93}) end)
 		b.MouseLeave:Connect(function() tw(b,.15,{TextColor3=C.White,BackgroundTransparency=1}) end)
 		b.Activated:Connect(function()
 			if not self:_debounce("min_toggle",0.25) then return end
@@ -2252,7 +2252,6 @@ end
 
 function Lib:_openSettings()
 	if not self:_isAlive() then return end
-	if not self:_debounce("settings_toggle",0.25) then return end
 	if not self._settingsFrame then self:_buildSettingsPanel() end
 
 	self._settingsGen = (self._settingsGen or 0) + 1

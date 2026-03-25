@@ -105,11 +105,8 @@ end
 
 -- Safe call helper
 local function safeCall(tag, fn, ...)
-	if typeof(fn) ~= "function" then return end
+	if typeof(fn) ~= "function" then return false end
 	local ok, res = pcall(fn, ...)
-	if not ok then
-		warn(("[SlaoqUILib] callback error%s: %s"):format(tag and (" ("..tag..")") or "", tostring(res)))
-	end
 	return ok, res
 end
 
@@ -164,6 +161,7 @@ local DefaultConfig = {
 	ToggleKey          = nil,
 	ShowPill           = true,
 	SplashMode         = "splash",
+	Debug              = false,
 	Pages = {
 		{Name="Dashboard"},
 		{Name="Settings"},
@@ -219,6 +217,8 @@ function Lib.new(userCfg)
 	self._tweens     = {}
 	self._tasks      = {}
 	self._debounces  = {}
+	self._throttles  = {}
+	self._cid        = 0
 	self._ord        = {}
 	self._pageIdx    = 1
 	self._minimised  = false
@@ -263,7 +263,7 @@ function Lib.new(userCfg)
 	if isDemo then
 		local ok, err = pcall(function() self:_runDemo() end)
 		if not ok then
-			warn("[SlaoqUILib] _runDemo error: " .. tostring(err))
+			self:logError("_runDemo error: "..tostring(err))
 		end
 	end
 	self:_runSplash()
@@ -282,9 +282,23 @@ function Lib.new(userCfg)
 		end
 	end)
 
+	-- registry of instances: last created instance is the active one for global keybinds
+	Lib._instances = Lib._instances or {}
+	table.insert(Lib._instances, self)
+	local function isActiveInstance()
+		for i = #Lib._instances, 1, -1 do
+			local inst = Lib._instances[i]
+			if inst and inst._sg and not inst._destroyed then
+				return inst == self
+			end
+		end
+		return true
+	end
+
 	if not UserInputService.TouchEnabled then
 		self._keyConn = UserInputService.InputBegan:Connect(function(inp, gp)
 			if gp then return end
+			if not isActiveInstance() then return end
 			local kc = tostring(inp.KeyCode):gsub("Enum%.KeyCode%.","")
 			if kc == self._toggleKey and not self._kbListening then
 				if UserInputService:GetFocusedTextBox() then return end
@@ -316,9 +330,15 @@ function Lib:_addTween(tweenObj)
 	return tweenObj
 end
 function Lib:_safeCall(cb, ...)
-	if validateCallback(cb) then
-		return safeCall(nil, cb, ...)
-	end
+	if not validateCallback(cb) then return false end
+	local args = {...}
+	task.spawn(function()
+		local ok, err = safeCall(nil, cb, table.unpack(args))
+		if not ok then
+			self:logError("callback error", nil)
+		end
+	end)
+	return true
 end
 function Lib:_debounce(key, interval)
 	key = tostring(key or "__")
@@ -328,12 +348,44 @@ function Lib:_debounce(key, interval)
 	self._debounces[key] = now + (interval or 0.18)
 	return true
 end
+function Lib:_throttle(key, interval)
+	key = tostring(key or "__")
+	local now = os.clock()
+	local nextTs = self._throttles[key]
+	if nextTs and now < nextTs then return false end
+	self._throttles[key] = now + (interval or 0.1)
+	return true
+end
 function Lib:IsVisible()
 	return not self._hidden
 end
 function Lib:IsMinimised()
 	return self._minimised == true
 end
+function Lib:_isAlive() return not self._destroyed end
+function Lib:_nextCompId(name)
+	self._cid = (self._cid or 0) + 1
+	return (name or "Component") .. "#" .. tostring(self._cid)
+end
+
+-- Internal logging
+function Lib:_log(level, msg, compId)
+	local prefix = "[SlaoqUILib]"
+	local id = compId and (" ["..tostring(compId).."]") or ""
+	local text = string.format("%s %s%s: %s", prefix, level, id, tostring(msg))
+	if level == "ERROR" then
+		warn(text)
+	elseif level == "WARN" then
+		warn(text)
+	else
+		if self and self.cfg and self.cfg.Debug then
+			print(text)
+		end
+	end
+end
+function Lib:logInfo(msg, compId) self:_log("INFO", msg, compId) end
+function Lib:logWarn(msg, compId) self:_log("WARN", msg, compId) end
+function Lib:logError(msg, compId) self:_log("ERROR", msg, compId) end
 
 function Lib:_useMiniMode()
 	if self._simulateMobile then return true end
@@ -1172,6 +1224,7 @@ function Lib:_initPages()
 end
 
 function Lib:SetPage(index)
+	if not self:_isAlive() then return end
 	local cfg = self.cfg
 	if index == self._pageIdx and not self._settingsVisible then return end
 	self._pageGen = (self._pageGen or 0) + 1
@@ -1243,12 +1296,22 @@ function Lib:SetPage(index)
 end
 
 function Lib:_animBar(target)
+	if not self:_isAlive() then return end
 	local bar = self._bar
 	if not bar or not target then return end
 	local ok,relY = pcall(function()
-		return target.AbsolutePosition.Y - self._sidebar.AbsolutePosition.Y + target.AbsoluteSize.Y*.5
+		local ap = target.AbsolutePosition
+		local as = target.AbsoluteSize
+		local sp = self._sidebar.AbsolutePosition
+		if as.Y == 0 then error("Unrendered") end
+		return ap.Y - sp.Y + as.Y*.5
 	end)
-	if not ok then return end
+	if not ok then
+		task.defer(function()
+			if self:_isAlive() then self:_animBar(target) end
+		end)
+		return
+	end
 	bar.Visible = true
 	local cfg = self.cfg
 	local t1 = tw(bar,cfg.BarTweenSpeed*.4,{Size=UDim2.fromOffset(3,0)},Enum.EasingStyle.Quint,Enum.EasingDirection.In)
@@ -1805,6 +1868,12 @@ function Lib:Destroy()
 	for _,th in ipairs(self._tasks or {}) do
 		pcall(function() if task.cancel then task.cancel(th) end end)
 	end
+	-- instance registry cleanup
+	if Lib._instances then
+		for i,inst in ipairs(Lib._instances) do
+			if inst == self then table.remove(Lib._instances, i) break end
+		end
+	end
 	for _,fn in ipairs(self._onDestroyFns or {}) do pcall(fn) end
 	for _,c in ipairs(self._conns) do pcall(function() c:Disconnect() end) end
 	if self._keyConn then pcall(function() self._keyConn:Disconnect() end) end
@@ -1848,6 +1917,7 @@ function Lib:_buildToastSystem()
 end
 
 function Lib:ShowNotification(msg, style, duration, title)
+	if not self:_isAlive() then return end
 	if not self._toastHolder then return end
 	local styleMap = {
 		info    = {dot=C.Blue,   bg=C.BlueBg,   tc=C.Blue},
@@ -2181,6 +2251,7 @@ function Lib:_buildSettingsPanel()
 end
 
 function Lib:_openSettings()
+	if not self:_isAlive() then return end
 	if not self:_debounce("settings_toggle",0.25) then return end
 	if not self._settingsFrame then self:_buildSettingsPanel() end
 
@@ -2257,6 +2328,7 @@ function Lib:_toggleSearch()
 end
 
 function Lib:_openSearch()
+	if not self:_isAlive() then return end
 	if self._searchOpen then return end
 	self._searchOpen = true
 	local sbH = 48
@@ -2276,6 +2348,7 @@ function Lib:_openSearch()
 end
 
 function Lib:_closeSearch()
+	if not self:_isAlive() then return end
 	if not self._searchOpen then return end
 	self._searchOpen = false
 	self:_clearHighlights()
@@ -2333,6 +2406,8 @@ function Lib:_searchNavigate(dir)
 end
 
 function Lib:_doSearch(query)
+	if not self:_isAlive() then return end
+	if not self:_throttle("search", 0.08) then return end
 	self:_clearHighlights()
 	self._searchIdx = 0
 	self._searchHitObjs = {}
@@ -2592,9 +2667,11 @@ function Lib:SetMetricValue(obj,val)
 end
 
 function Lib:AddButtonRow(pi,defs)
+	if not self:_isAlive() then return end
 	local s=self:GetPage(pi); if not s then return end
 	defs = validateTable(defs, {})
 	local row=new("Frame",{Size=UDim2.new(1,0,0,44),BackgroundTransparency=1,LayoutOrder=self:_o(pi)},s)
+	row:SetAttribute("ComponentId", self:_nextCompId("ButtonRow"))
 	hlist(row,10)
 
 	local styles={
@@ -2795,6 +2872,7 @@ function Lib:AddCheckbox(pi,label,default,callback)
 end
 
 function Lib:AddInput(pi,labelTxt,placeholder,callback,opts)
+	if not self:_isAlive() then return end
 	local s=self:GetPage(pi); if not s then return end
 	opts = opts or {}
 	local removeAfterFocus = opts.RemoveTextAfterFocusLost
@@ -2809,6 +2887,7 @@ function Lib:AddInput(pi,labelTxt,placeholder,callback,opts)
 	end
 	local wrapH = multiLine and 80 or 44
 	local wrap=new("Frame",{Size=UDim2.new(1,0,0,wrapH),BackgroundColor3=C.Card,BorderSizePixel=0,LayoutOrder=self:_o(pi)},s)
+	wrap:SetAttribute("ComponentId", self:_nextCompId("Input"))
 	corner(wrap,10)
 	local ws=stroke(wrap,C.Border,1)
 	pad(wrap,0,0,16,16)
@@ -2836,6 +2915,7 @@ end
 
 
 function Lib:AddInputNumber(pi, labelTxt, opts, callback)
+	if not self:_isAlive() then return end
 	opts = opts or {}
 	local min = opts.Min or 0
 	local max = opts.Max or 999999999
@@ -2849,6 +2929,7 @@ function Lib:AddInputNumber(pi, labelTxt, opts, callback)
 		self:_gap(s,pi,4)
 	end
 	local wrap=new("Frame",{Size=UDim2.new(1,0,0,44),BackgroundColor3=C.Card,BorderSizePixel=0,LayoutOrder=self:_o(pi)},s)
+	wrap:SetAttribute("ComponentId", self:_nextCompId("InputNumber"))
 	corner(wrap,10)
 	local ws=stroke(wrap,C.Border,1)
 	pad(wrap,0,0,16,16)
@@ -2901,6 +2982,7 @@ function Lib:AddInputNumber(pi, labelTxt, opts, callback)
 end
 
 function Lib:AddMultiSelect(pi, labelTxt, options, callback)
+	if not self:_isAlive() then return end
 	local s=self:GetPage(pi); if not s then return end
 	options = validateTable(options, {})
 	local selected = {}
@@ -2908,6 +2990,7 @@ function Lib:AddMultiSelect(pi, labelTxt, options, callback)
 
 	local wrapper=new("Frame",{Size=UDim2.new(1,0,0,0),AutomaticSize=Enum.AutomaticSize.Y,
 		BackgroundColor3=C.Card,BorderSizePixel=0,LayoutOrder=self:_o(pi),ClipsDescendants=false},s)
+	wrapper:SetAttribute("ComponentId", self:_nextCompId("MultiSelect"))
 	corner(wrapper,10)
 	stroke(wrapper,C.Border,1)
 	-- Stack header and expandable list vertically — critical for no-overlap
@@ -3227,6 +3310,7 @@ function Lib:AddStepper(pi,label,min,max,default,step,callback)
 end
 
 function Lib:AddSlider(pi,label,min,max,default,callback)
+	if not self:_isAlive() then return end
 	local s=self:GetPage(pi); if not s then return end
 	min=min or 0; max=max or 100
 	if max < min then max, min = min, max end
@@ -3235,6 +3319,7 @@ function Lib:AddSlider(pi,label,min,max,default,callback)
 	default=math.clamp(default or min,min,max)
 
 	local wrap=new("Frame",{Size=UDim2.new(1,0,0,66),BackgroundColor3=C.Card,BorderSizePixel=0,LayoutOrder=self:_o(pi)},s)
+	wrap:SetAttribute("ComponentId", self:_nextCompId("Slider"))
 	corner(wrap,10)
 	stroke(wrap,C.Border,1)
 	pad(wrap,12,12,16,16)
@@ -3308,6 +3393,7 @@ function Lib:AddSlider(pi,label,min,max,default,callback)
 end
 
 function Lib:AddDropdown(pi,labelTxt,options,callback)
+	if not self:_isAlive() then return end
 	local s=self:GetPage(pi); if not s then return end
 	options = validateTable(options, {})
 	if labelTxt then
@@ -3321,6 +3407,7 @@ function Lib:AddDropdown(pi,labelTxt,options,callback)
 	local open=false
 	local wrapper=new("Frame",{Size=UDim2.new(1,0,0,0),AutomaticSize=Enum.AutomaticSize.Y,
 		BackgroundTransparency=1,ClipsDescendants=false,LayoutOrder=self:_o(pi),ZIndex=50},s)
+	wrapper:SetAttribute("ComponentId", self:_nextCompId("Dropdown"))
 
 	local btn=new("TextButton",{Text="",BackgroundColor3=C.Card,BorderSizePixel=0,
 		Size=UDim2.new(1,0,0,44),AutoButtonColor=false,ZIndex=51},wrapper)
@@ -3396,6 +3483,7 @@ function Lib:AddDropdown(pi,labelTxt,options,callback)
 end
 
 function Lib:AddRadioGroup(pi,label,options,default,callback)
+	if not self:_isAlive() then return end
 	local s=self:GetPage(pi); if not s then return end
 	options = validateTable(options, {})
 	local selected=default or (options[1] or "")
@@ -3409,6 +3497,7 @@ function Lib:AddRadioGroup(pi,label,options,default,callback)
 
 	local wrap=new("Frame",{Size=UDim2.new(1,0,0,0),AutomaticSize=Enum.AutomaticSize.Y,
 		BackgroundColor3=C.Card,BorderSizePixel=0,LayoutOrder=self:_o(pi)},s)
+	wrap:SetAttribute("ComponentId", self:_nextCompId("RadioGroup"))
 	corner(wrap,10)
 	stroke(wrap,C.Border,1)
 
@@ -4175,6 +4264,7 @@ function Lib:AddProgressBar(pi,label,value,maxVal)
 end
 
 function Lib:AddTable(pi,headers,rows)
+	if not self:_isAlive() then return end
 	local s=self:GetPage(pi); if not s then return end
 	headers = validateTable(headers, {})
 	rows    = validateTable(rows, {})
@@ -4186,6 +4276,7 @@ function Lib:AddTable(pi,headers,rows)
 		BackgroundColor3=C.Card,BorderSizePixel=0,
 		LayoutOrder=self:_o(pi),ClipsDescendants=true,
 	},s)
+	wrap:SetAttribute("ComponentId", self:_nextCompId("Table"))
 	corner(wrap,10)
 	stroke(wrap,C.Border,1)
 
@@ -4624,6 +4715,7 @@ function Lib:_runDemo()
 		"AddBadge · AddTag · AddAlert · AddCard · AddTable · AddKeybind · AddSpinner")
 end
 function Lib:AddNotificationCenter(pi, opts)
+	if not self:_isAlive() then return end
 	opts = opts or {}
 	local maxItems = opts.MaxItems or 30
 	local height = opts.Height or 200
@@ -4631,6 +4723,7 @@ function Lib:AddNotificationCenter(pi, opts)
 
 	local wrap=new("Frame",{Size=UDim2.new(1,0,0,height+34),BackgroundColor3=fromHex("050505"),
 		BorderSizePixel=0,ClipsDescendants=true,LayoutOrder=self:_o(pi)},s)
+	wrap:SetAttribute("ComponentId", self:_nextCompId("NotificationCenter"))
 	corner(wrap,10)
 	stroke(wrap,C.Border,1)
 

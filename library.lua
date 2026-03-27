@@ -64,7 +64,7 @@ local function corner(obj, r)
 end
 
 local function stroke(obj, c, th, tr)
-	return new("UIStroke",{Color=c or fromHex("1a1a1a"),Thickness=th or 1,Transparency=tr or 0},obj)
+	return new("UIStroke",{Color=c or fromHex("2a2a2a"),Thickness=th or 1,Transparency=tr or 0},obj)
 end
 
 local function pad(obj, t, b, l, r)
@@ -114,15 +114,15 @@ local C = {
 	Bg       = fromHex("060606"),
 	Bg2      = fromHex("080808"),
 	Sidebar  = fromHex("050505"),
-	Card     = fromHex("0e0e0e"),
-	Card2    = fromHex("131313"),
-	Card3    = fromHex("191919"),
-	Border   = fromHex("1a1a1a"),
+	Card     = fromHex("121212"),
+	Card2    = fromHex("1a1a1a"),
+	Card3    = fromHex("222222"),
+	Border   = fromHex("2a2a2a"),
 	Border2  = fromHex("222222"),
 	Border3  = fromHex("2e2e2e"),
 	Text     = fromHex("d8d8d8"),
-	TextDim  = fromHex("666666"),
-	TextOff  = fromHex("2e2e2e"),
+	TextDim  = fromHex("9a9a9a"),
+	TextOff  = fromHex("555555"),
 	White    = fromHex("ffffff"),
 	Green    = fromHex("00e87a"),
 	GreenBg  = fromHex("030e08"),
@@ -156,7 +156,7 @@ local DefaultConfig = {
 	WindowHeight       = 580,
 	SidebarWidth       = 210,
 	TweenSpeed         = 0.22,
-	BarTweenSpeed      = 0.28,
+	BarTweenSpeed      = 0.22,
 	MiniModeBreakpoint = 700,
 	ToggleKey          = nil,
 	ShowPill           = true,
@@ -302,7 +302,7 @@ function Lib.new(userCfg)
 			local kc = tostring(inp.KeyCode):gsub("Enum%.KeyCode%.","")
 			if kc == self._toggleKey and not self._kbListening then
 				if UserInputService:GetFocusedTextBox() then return end
-				if not self:_debounce("toggle_key",0.25) then return end
+				if not self:_debounce("toggle_key",0.15) then return end
 				self:ToggleVisibility()
 			end
 			if kc == "F" and (UserInputService:IsKeyDown(Enum.KeyCode.LeftControl) or UserInputService:IsKeyDown(Enum.KeyCode.RightControl)) then
@@ -580,7 +580,7 @@ function Lib:_buildWindow()
 
 		local w  = math.floor(cfg.WindowWidth  * s)
 		local h  = math.floor(cfg.WindowHeight * s)
-		local sw = math.max(48, math.floor(cfg.SidebarWidth * s))
+		local sw = math.max(120, math.floor(cfg.SidebarWidth * s))
 
 		local collapsed = sw < 100
 
@@ -667,7 +667,7 @@ function Lib:_buildWindow()
 		if self._dragActive then
 			local wx = win.Position.X.Offset
 			local wy = win.Position.Y.Offset
-			local sp = 0.10
+			local sp = 1
 			local nx = wx + (tx - wx) * sp
 			local ny = wy + (ty - wy) * sp
 			if math.abs(nx - tx) < 0.5 then nx = tx end
@@ -717,8 +717,10 @@ function Lib:_buildWindow()
 			if not active then return end
 			if i.UserInputType~=Enum.UserInputType.MouseMovement and i.UserInputType~=Enum.UserInputType.Touch then return end
 			local d = i.Position - ds
-			self._dragTargetOX = wsOX + d.X
-			self._dragTargetOY = wsOY + d.Y
+			local cam3 = workspace.CurrentCamera
+			local vp3 = cam3 and cam3.ViewportSize or Vector2.new(1920,1080)
+			self._dragTargetOX = math.clamp(wsOX + d.X, -vp3.X/2 + 100, vp3.X/2 - 100)
+			self._dragTargetOY = math.clamp(wsOY + d.Y, -vp3.Y/2 + 40, vp3.Y/2 - 40)
 		end))
 	end
 end
@@ -756,7 +758,7 @@ function Lib:_buildTitleBar(win)
 
 	local ver = new("Frame",{Size=UDim2.fromOffset(0,22),AutomaticSize=Enum.AutomaticSize.X,
 		BackgroundColor3=C.Card3,BorderSizePixel=0,ZIndex=11,LayoutOrder=2},left)
-	corner(ver,5)
+	corner(ver,6)
 	pad(ver,0,0,8,8)
 	new("TextLabel",{Text="v"..cfg.AppVersion,Font=Enum.Font.Gotham,TextSize=10,TextColor3=C.TextDim,
 		BackgroundTransparency=1,Size=UDim2.fromOffset(0,22),AutomaticSize=Enum.AutomaticSize.X,ZIndex=12},ver)
@@ -768,7 +770,7 @@ function Lib:_buildTitleBar(win)
 	local function mkBtn(sym,hc,cb,lo)
 		local b = new("TextButton",{Text=sym,Font=Enum.Font.GothamBold,TextSize=18,TextColor3=C.TextDim,
 			BackgroundTransparency=1,Size=UDim2.fromOffset(44,44),ZIndex=12,AutoButtonColor=false,LayoutOrder=lo},right)
-		b.MouseEnter:Connect(function() tw(b,.12,{TextColor3=hc,BackgroundTransparency=.93}) end)
+		b.MouseEnter:Connect(function() tw(b,.12,{TextColor3=C.White,BackgroundTransparency=.9}) end)
 		b.MouseLeave:Connect(function() tw(b,.15,{TextColor3=C.TextDim,BackgroundTransparency=1}) end)
 		b.Activated:Connect(cb)
 		return b
@@ -801,7 +803,7 @@ function Lib:_buildTitleBar(win)
 		btn.MouseEnter:Connect(function() tw(img,.12,{ImageColor3=C.White}); tw(w,.12,{BackgroundTransparency=.93}) end)
 		btn.MouseLeave:Connect(function() tw(img,.15,{ImageColor3=C.Text}); tw(w,.15,{BackgroundTransparency=1}) end)
 		btn.Activated:Connect(function()
-			if not self:_debounce("settings_toggle",0.25) then return end
+			if not self:_debounce("settings_toggle",0.15) then return end
 			self:_openSettings()
 		end)
 		self._gearImg = img
@@ -809,12 +811,14 @@ function Lib:_buildTitleBar(win)
 	end
 
 	do
-		local b = new("TextButton",{Text="-",Font=Enum.Font.GothamBold,TextSize=18,TextColor3=C.White,
+		local b = new("TextButton",{Text=self._minimised and "+" or "-",Font=Enum.Font.GothamBold,TextSize=18,TextColor3=C.White,
 			BackgroundTransparency=1,Size=UDim2.fromOffset(44,44),ZIndex=12,AutoButtonColor=false,LayoutOrder=2},right)
-		b.MouseEnter:Connect(function() tw(b,.12,{TextColor3=C.White,BackgroundTransparency=.93}) end)
+		b.MouseEnter:Connect(function() tw(b,.12,{TextColor3=C.White,BackgroundTransparency=.9}) end)
 		b.MouseLeave:Connect(function() tw(b,.15,{TextColor3=C.White,BackgroundTransparency=1}) end)
+		b.MouseButton1Down:Connect(function() tw(b,.08,{TextSize=15}) end)
+		b.MouseButton1Up:Connect(function() tw(b,.12,{TextSize=18},Enum.EasingStyle.Back,Enum.EasingDirection.Out) end)
 		b.Activated:Connect(function()
-			if not self:_debounce("min_toggle",0.25) then return end
+			if not self:_debounce("min_toggle",0.15) then return end
 			if self._minimised then self:Maximise() else self:Minimise() end
 		end)
 		self._minBtn = b
@@ -825,8 +829,10 @@ function Lib:_buildTitleBar(win)
 	do
 		local b = new("TextButton",{Text="x",Font=Enum.Font.GothamBold,TextSize=18,TextColor3=C.TextDim,
 			BackgroundTransparency=1,Size=UDim2.fromOffset(44,44),ZIndex=12,AutoButtonColor=false,LayoutOrder=3},right)
-		b.MouseEnter:Connect(function() tw(b,.1,{TextColor3=C.Red,BackgroundTransparency=.93}) end)
+		b.MouseEnter:Connect(function() tw(b,.1,{TextColor3=C.Red,BackgroundTransparency=.9}) end)
 		b.MouseLeave:Connect(function() tw(b,.15,{TextColor3=C.TextDim,BackgroundTransparency=1}) end)
+		b.MouseButton1Down:Connect(function() tw(b,.08,{TextSize=15}) end)
+		b.MouseButton1Up:Connect(function() tw(b,.12,{TextSize=18},Enum.EasingStyle.Back,Enum.EasingDirection.Out) end)
 		b.InputBegan:Connect(function(i)
 			if i.UserInputType==Enum.UserInputType.Touch then
 				tw(b,.08,{TextColor3=C.Red,BackgroundTransparency=.93})
@@ -876,6 +882,9 @@ function Lib:_buildTitleBar(win)
 			end
 			local nx = wsX + d.X
 			local ny = wsY + d.Y
+			local vp2 = workspace.CurrentCamera and workspace.CurrentCamera.ViewportSize or Vector2.new(1920,1080)
+			nx = math.clamp(nx, -vp2.X/2 + 100, vp2.X/2 - 100)
+			ny = math.clamp(ny, -vp2.Y/2 + 40, vp2.Y/2 - 40)
 			self.Window.Position = UDim2.new(0.5, nx, 0.5, ny)
 			self._dragTargetOX = nx
 			self._dragTargetOY = ny
@@ -1187,19 +1196,39 @@ function Lib:_makeNavBtn(page,index,parent,indented)
 		end
 	end
 
+	-- Tooltip for collapsed sidebar
+	local tooltip = new("TextLabel",{
+		Text=page.Name,
+		Font=Enum.Font.GothamBold,TextSize=11,TextColor3=C.White,
+		BackgroundColor3=C.Card2,BorderSizePixel=0,
+		Size=UDim2.fromOffset(0,26),AutomaticSize=Enum.AutomaticSize.X,
+		TextXAlignment=Enum.TextXAlignment.Left,
+		Position=UDim2.new(1,8,.5,-13),
+		AnchorPoint=Vector2.new(0,.5),
+		ZIndex=20,Visible=false,
+	},frame)
+	corner(tooltip,6)
+	stroke(tooltip,C.Border2,1)
+	pad(tooltip,0,0,8,8)
+
 	click.MouseEnter:Connect(function()
 		if self._pageIdx ~= index then
-			tw(bg,.15,{BackgroundTransparency=.88})
-			tw(lbl,.15,{TextColor3=C.Text})
+			tw(bg,.12,{BackgroundTransparency=.9})
+			tw(lbl,.12,{TextColor3=C.White})
 			setDotColor(C.TextDim); setDotSize(7)
+		end
+		-- Show tooltip when sidebar is narrow (collapsed)
+		if self._sidebar and self._sidebar.Size.X.Offset < 100 then
+			tooltip.Visible = true
 		end
 	end)
 	click.MouseLeave:Connect(function()
 		if self._pageIdx ~= index then
-			tw(bg,.18,{BackgroundTransparency=1})
-			tw(lbl,.18,{TextColor3=C.TextDim})
+			tw(bg,.15,{BackgroundTransparency=1})
+			tw(lbl,.15,{TextColor3=C.TextDim})
 			setDotColor(C.TextOff); setDotSize(6)
 		end
+		tooltip.Visible = false
 	end)
 	click.Activated:Connect(function()
 		if not self:_debounce("nav_"..tostring(index),0.2) then return end
@@ -1213,11 +1242,11 @@ function Lib:_initPages()
 	for i=1,#self.cfg.Pages do
 		local frame = new("Frame",{Size=UDim2.fromScale(1,1),BackgroundTransparency=1,Visible=false},self._pagesWrap)
 		local scroll = new("ScrollingFrame",{Size=UDim2.fromScale(1,1),BackgroundTransparency=1,
-			ScrollBarThickness=3,ScrollBarImageColor3=C.Border3,ScrollBarImageTransparency=.5,
+			ScrollBarThickness=5,ScrollBarImageColor3=C.Border3,ScrollBarImageTransparency=.2,
 			CanvasSize=UDim2.new(0,0,0,0),AutomaticCanvasSize=Enum.AutomaticSize.Y,
 			ElasticBehavior=Enum.ElasticBehavior.Never},frame)
 		new("UIListLayout",{SortOrder=Enum.SortOrder.LayoutOrder,Padding=UDim.new(0,0)},scroll)
-		pad(scroll,28,28,26,26)
+		pad(scroll,16,24,16,16)
 		self._pages[i] = {Frame=frame,Scroll=scroll}
 		self._ord[i]   = 0
 	end
@@ -1314,13 +1343,10 @@ function Lib:_animBar(target)
 	end
 	bar.Visible = true
 	local cfg = self.cfg
-	local t1 = tw(bar,cfg.BarTweenSpeed*.4,{Size=UDim2.fromOffset(3,0)},Enum.EasingStyle.Quint,Enum.EasingDirection.In)
-	if t1 then
-		t1.Completed:Connect(function()
-			bar.Position = UDim2.new(0,0,0,relY)
-			tw(bar,cfg.BarTweenSpeed*.7,{Size=UDim2.fromOffset(3,32)},Enum.EasingStyle.Back,Enum.EasingDirection.Out)
-		end)
-	end
+	tw(bar, cfg.BarTweenSpeed, {
+		Position = UDim2.new(0, 0, 0, relY - 16),
+		Size = UDim2.fromOffset(3, 32)
+	}, Enum.EasingStyle.Back, Enum.EasingDirection.Out)
 end
 
 function Lib:_setCollapsed(collapsed)
@@ -1333,15 +1359,15 @@ function Lib:_setCollapsed(collapsed)
 		if nb.Frame then
 			nb.Frame.Size = UDim2.new(1, 0, 0, rowH)
 		end
-		-- Reposition dot/icon: centre when collapsed, restore original X when expanded
+		-- Reposition dot/icon: left-aligned (16px) when collapsed, restore original X when expanded
 		if collapsed then
 			if nb.HasIcon and nb.Dot and nb.Dot._frame then
 				nb.Dot._frame.AnchorPoint = Vector2.new(.5, .5)
-				nb.Dot._frame.Position = UDim2.new(.5, 0, .5, 0)
+				nb.Dot._frame.Position = UDim2.new(0, 16, .5, 0)
 				nb.Dot._frame.Size = UDim2.fromOffset(20, 20)
 			elseif nb.Dot and type(nb.Dot) ~= "table" then
 				nb.Dot.AnchorPoint = Vector2.new(.5, .5)
-				tw(nb.Dot, .15, {Size=UDim2.fromOffset(8,8), Position=UDim2.new(.5,0,.5,0)})
+				tw(nb.Dot, .15, {Size=UDim2.fromOffset(8,8), Position=UDim2.new(0,16,.5,0)})
 			end
 		else
 			local ox = nb._dotX or 22
@@ -1455,6 +1481,15 @@ function Lib:_ensurePill()
 		if i.UserInputType==Enum.UserInputType.MouseButton1 or i.UserInputType==Enum.UserInputType.Touch then
 			local moved=dragging and ds and (math.abs(i.Position.X-ds.X)>6 or math.abs(i.Position.Y-ds.Y)>6)
 			dragging=false
+			if moved then
+				-- snap pill to nearest horizontal edge
+				local cam2=workspace.CurrentCamera
+				local vp2=cam2 and cam2.ViewportSize or Vector2.new(1920,1080)
+				local pw2=pill.AbsoluteSize.X
+				local cx=pill.Position.X.Offset
+				local nx2 = cx < vp2.X/2 and 20 or (vp2.X - pw2 - 20)
+				tw(pill,.18,{Position=UDim2.new(0,nx2,0,pill.Position.Y.Offset)},Enum.EasingStyle.Quint)
+			end
 			if not moved then
 				self:Show()
 			end
@@ -1469,7 +1504,8 @@ function Lib:_ensurePill()
 		local pw=pill.AbsoluteSize.X
 		local ph=pill.AbsoluteSize.Y
 		local nx=math.clamp(px0+d.X, pw*0.5, vp.X-pw*0.5)
-		local ny=math.clamp(py0+d.Y, 10, vp.Y-ph-10)
+		local ny=math.clamp(py0+d.Y, 20, vp.Y-ph-20)
+		-- snap lateral when drag ends (handled in InputEnded)
 		pill.Position=UDim2.new(0,nx,0,ny)
 	end))
 
@@ -1577,13 +1613,6 @@ function Lib:Maximise()
 		self._dragTargetOX = 0
 		self._dragTargetOY = 0
 		if self._sidebar and sw then
-			self._sidebar.Size = UDim2.new(0, sw, 1, 0)
-			self:_setCollapsed(collapsed)
-		end
-		tw(win,.45,{Size=UDim2.fromOffset(targetW, targetH)},Enum.EasingStyle.Back,Enum.EasingDirection.Out)
-		
-		if self._minFb  then self._minFb.Text  = "-" end
-	end
 	if self._dragHandle and not self:_useMiniMode() then
 		self._dragHandle.Visible = true
 	end
@@ -1947,7 +1976,7 @@ function Lib:ShowNotification(msg, style, duration, title)
 		ZIndex = 1002,
 		Position = UDim2.fromOffset(320, 0),
 	}, wrapper)
-	corner(toast, 10)
+	corner(toast, 8)
 	stroke(toast, C.Border2, 1)
 
 	local inner = new("Frame",{
@@ -1955,7 +1984,7 @@ function Lib:ShowNotification(msg, style, duration, title)
 		AutomaticSize = Enum.AutomaticSize.Y,
 		BackgroundTransparency = 1,
 	}, toast)
-	pad(inner, 11, 11, 14, 14)
+	pad(inner, 12, 12, 16, 16)
 	vlist(inner, 5)
 
 	local topRow = new("Frame",{
@@ -2025,12 +2054,12 @@ function Lib:_buildSettingsPanel()
 	}, self._pagesWrap)
 	local scroll = new("ScrollingFrame",{
 		Size=UDim2.fromScale(1,1),BackgroundTransparency=1,
-		ScrollBarThickness=3,ScrollBarImageColor3=C.Border3,ScrollBarImageTransparency=.5,
+		ScrollBarThickness=5,ScrollBarImageColor3=C.Border3,ScrollBarImageTransparency=.2,
 		CanvasSize=UDim2.new(0,0,0,0),AutomaticCanvasSize=Enum.AutomaticSize.Y,
 		ElasticBehavior=Enum.ElasticBehavior.Never,
 	},frame)
 	new("UIListLayout",{SortOrder=Enum.SortOrder.LayoutOrder,Padding=UDim.new(0,0)},scroll)
-	pad(scroll,24,24,24,24)
+	pad(scroll,16,24,16,16)
 	self._settingsFrame = frame
 	self._settingsScroll = scroll
 
@@ -2331,7 +2360,7 @@ function Lib:_openSearch()
 	self._searchOpen = true
 	local sbH = 48
 	self._searchBar.Size = UDim2.new(1,0,0,0)
-	tw(self._searchBar, .25, {Size=UDim2.new(1,0,0,sbH)}, Enum.EasingStyle.Back, Enum.EasingDirection.Out)
+	tw(self._searchBar, 0.2, {Size=UDim2.new(1,0,0,sbH)}, Enum.EasingStyle.Back, Enum.EasingDirection.Out)
 	tw(self._pagesWrap, .25, {
 		Position = UDim2.fromOffset(0,sbH),
 		Size     = UDim2.new(1,0,1,-sbH),
@@ -2392,7 +2421,7 @@ function Lib:_searchNavigate(dir)
 	if self._searchIdx > #hits then self._searchIdx = 1 end
 	local obj = hits[self._searchIdx]
 	if self._searchResultLbl then
-		self._searchResultLbl.Text = self._searchIdx .. "/" .. #hits
+		self._searchResultLbl.Text = self._searchIdx .. " / " .. #hits
 	end
 	local scroll = self._pages[self._pageIdx] and self._pages[self._pageIdx].Scroll
 	if scroll and obj and obj.Parent then
@@ -2459,13 +2488,18 @@ function Lib:_doSearch(query)
 					if txt ~= "" and txt:lower():find(qLower, 1, true) then
 						local wasRich = child.RichText
 						local escaped = txt:gsub("&","&amp;"):gsub("<","&lt;"):gsub(">","&gt;")
+						local accentCol = accentOrWhite(self)
+						local r2 = math.floor(accentCol.R * 255)
+						local g2 = math.floor(accentCol.G * 255)
+						local b2 = math.floor(accentCol.B * 255)
+						local highlightTag = string.format('<font color="rgb(%d,%d,%d)"><b>', r2, g2, b2)
 						local result = ""
 						local i = 1
 						while i <= #escaped do
 							local s, e = escaped:lower():find(qLower, i, true)
 							if s then
 								result = result .. escaped:sub(i, s-1)
-								result = result .. '<font color="rgb(255,210,0)"><b>' .. escaped:sub(s,e) .. '</b></font>'
+								result = result .. highlightTag .. escaped:sub(s,e) .. '</b></font>'
 								i = e + 1
 							else
 								result = result .. escaped:sub(i)
@@ -2504,7 +2538,7 @@ function Lib:_doSearch(query)
 		self._searchIdx = 1
 		if self._searchResultLbl then
 			self._searchResultLbl.Visible = true
-			self._searchResultLbl.Text = "1/" .. total
+			self._searchResultLbl.Text = "1 / " .. total
 			tw(self._searchResultLbl, .1, {TextColor3=C.Green})
 		end
 		if nu then nu.Visible = total > 1 end
@@ -2690,10 +2724,10 @@ function Lib:AddButtonRow(pi,defs)
 		local btn=new("TextButton",{Text=def.Text or "",Font=Enum.Font.GothamBold,TextSize=12,
 			TextColor3=st.tc,BackgroundColor3=st.bg,BorderSizePixel=0,
 			Size=UDim2.fromOffset(w,40),AutoButtonColor=false,LayoutOrder=i},row)
-		corner(btn,9)
+		corner(btn,8)
 		if def.Style=="outline" then stroke(btn,C.Border2,1) end
-		btn.MouseEnter:Connect(function() tw(btn,.14,{BackgroundColor3=st.hov}) end)
-		btn.MouseLeave:Connect(function() tw(btn,.16,{BackgroundColor3=st.bg}) end)
+		btn.MouseEnter:Connect(function() tw(btn,.12,{BackgroundColor3=st.hov}) end)
+		btn.MouseLeave:Connect(function() tw(btn,.15,{BackgroundColor3=st.bg}) end)
 		btn.MouseButton1Down:Connect(function() tw(btn,.07,{BackgroundColor3=st.dn,Size=UDim2.fromOffset(w-4,38)}) end)
 		btn.MouseButton1Up:Connect(function() tw(btn,.2,{BackgroundColor3=st.hov,Size=UDim2.fromOffset(w,40)},Enum.EasingStyle.Back,Enum.EasingDirection.Out) end)
 		pcall(function() btn.CursorIcon="rbxasset://SystemCursors/PointingHand" end)
@@ -2766,8 +2800,9 @@ function Lib:AddToggle(pi,label,default,callback,desc)
 	end
 
 	local state=default==true
+	local accentCol = accentOrWhite(self)
 	local track=new("Frame",{AnchorPoint=Vector2.new(1,.5),Position=UDim2.new(1,0,.5,0),
-		Size=UDim2.fromOffset(44,24),BackgroundColor3=state and C.White or C.Card3,BorderSizePixel=0},row)
+		Size=UDim2.fromOffset(44,24),BackgroundColor3=state and accentCol or C.Card3,BorderSizePixel=0},row)
 	corner(track,12)
 	local tStroke=stroke(track,state and fromHex("aaaaaa") or C.Border2,1)
 	local knob=new("Frame",{AnchorPoint=Vector2.new(0,.5),
@@ -2777,10 +2812,11 @@ function Lib:AddToggle(pi,label,default,callback,desc)
 
 	local function apply(v,silent)
 		state=v
-		tw(track,.28,{BackgroundColor3=v and C.White or C.Card3},Enum.EasingStyle.Quint)
-		tw(tStroke,.28,{Color=v and fromHex("aaaaaa") or C.Border2})
-		tw(knob,.28,{BackgroundColor3=v and C.Bg or C.TextDim},Enum.EasingStyle.Quint)
-		tw(knob,.32,{Position=UDim2.new(0,v and 22 or 2,.5,0)},Enum.EasingStyle.Back,Enum.EasingDirection.Out)
+		local ac = accentOrWhite(self)
+		tw(track,.22,{BackgroundColor3=v and ac or C.Card3},Enum.EasingStyle.Quint)
+		tw(tStroke,.22,{Color=v and fromHex("aaaaaa") or C.Border2})
+		tw(knob,.22,{BackgroundColor3=v and C.Bg or C.TextDim},Enum.EasingStyle.Quint)
+		tw(knob,.28,{Position=UDim2.new(0,v and 22 or 2,.5,0)},Enum.EasingStyle.Back,Enum.EasingDirection.Out)
 		if not silent and callback then self:_safeCall(callback, v) end
 	end
 
@@ -2789,8 +2825,8 @@ function Lib:AddToggle(pi,label,default,callback,desc)
 	click.MouseButton1Down:Connect(function() tw(knob,.07,{Size=UDim2.fromOffset(22,18)}) end)
 	click.MouseButton1Up:Connect(function() tw(knob,.15,{Size=UDim2.fromOffset(20,20)},Enum.EasingStyle.Back,Enum.EasingDirection.Out) end)
 	click.Activated:Connect(function() apply(not state) end)
-	row.MouseEnter:Connect(function() tw(row,.15,{BackgroundColor3=C.Card2}) end)
-	row.MouseLeave:Connect(function() tw(row,.18,{BackgroundColor3=C.Card}) end)
+	row.MouseEnter:Connect(function() tw(row,.12,{BackgroundColor3=C.Card2}) end)
+	row.MouseLeave:Connect(function() tw(row,.15,{BackgroundColor3=C.Card}) end)
 
 	self:_gap(s,pi,6)
 	local t={Track=track,Knob=knob,Frame=row}
@@ -2811,7 +2847,7 @@ function Lib:AddCheckbox(pi,label,default,callback)
 	pad(row,0,0,16,16)
 
 	local box=new("Frame",{AnchorPoint=Vector2.new(0,.5),Position=UDim2.new(0,0,.5,0),
-		Size=UDim2.fromOffset(20,20),BackgroundColor3=state and C.White or C.Card3,BorderSizePixel=0},row)
+		Size=UDim2.fromOffset(20,20),BackgroundColor3=state and accentOrWhite(self) or C.Card3,BorderSizePixel=0},row)
 	corner(box,5)
 	local bStroke=stroke(box,state and fromHex("aaaaaa") or C.Border2,1)
 
@@ -2845,7 +2881,8 @@ function Lib:AddCheckbox(pi,label,default,callback)
 
 	local function apply(v,silent)
 		state=v
-		tw(box,.18,{BackgroundColor3=v and C.White or C.Card3},Enum.EasingStyle.Quart)
+		local ac = accentOrWhite(self)
+		tw(box,.18,{BackgroundColor3=v and ac or C.Card3},Enum.EasingStyle.Quart)
 		tw(bStroke,.18,{Color=v and fromHex("aaaaaa") or C.Border2})
 		tw(checkImg,.12,{ImageTransparency=v and 0 or 1})
 		if not checkIconWorks then
@@ -2857,8 +2894,8 @@ function Lib:AddCheckbox(pi,label,default,callback)
 	local click=new("TextButton",{Text="",BackgroundTransparency=1,Size=UDim2.fromScale(1,1),ZIndex=5,AutoButtonColor=false},row)
 	pcall(function() click.CursorIcon="rbxasset://SystemCursors/PointingHand" end)
 	click.Activated:Connect(function() apply(not state) end)
-	row.MouseEnter:Connect(function() tw(row,.15,{BackgroundColor3=C.Card2}) end)
-	row.MouseLeave:Connect(function() tw(row,.18,{BackgroundColor3=C.Card}) end)
+	row.MouseEnter:Connect(function() tw(row,.12,{BackgroundColor3=C.Card2}) end)
+	row.MouseLeave:Connect(function() tw(row,.15,{BackgroundColor3=C.Card}) end)
 
 	self:_gap(s,pi,6)
 	local obj={Frame=row,Box=box}
@@ -2894,14 +2931,14 @@ function Lib:AddInput(pi,labelTxt,placeholder,callback,opts)
 		Size=UDim2.fromScale(1,1),ClearTextOnFocus=clearOnFocus==true,
 		TextXAlignment=Enum.TextXAlignment.Left,
 		MultiLine=multiLine==true,TextWrapped=multiLine==true},wrap)
-	box.Focused:Connect(function() tw(wrap,.16,{BackgroundColor3=C.Card2}); tw(ws,.16,{Color=C.Border3}) end)
+	box.Focused:Connect(function() tw(wrap,.16,{BackgroundColor3=C.Card2}); tw(ws,.16,{Color=accentOrWhite(self)}) end)
 	box.FocusLost:Connect(function(enter)
-		tw(wrap,.18,{BackgroundColor3=C.Card}); tw(ws,.18,{Color=C.Border})
+		tw(wrap,.15,{BackgroundColor3=C.Card}); tw(ws,.18,{Color=C.Border})
 		if callback then self:_safeCall(callback, box.Text, enter or UserInputService.TouchEnabled) end
 		if removeAfterFocus then box.Text="" end
 	end)
-	wrap.MouseEnter:Connect(function() if not box:IsFocused() then tw(wrap,.15,{BackgroundColor3=C.Card2}) end end)
-	wrap.MouseLeave:Connect(function() if not box:IsFocused() then tw(wrap,.18,{BackgroundColor3=C.Card}) end end)
+	wrap.MouseEnter:Connect(function() if not box:IsFocused() then tw(wrap,.12,{BackgroundColor3=C.Card2}) end end)
+	wrap.MouseLeave:Connect(function() if not box:IsFocused() then tw(wrap,.15,{BackgroundColor3=C.Card}) end end)
 	self:_gap(s,pi,10)
 	local obj={TextBox=box,Frame=wrap}
 	function obj:Set(v) if box and box.Parent then box.Text=tostring(v) end end
@@ -2934,12 +2971,12 @@ function Lib:AddInputNumber(pi, labelTxt, opts, callback)
 	local box=new("TextBox",{Text="",PlaceholderText=placeholder,Font=Enum.Font.Gotham,TextSize=13,
 		TextColor3=C.Text,PlaceholderColor3=C.TextOff,BackgroundTransparency=1,
 		Size=UDim2.new(1,-60,1,0),ClearTextOnFocus=false,TextXAlignment=Enum.TextXAlignment.Left},wrap)
-	box.Focused:Connect(function() tw(wrap,.16,{BackgroundColor3=C.Card2}); tw(ws,.16,{Color=C.Border3}) end)
+	box.Focused:Connect(function() tw(wrap,.16,{BackgroundColor3=C.Card2}); tw(ws,.16,{Color=accentOrWhite(self)}) end)
 	local errLbl=new("TextLabel",{Text="",Font=Enum.Font.Gotham,TextSize=10,TextColor3=C.Red,
 		BackgroundTransparency=1,AnchorPoint=Vector2.new(1,.5),Position=UDim2.new(1,0,.5,0),
 		Size=UDim2.fromOffset(56,20),TextXAlignment=Enum.TextXAlignment.Right},wrap)
 	box.FocusLost:Connect(function(enter)
-		tw(wrap,.18,{BackgroundColor3=C.Card}); tw(ws,.18,{Color=C.Border})
+		tw(wrap,.15,{BackgroundColor3=C.Card}); tw(ws,.18,{Color=C.Border})
 		local raw = box.Text:gsub("[^%d%.%-]","")
 		local n = tonumber(raw)
 		if n == nil then
@@ -2953,8 +2990,8 @@ function Lib:AddInputNumber(pi, labelTxt, opts, callback)
 			if callback then self:_safeCall(callback, n, enter or UserInputService.TouchEnabled) end
 		end
 	end)
-	wrap.MouseEnter:Connect(function() if not box:IsFocused() then tw(wrap,.15,{BackgroundColor3=C.Card2}) end end)
-	wrap.MouseLeave:Connect(function() if not box:IsFocused() then tw(wrap,.18,{BackgroundColor3=C.Card}) end end)
+	wrap.MouseEnter:Connect(function() if not box:IsFocused() then tw(wrap,.12,{BackgroundColor3=C.Card2}) end end)
+	wrap.MouseLeave:Connect(function() if not box:IsFocused() then tw(wrap,.15,{BackgroundColor3=C.Card}) end end)
 	self:_gap(s,pi,10)
 	local obj={TextBox=box,Frame=wrap}
 	function obj:Set(v)
@@ -3308,8 +3345,8 @@ function Lib:AddStepper(pi,label,min,max,default,step,callback)
 		if not self:_debounce("stepper_"..tostring(label or "").."_+",0.08) then return end
 		update(step)
 	end)
-	row.MouseEnter:Connect(function() tw(row,.15,{BackgroundColor3=C.Card2}) end)
-	row.MouseLeave:Connect(function() tw(row,.18,{BackgroundColor3=C.Card}) end)
+	row.MouseEnter:Connect(function() tw(row,.12,{BackgroundColor3=C.Card2}) end)
+	row.MouseLeave:Connect(function() tw(row,.15,{BackgroundColor3=C.Card}) end)
 
 	self:_gap(s,pi,6)
 	local obj={Frame=row,ValueLabel=valLbl}
@@ -3383,8 +3420,8 @@ function Lib:AddSlider(pi,label,min,max,default,callback)
 			updateVal(i.Position.X)
 		end
 	end))
-	wrap.MouseEnter:Connect(function() tw(wrap,.15,{BackgroundColor3=C.Card2}) end)
-	wrap.MouseLeave:Connect(function() tw(wrap,.18,{BackgroundColor3=C.Card}) end)
+	wrap.MouseEnter:Connect(function() tw(wrap,.12,{BackgroundColor3=C.Card2}) end)
+	wrap.MouseLeave:Connect(function() tw(wrap,.15,{BackgroundColor3=C.Card}) end)
 
 	self:_gap(s,pi,6)
 	local obj={Frame=wrap,Fill=fill,Knob=knobSl,ValueLabel=valLbl,_min=min,_max=max}
@@ -3518,8 +3555,8 @@ function Lib:AddDropdown(pi,labelTxt,options,callback)
 	end
 	end
 
-	btn.MouseEnter:Connect(function() tw(btn,.14,{BackgroundColor3=C.Card2}) end)
-	btn.MouseLeave:Connect(function() tw(btn,.16,{BackgroundColor3=C.Card}) end)
+	btn.MouseEnter:Connect(function() tw(btn,.12,{BackgroundColor3=C.Card2}) end)
+	btn.MouseLeave:Connect(function() tw(btn,.15,{BackgroundColor3=C.Card}) end)
 	pcall(function() btn.CursorIcon="rbxasset://SystemCursors/PointingHand" end)
 	btn.Activated:Connect(function()
 		if not self:_debounce("dd_toggle_"..tostring(labelTxt or ""),0.2) then return end
@@ -3606,8 +3643,9 @@ function Lib:AddRadioGroup(pi,label,options,default,callback)
 		end
 
 		local isActive=opt==selected
+		local ac = accentOrWhite(self)
 		local radio=new("Frame",{AnchorPoint=Vector2.new(0,.5),Position=UDim2.new(0,0,.5,0),
-			Size=UDim2.fromOffset(18,18),BackgroundColor3=isActive and C.White or C.Card3,BorderSizePixel=0},row)
+			Size=UDim2.fromOffset(18,18),BackgroundColor3=isActive and ac or C.Card3,BorderSizePixel=0},row)
 		corner(radio,9)
 		stroke(radio,isActive and fromHex("aaaaaa") or C.Border2,1)
 
@@ -3630,7 +3668,8 @@ function Lib:AddRadioGroup(pi,label,options,default,callback)
 			if selected==opt then return end
 			for k,v in pairs(items) do
 				local a=k==opt
-				tw(v.Radio,.2,{BackgroundColor3=a and C.White or C.Card3})
+				local ac = accentOrWhite(self)
+				tw(v.Radio,.2,{BackgroundColor3=a and ac or C.Card3})
 				tw(v.Dot,.2,{Size=a and UDim2.fromOffset(8,8) or UDim2.fromOffset(0,0)})
 				tw(v.Label,.2,{TextColor3=a and C.White or C.Text})
 			end
@@ -3647,7 +3686,8 @@ function Lib:AddRadioGroup(pi,label,options,default,callback)
 		if not items[v] then return end
 		for k,item in pairs(items) do
 			local a=k==v
-			tw(item.Radio,.2,{BackgroundColor3=a and C.White or C.Card3})
+			local ac = accentOrWhite(self)
+			tw(item.Radio,.2,{BackgroundColor3=a and ac or C.Card3})
 			tw(item.Dot,.2,{Size=a and UDim2.fromOffset(8,8) or UDim2.fromOffset(0,0)})
 			tw(item.Label,.2,{TextColor3=a and C.White or C.Text})
 		end
@@ -3931,8 +3971,8 @@ function Lib:AddColorPicker(pi,label,default,callback)
 	preview.MouseEnter:Connect(function() tw(preview,.12,{Size=UDim2.fromOffset(54,34)}) end)
 	preview.MouseLeave:Connect(function() tw(preview,.15,{Size=UDim2.fromOffset(52,32)}) end)
 	preview.Activated:Connect(openPopup)
-	row.MouseEnter:Connect(function() tw(row,.15,{BackgroundColor3=C.Card2}) end)
-	row.MouseLeave:Connect(function() tw(row,.18,{BackgroundColor3=C.Card}) end)
+	row.MouseEnter:Connect(function() tw(row,.12,{BackgroundColor3=C.Card2}) end)
+	row.MouseLeave:Connect(function() tw(row,.15,{BackgroundColor3=C.Card}) end)
 
 	self:_gap(s,pi,6)
 	local obj={Frame=row,Preview=preview}
@@ -4006,7 +4046,7 @@ function Lib:AddLogConsole(pi,height)
 	local scroll=new("ScrollingFrame",{
 		Position=UDim2.fromOffset(0,35),Size=UDim2.new(1,0,1,-35),
 		BackgroundTransparency=1,BorderSizePixel=0,
-		ScrollBarThickness=3,ScrollBarImageColor3=C.Border3,ScrollBarImageTransparency=.4,
+		ScrollBarThickness=5,ScrollBarImageColor3=C.Border3,ScrollBarImageTransparency=.2,
 		CanvasSize=UDim2.new(0,0,0,0),AutomaticCanvasSize=Enum.AutomaticSize.Y,
 		ScrollingDirection=Enum.ScrollingDirection.Y,
 		ZIndex=2,
@@ -4445,8 +4485,8 @@ function Lib:AddKeybind(pi,label,default,callback)
 		tw(keyBtn,.15,{BackgroundColor3=C.Card3})
 		if callback then self:_safeCall(callback, name) end
 	end))
-	row.MouseEnter:Connect(function() tw(row,.15,{BackgroundColor3=C.Card2}) end)
-	row.MouseLeave:Connect(function() tw(row,.18,{BackgroundColor3=C.Card}) end)
+	row.MouseEnter:Connect(function() tw(row,.12,{BackgroundColor3=C.Card2}) end)
+	row.MouseLeave:Connect(function() tw(row,.15,{BackgroundColor3=C.Card}) end)
 
 	self:_gap(s,pi,6)
 	local obj={Frame=row,Button=keyBtn}
@@ -4829,7 +4869,7 @@ function Lib:AddNotificationCenter(pi, opts)
 	local scroll=new("ScrollingFrame",{
 		Position=UDim2.fromOffset(0,34),Size=UDim2.new(1,0,1,-34),
 		BackgroundTransparency=1,BorderSizePixel=0,
-		ScrollBarThickness=3,ScrollBarImageColor3=C.Border3,ScrollBarImageTransparency=.4,
+		ScrollBarThickness=5,ScrollBarImageColor3=C.Border3,ScrollBarImageTransparency=.2,
 		CanvasSize=UDim2.new(0,0,0,0),AutomaticCanvasSize=Enum.AutomaticSize.Y,
 		ScrollingDirection=Enum.ScrollingDirection.Y,ZIndex=2,
 	},wrap)

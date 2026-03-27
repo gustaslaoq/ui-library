@@ -3680,13 +3680,14 @@ function Lib:AddRadioGroup(pi,label,options,default,callback)
 
 	new("UIListLayout",{SortOrder=Enum.SortOrder.LayoutOrder,Padding=UDim.new(0,0)},wrap)
 	self:_gap(s,pi,6)
+	local libSelf = self  -- capture Lib instance for use inside obj methods
 	local obj={Frame=wrap}
 	function obj:GetSelected() return selected end
 	function obj:SetSelected(v)
 		if not items[v] then return end
 		for k,item in pairs(items) do
 			local a=k==v
-			local ac = accentOrWhite(self)
+			local ac = accentOrWhite(libSelf)
 			tw(item.Radio,.2,{BackgroundColor3=a and ac or C.Card3})
 			tw(item.Dot,.2,{Size=a and UDim2.fromOffset(8,8) or UDim2.fromOffset(0,0)})
 			tw(item.Label,.2,{TextColor3=a and C.White or C.Text})

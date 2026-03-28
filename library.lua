@@ -1617,9 +1617,8 @@ function Lib:Minimise()
 		self._preMinSize = {W=win.AbsoluteSize.X, H=win.AbsoluteSize.Y}
 		if self._tbFiller then self._tbFiller.Visible = false end
 		if self._tbBorderLine then self._tbBorderLine.Visible = false end
-		if self._verBadge then self._verBadge.Visible = false end
 		win.BackgroundColor3 = C.Bg2
-		-- Aumenta um pouco para compensar o espaço do badge de versão que some
+		-- Aumenta um pouco para o conteúdo do título respirar
 		local minBarW = math.min(self._preMinSize.W, 380)
 		tw(win,.35,{Size=UDim2.fromOffset(minBarW, 44)},Enum.EasingStyle.Quint)
 		task.delay(.37,function()
@@ -1662,7 +1661,6 @@ function Lib:Maximise()
 		win.BackgroundColor3 = C.Bg
 		if self._tbFiller then self._tbFiller.Visible = true end
 		if self._tbBorderLine then self._tbBorderLine.Visible = true end
-		if self._verBadge then self._verBadge.Visible = true end
 		win.Position = UDim2.fromScale(.5,.5)
 		self._dragTargetOX = 0
 		self._dragTargetOY = 0

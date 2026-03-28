@@ -183,7 +183,7 @@ function Lib.new(userCfg)
 	local isDemo = (userCfg == nil)
 
 	if isDemo then
-		self.cfg.AppName     = "SlaoqUILibaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+		self.cfg.AppName     = "SlaoqUILib"
 		self.cfg.AppSubtitle = "Component Showcase"
 		self.cfg.AppVersion  = "1.0"
 		self.cfg.Pages = {
@@ -466,6 +466,7 @@ function Lib:_runSplash()
 		Size=UDim2.new(1,-32,0,22), BackgroundTransparency=1,
 		Text=cfg.AppName, Font=Enum.Font.GothamBold, TextSize=16,
 		TextColor3=C.White, ZIndex=601, TextTransparency=1,
+		TextTruncate=Enum.TextTruncate.AtEnd,
 	}, card)
 
 	new("TextLabel",{
@@ -473,6 +474,7 @@ function Lib:_runSplash()
 		Size=UDim2.new(1,-32,0,15), BackgroundTransparency=1,
 		Text=cfg.AppSubtitle, Font=Enum.Font.Gotham, TextSize=11,
 		TextColor3=C.TextDim, ZIndex=601, TextTransparency=1,
+		TextTruncate=Enum.TextTruncate.AtEnd,
 	}, card)
 
 	local taskLbl = new("TextLabel",{
@@ -1617,7 +1619,8 @@ function Lib:Minimise()
 		if self._tbBorderLine then self._tbBorderLine.Visible = false end
 		if self._verBadge then self._verBadge.Visible = false end
 		win.BackgroundColor3 = C.Bg2
-		local minBarW = math.min(self._preMinSize.W, 340)
+		-- Aumenta um pouco para compensar o espaço do badge de versão que some
+		local minBarW = math.min(self._preMinSize.W, 380)
 		tw(win,.35,{Size=UDim2.fromOffset(minBarW, 44)},Enum.EasingStyle.Quint)
 		task.delay(.37,function()
 			if self._body then self._body.Visible = false end

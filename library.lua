@@ -2215,7 +2215,7 @@ function Lib:_buildSettingsPanel()
 		corner(track,12)
 		local knob=new("Frame",{AnchorPoint=Vector2.new(0,.5),
 			Position=UDim2.new(0,rmVal and 22 or 2,.5,0),
-			Size=UDim2.fromOffset(20,20),BackgroundColor3=rmVal and C.Bg or C.TextDim,BorderSizePixel=0},track)
+			Size=UDim2.fromOffset(20,20),BackgroundColor3=rmVal and C.White or C.TextDim,BorderSizePixel=0},track)
 		corner(knob,10)
 		local rmClick=new("TextButton",{Text="",BackgroundTransparency=1,Size=UDim2.fromScale(1,1),ZIndex=5,AutoButtonColor=false,ClipsDescendants=false},rmRow)
 		rmClick.Activated:Connect(function()
@@ -2223,7 +2223,7 @@ function Lib:_buildSettingsPanel()
 			self._reduceMotion=rmVal
 			_rm=rmVal
 			tw(track,.2,{BackgroundColor3=rmVal and C.Green or C.Card3})
-			tw(knob,.22,{Position=UDim2.new(0,rmVal and 22 or 2,.5,0),BackgroundColor3=rmVal and C.Bg or C.TextDim})
+			tw(knob,.22,{Position=UDim2.new(0,rmVal and 22 or 2,.5,0),BackgroundColor3=rmVal and C.White or C.TextDim})
 			self:ShowNotification(rmVal and "Reduce Motion enabled" or "Reduce Motion disabled","info",2)
 		end)
 		rmRow.MouseEnter:Connect(function() tw(rmRow,.15,{BackgroundColor3=C.Card2}) end)
@@ -2245,14 +2245,14 @@ function Lib:_buildSettingsPanel()
 			corner(smTrack,12)
 			local smKnob=new("Frame",{AnchorPoint=Vector2.new(0,.5),
 				Position=UDim2.new(0,smVal and 22 or 2,.5,0),
-				Size=UDim2.fromOffset(20,20),BackgroundColor3=smVal and C.Bg or C.TextDim,BorderSizePixel=0},smTrack)
+				Size=UDim2.fromOffset(20,20),BackgroundColor3=smVal and C.White or C.TextDim,BorderSizePixel=0},smTrack)
 			corner(smKnob,10)
 			local smClick=new("TextButton",{Text="",BackgroundTransparency=1,Size=UDim2.fromScale(1,1),ZIndex=5,AutoButtonColor=false},smRow)
 			smClick.Activated:Connect(function()
 				smVal=not smVal
 				self._simulateMobile=smVal
 				tw(smTrack,.2,{BackgroundColor3=smVal and C.Yellow or C.Card3})
-				tw(smKnob,.22,{Position=UDim2.new(0,smVal and 22 or 2,.5,0),BackgroundColor3=smVal and C.Bg or C.TextDim})
+				tw(smKnob,.22,{Position=UDim2.new(0,smVal and 22 or 2,.5,0),BackgroundColor3=smVal and C.White or C.TextDim})
 				if smVal then
 					if self._mobilePill then
 						pcall(function() self._mobilePill:Destroy() end)
@@ -2882,41 +2882,28 @@ function Lib:AddToggle(pi,label,default,callback,desc)
 
 	local _knobPressed = false
 
-	local function applyKnobPos(v)
-		-- Cancela qualquer tween de posição pendente e aplica com Back easing
-		local targetPos = UDim2.new(0, v and 22 or 2, .5, 0)
-		tw(knob, .26, {Position = targetPos}, Enum.EasingStyle.Back, Enum.EasingDirection.Out)
-	end
-
-	local function applyKnobColor(v)
-		-- FIX: ON = C.White, OFF = C.TextDim
-		tw(knob, .18, {BackgroundColor3 = v and C.White or C.TextDim}, Enum.EasingStyle.Quint)
-	end
-
 	local function apply(v, silent)
 		state = v
 		local ac = accentOrWhite(self)
 		-- Track background e stroke
 		tw(track, .22, {BackgroundColor3 = v and ac or C.Card3}, Enum.EasingStyle.Quint)
 		tw(tStroke, .22, {Color = v and fromHex("aaaaaa") or C.Border2})
-		-- FIX: cor do knob em objeto separado do tween de posição.
-		-- Como tw() cancela tweens do mesmo objeto, animamos cor logo e posição com
-		-- um pequeno delay para não se sobrescreverem — usamos task.defer para a posição.
-		applyKnobColor(v)
-		task.defer(applyKnobPos, v)
+		-- Anima cor E posição do knob num único tw() para evitar que o segundo cancele o primeiro
+		tw(knob, .24, {
+			BackgroundColor3 = v and C.White or C.TextDim,
+			Position = UDim2.new(0, v and 22 or 2, .5, 0),
+		}, Enum.EasingStyle.Back, Enum.EasingDirection.Out)
 		if not silent and callback then self:_safeCall(callback, v) end
 	end
 
 	local click=new("TextButton",{Text="",BackgroundTransparency=1,Size=UDim2.fromScale(1,1),ZIndex=5,AutoButtonColor=false},track)
 	pcall(function() click.CursorIcon="rbxasset://SystemCursors/PointingHand" end)
 
-	-- FIX: squeeze do knob usa objeto separado — aqui usamos knob diretamente mas
-	-- o squeeze só afeta Size, enquanto apply() afeta Position (via defer).
-	-- Para evitar conflito, o squeeze é feito inline sem tw() (direto, sem cancelar):
 	click.MouseButton1Down:Connect(function()
 		if _knobPressed then return end
 		_knobPressed = true
-		tw(knob, .07, {Size = UDim2.fromOffset(22, 18)})
+		-- Squeeze leve no knob (só Size, não conflita com apply que usa o mesmo tw)
+		knob.Size = UDim2.fromOffset(22, 18)
 	end)
 	click.MouseButton1Up:Connect(function()
 		_knobPressed = false
@@ -2924,9 +2911,7 @@ function Lib:AddToggle(pi,label,default,callback,desc)
 	end)
 	click.Activated:Connect(function()
 		_knobPressed = false
-		-- Restaura tamanho imediatamente antes de apply para não conflitar
-		tw(knob, .15, {Size = UDim2.fromOffset(20, 20)}, Enum.EasingStyle.Back, Enum.EasingDirection.Out)
-		task.defer(function() apply(not state) end)
+		apply(not state)
 	end)
 	row.MouseEnter:Connect(function() tw(row,.12,{BackgroundColor3=C.Card2}) end)
 	row.MouseLeave:Connect(function() tw(row,.15,{BackgroundColor3=C.Card}) end)
@@ -3186,27 +3171,37 @@ function Lib:AddMultiSelect(pi, labelTxt, options, callback)
 			LayoutOrder=i},listInner)
 		row:SetAttribute("AriaRole","option")
 		row:SetAttribute("AriaLabel", tostring(opt))
-		pad(row,0,0,16,16)
-		local hv=new("Frame",{BackgroundColor3=C.Card2,BackgroundTransparency=1,Size=UDim2.new(1,-2,1,-2),Position=UDim2.fromOffset(1,1),BorderSizePixel=0,ZIndex=52},row)
+		-- hv cobre TODA a área do row (sem offset de padding), igual ao dropdown
+		local hv=new("Frame",{BackgroundColor3=C.Card2,BackgroundTransparency=1,
+			Size=UDim2.new(1,-8,1,-4),Position=UDim2.fromOffset(4,2),
+			BorderSizePixel=0,ZIndex=52},row)
 		corner(hv,8)
+		-- Label com padding interno próprio para o texto não tocar as bordas
 		local optLbl=new("TextLabel",{Text=tostring(opt),Font=Enum.Font.Gotham,TextSize=13,TextColor3=C.Text,
-			BackgroundTransparency=1,Position=UDim2.fromOffset(0,0),
-			Size=UDim2.new(1,0,1,0),TextXAlignment=Enum.TextXAlignment.Left,ZIndex=53},row)
+			BackgroundTransparency=1,Position=UDim2.fromOffset(16,0),
+			Size=UDim2.new(1,-32,1,0),TextXAlignment=Enum.TextXAlignment.Left,ZIndex=53},row)
+		-- Ícone de check no lado direito para indicar seleção
+		local checkDot=new("Frame",{AnchorPoint=Vector2.new(1,.5),Position=UDim2.new(1,-16,.5,0),
+			Size=UDim2.fromOffset(8,8),BorderSizePixel=0,ZIndex=54,
+			BackgroundColor3=accentOrWhite(self),
+			BackgroundTransparency=selected[opt] and 0 or 1},row)
+		corner(checkDot,4)
 		local btn=new("TextButton",{Text="",BackgroundTransparency=1,Size=UDim2.fromScale(1,1),
-			ZIndex=54,AutoButtonColor=false},row)
+			ZIndex=55,AutoButtonColor=false},row)
 		btn.Activated:Connect(function()
 			selected[opt]=not selected[opt]
 			local v=selected[opt]
-			tw(hv,.18,{BackgroundTransparency=v and .2 or 1})
+			tw(hv,.15,{BackgroundTransparency=v and .15 or .3})
+			tw(checkDot,.15,{BackgroundTransparency=v and 0 or 1})
 			refreshCount()
 		end)
 		btn.MouseEnter:Connect(function()
-			if not selected[opt] then tw(hv,.2,{BackgroundTransparency=.2}) end
+			tw(hv,.15,{BackgroundTransparency=selected[opt] and .1 or .3})
 		end)
 		btn.MouseLeave:Connect(function()
-			if not selected[opt] then tw(hv,.22,{BackgroundTransparency=1}) end
+			tw(hv,.18,{BackgroundTransparency=selected[opt] and .2 or 1})
 		end)
-		optionRows[i]={Row=row,Label=optLbl,Hv=hv,Key=opt}
+		optionRows[i]={Row=row,Label=optLbl,Hv=hv,Check=checkDot,Key=opt}
 	end
 	end
 
@@ -3230,9 +3225,12 @@ function Lib:AddMultiSelect(pi, labelTxt, options, callback)
 			for _,entry in ipairs(optionRows) do
 				local v=selected[entry.Key]
 				if entry.Hv then entry.Hv.BackgroundTransparency = v and .2 or 1 end
+				if entry.Check then entry.Check.BackgroundTransparency = v and 0 or 1 end
 			end
 		else
 			tw(listFrame,.22,{Size=UDim2.new(1,0,0,0)},Enum.EasingStyle.Quint,Enum.EasingDirection.In)
+			-- Reset hover do wrapper ao fechar para não ficar "preso" com cor de hover
+			tw(wrapper,.18,{BackgroundColor3=C.Card})
 			task.delay(.19,function() if not open and listFrame and listFrame.Parent then listFrame.Visible=false end end)
 		end
 	end)
@@ -3250,6 +3248,11 @@ function Lib:AddMultiSelect(pi, labelTxt, options, callback)
 		for opt in pairs(selected) do selected[opt]=false end
 		if type(tbl)=="table" then
 			for _,opt in ipairs(tbl) do selected[opt]=true end
+		end
+		for _,entry in ipairs(optionRows) do
+			local v=selected[entry.Key]
+			if entry.Hv then entry.Hv.BackgroundTransparency = v and .2 or 1 end
+			if entry.Check then entry.Check.BackgroundTransparency = v and 0 or 1 end
 		end
 		refreshCount()
 	end
@@ -3650,6 +3653,8 @@ function Lib:AddDropdown(pi,labelTxt,options,callback)
 			tw(optList,.22,{Size=UDim2.new(1,0,0,0)},Enum.EasingStyle.Quint,Enum.EasingDirection.In)
 			tw(arrow,.18,{Rotation=0})
 			tw(arrowImg,.18,{Rotation=0})
+			-- Reset hover do botão principal ao fechar pela seleção de opção
+			tw(btn,.15,{BackgroundColor3=C.Card})
 			task.delay(.2,function() if optList then optList.Visible=false end end)
 			if callback then self:_safeCall(callback, opt) end
 			if keyConnOpen then pcall(function() keyConnOpen:Disconnect() end) end
@@ -3690,6 +3695,7 @@ function Lib:AddDropdown(pi,labelTxt,options,callback)
 						open=false
 						tw(optList,.22,{Size=UDim2.new(1,0,0,0)},Enum.EasingStyle.Quint,Enum.EasingDirection.In)
 						tw(arrow,.2,{Rotation=0}); tw(arrowImg,.2,{Rotation=0})
+						tw(btn,.15,{BackgroundColor3=C.Card})
 						task.delay(.2,function() if optList then optList.Visible=false end end)
 						if keyConnOpen then pcall(function() keyConnOpen:Disconnect() end) end
 					end
@@ -3698,6 +3704,7 @@ function Lib:AddDropdown(pi,labelTxt,options,callback)
 		else
 			tw(optList,.22,{Size=UDim2.new(1,0,0,0)},Enum.EasingStyle.Quint,Enum.EasingDirection.In)
 			tw(arrow,.2,{Rotation=0}); tw(arrowImg,.2,{Rotation=0})
+			tw(btn,.15,{BackgroundColor3=C.Card})
 			task.delay(.2,function() if optList then optList.Visible=false end end)
 			if keyConnOpen then pcall(function() keyConnOpen:Disconnect() end) end
 		end
@@ -3754,7 +3761,7 @@ function Lib:AddRadioGroup(pi,label,options,default,callback)
 
 		local dot=new("Frame",{AnchorPoint=Vector2.new(.5,.5),Position=UDim2.fromScale(.5,.5),
 			Size=UDim2.fromOffset(isActive and 8 or 0,isActive and 8 or 0),
-			BackgroundColor3=C.Bg,BorderSizePixel=0},radio)
+			BackgroundColor3=C.White,BorderSizePixel=0},radio)
 		corner(dot,4)
 
 		local lbl=new("TextLabel",{Text=opt,Font=Enum.Font.Gotham,TextSize=13,

@@ -2882,9 +2882,11 @@ function Lib:AddToggle(pi,label,default,callback,desc)
 		local ac = accentOrWhite(self)
 		tw(track, .22, {BackgroundColor3 = v and ac or C.Card3}, Enum.EasingStyle.Quint)
 		tw(tStroke, .22, {Color = v and fromHex("aaaaaa") or C.Border2})
-		-- ON = knob escuro sobre accent claro, OFF = knob claro sobre track cinza escuro
+		-- Cor muda instantaneamente (evita flick de interpolação com Back easing)
+		-- O olho não percebe a troca de cor — só percebe o movimento da bola
+		knob.BackgroundColor3 = v and C.Bg or C.White
+		-- Apenas posição e tamanho animados com Back easing
 		tw(knob, .24, {
-			BackgroundColor3 = v and C.Bg or C.White,
 			Position = UDim2.new(0, v and 22 or 2, .5, 0),
 			Size = UDim2.fromOffset(20, 20),
 		}, Enum.EasingStyle.Back, Enum.EasingDirection.Out)

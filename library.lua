@@ -229,7 +229,7 @@ function Lib.new(userCfg)
 	self._minImg     = nil
 	self._minFb      = nil
 	self._tbFiller   = nil
-	self._tbBorder   = nil
+	self._tbBorderLine = nil
 	self._toggleKey      = (userCfg and userCfg.ToggleKey) or "K"
 	self._toasts         = {}
 	self._toastCount     = 0
@@ -1034,7 +1034,10 @@ function Lib:_buildBody(win)
 			ImageColor3=C.TextDim,ScaleType=Enum.ScaleType.Fit,ZIndex=23},navUp)
 		local fb=new("TextLabel",{Text="^",Font=Enum.Font.GothamBold,TextSize=11,TextColor3=C.TextDim,
 			BackgroundTransparency=1,Size=UDim2.fromScale(1,1),TextXAlignment=Enum.TextXAlignment.Center,ZIndex=23},navUp)
-		task.defer(function() if img.IsLoaded then fb.Visible=false end end)
+		img:GetPropertyChangedSignal("IsLoaded"):Connect(function()
+			if img.IsLoaded and img.AbsoluteSize.X > 0 then fb.Visible = false end
+		end)
+		task.defer(function() if img.IsLoaded then fb.Visible = false end end)
 	end
 
 	local navDown = new("TextButton",{
@@ -1050,7 +1053,10 @@ function Lib:_buildBody(win)
 			ImageColor3=C.TextDim,ScaleType=Enum.ScaleType.Fit,ZIndex=23},navDown)
 		local fb=new("TextLabel",{Text="v",Font=Enum.Font.GothamBold,TextSize=11,TextColor3=C.TextDim,
 			BackgroundTransparency=1,Size=UDim2.fromScale(1,1),TextXAlignment=Enum.TextXAlignment.Center,ZIndex=23},navDown)
-		task.defer(function() if img.IsLoaded then fb.Visible=false end end)
+		img:GetPropertyChangedSignal("IsLoaded"):Connect(function()
+			if img.IsLoaded and img.AbsoluteSize.X > 0 then fb.Visible = false end
+		end)
+		task.defer(function() if img.IsLoaded then fb.Visible = false end end)
 	end
 
 	local closeSearchBtn = new("TextButton",{
@@ -1613,8 +1619,15 @@ function Lib:Maximise()
 		self._dragTargetOX = 0
 		self._dragTargetOY = 0
 		if self._sidebar and sw then
-	if self._dragHandle and not self:_useMiniMode() then
-		self._dragHandle.Visible = true
+			self._sidebar.Size = UDim2.new(0, sw, 1, 0)
+			self:_setCollapsed(collapsed)
+		end
+		tw(win, .38, {Size=UDim2.fromOffset(targetW, targetH)}, Enum.EasingStyle.Back, Enum.EasingDirection.Out)
+		if self._minFb then self._minFb.Text = "-" end
+		if self._dragHandle and not self:_useMiniMode() then
+			self._dragHandle.Visible = true
+			if self._syncHandle then self._syncHandle() end
+		end
 	end
 end
 
@@ -2371,7 +2384,7 @@ function Lib:_openSearch()
 		end
 	end)
 	if self._searchBtnImg then tw(self._searchBtnImg,.15,{ImageColor3=C.White}) end
-		if self._searchBtnFb  then tw(self._searchBtnFb,.15,{TextColor3=C.White}) end
+	if self._searchBtnFb  then tw(self._searchBtnFb,.15,{TextColor3=C.White}) end
 end
 
 function Lib:_closeSearch()
@@ -2387,7 +2400,7 @@ function Lib:_closeSearch()
 		Size     = UDim2.fromScale(1,1),
 	}, Enum.EasingStyle.Quint)
 	if self._searchBtnImg then tw(self._searchBtnImg,.15,{ImageColor3=C.Text}) end
-		if self._searchBtnFb  then tw(self._searchBtnFb,.15,{TextColor3=C.Text}) end
+	if self._searchBtnFb  then tw(self._searchBtnFb,.15,{TextColor3=C.Text}) end
 end
 
 function Lib:_clearHighlights()

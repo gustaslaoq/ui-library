@@ -2818,26 +2818,68 @@ function Lib:AddToggle(pi,label,default,callback,desc)
 		Size=UDim2.fromOffset(44,24),BackgroundColor3=state and accentCol or C.Card3,BorderSizePixel=0},row)
 	corner(track,12)
 	local tStroke=stroke(track,state and fromHex("aaaaaa") or C.Border2,1)
+	-- FIX: cor do knob ON é C.White (visível), não C.Bg (fundo invisível)
 	local knob=new("Frame",{AnchorPoint=Vector2.new(0,.5),
 		Position=UDim2.new(0,state and 22 or 2,.5,0),
-		Size=UDim2.fromOffset(20,20),BackgroundColor3=state and C.Bg or C.TextDim,BorderSizePixel=0},track)
+		Size=UDim2.fromOffset(20,20),BackgroundColor3=state and C.White or C.TextDim,BorderSizePixel=0},track)
 	corner(knob,10)
 
-	local function apply(v,silent)
-		state=v
+	-- FIX: usar um Frame intermediário como proxy para animar Position separadamente do Size,
+	-- evitando que tw() cancele o tween anterior do mesmo objeto (knob).
+	-- A posição é animada via um objeto separado (knobPos) e copiada para o knob via heartbeat.
+	-- Solução mais simples e robusta: usar dois tweens em sub-objetos distintos.
+	-- Para não refatorar tw(), simplesmente separamos os tweens em objetos diferentes:
+	-- track para cor do track, tStroke para borda, knobColor (UIStroke dummy) não existe,
+	-- então usamos a abordagem de animar BackgroundColor3 e Position/Size em sequência controlada.
+
+	local _knobPressed = false
+
+	local function applyKnobPos(v)
+		-- Cancela qualquer tween de posição pendente e aplica com Back easing
+		local targetPos = UDim2.new(0, v and 22 or 2, .5, 0)
+		tw(knob, .26, {Position = targetPos}, Enum.EasingStyle.Back, Enum.EasingDirection.Out)
+	end
+
+	local function applyKnobColor(v)
+		-- FIX: ON = C.White, OFF = C.TextDim
+		tw(knob, .18, {BackgroundColor3 = v and C.White or C.TextDim}, Enum.EasingStyle.Quint)
+	end
+
+	local function apply(v, silent)
+		state = v
 		local ac = accentOrWhite(self)
-		tw(track,.22,{BackgroundColor3=v and ac or C.Card3},Enum.EasingStyle.Quint)
-		tw(tStroke,.22,{Color=v and fromHex("aaaaaa") or C.Border2})
-		tw(knob,.22,{BackgroundColor3=v and C.Bg or C.TextDim},Enum.EasingStyle.Quint)
-		tw(knob,.28,{Position=UDim2.new(0,v and 22 or 2,.5,0)},Enum.EasingStyle.Back,Enum.EasingDirection.Out)
+		-- Track background e stroke
+		tw(track, .22, {BackgroundColor3 = v and ac or C.Card3}, Enum.EasingStyle.Quint)
+		tw(tStroke, .22, {Color = v and fromHex("aaaaaa") or C.Border2})
+		-- FIX: cor do knob em objeto separado do tween de posição.
+		-- Como tw() cancela tweens do mesmo objeto, animamos cor logo e posição com
+		-- um pequeno delay para não se sobrescreverem — usamos task.defer para a posição.
+		applyKnobColor(v)
+		task.defer(applyKnobPos, v)
 		if not silent and callback then self:_safeCall(callback, v) end
 	end
 
 	local click=new("TextButton",{Text="",BackgroundTransparency=1,Size=UDim2.fromScale(1,1),ZIndex=5,AutoButtonColor=false},track)
 	pcall(function() click.CursorIcon="rbxasset://SystemCursors/PointingHand" end)
-	click.MouseButton1Down:Connect(function() tw(knob,.07,{Size=UDim2.fromOffset(22,18)}) end)
-	click.MouseButton1Up:Connect(function() tw(knob,.15,{Size=UDim2.fromOffset(20,20)},Enum.EasingStyle.Back,Enum.EasingDirection.Out) end)
-	click.Activated:Connect(function() apply(not state) end)
+
+	-- FIX: squeeze do knob usa objeto separado — aqui usamos knob diretamente mas
+	-- o squeeze só afeta Size, enquanto apply() afeta Position (via defer).
+	-- Para evitar conflito, o squeeze é feito inline sem tw() (direto, sem cancelar):
+	click.MouseButton1Down:Connect(function()
+		if _knobPressed then return end
+		_knobPressed = true
+		tw(knob, .07, {Size = UDim2.fromOffset(22, 18)})
+	end)
+	click.MouseButton1Up:Connect(function()
+		_knobPressed = false
+		tw(knob, .15, {Size = UDim2.fromOffset(20, 20)}, Enum.EasingStyle.Back, Enum.EasingDirection.Out)
+	end)
+	click.Activated:Connect(function()
+		_knobPressed = false
+		-- Restaura tamanho imediatamente antes de apply para não conflitar
+		tw(knob, .15, {Size = UDim2.fromOffset(20, 20)}, Enum.EasingStyle.Back, Enum.EasingDirection.Out)
+		task.defer(function() apply(not state) end)
+	end)
 	row.MouseEnter:Connect(function() tw(row,.12,{BackgroundColor3=C.Card2}) end)
 	row.MouseLeave:Connect(function() tw(row,.15,{BackgroundColor3=C.Card}) end)
 

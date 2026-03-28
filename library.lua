@@ -593,6 +593,8 @@ function Lib:_buildWindow()
 	end
 
 	local function doScale()
+		-- FIX: não redimensionar enquanto escondido — evita cancelar tween do Hide()
+		if self._hidden then return end
 		local w, h, sw, collapsed = computeScale()
 		if not self._minimised then
 			win.Size = UDim2.fromOffset(w, h)
@@ -930,13 +932,12 @@ function Lib:_buildBody(win)
 	new("Frame",{AnchorPoint=Vector2.new(.5,.5),Position=UDim2.fromScale(.5,.5),
 		Size=UDim2.new(.8,0,0,1),BackgroundColor3=C.Border,BorderSizePixel=0},divArea)
 
-	-- FIX: barra na borda DIREITA do sidebar (AnchorPoint X=1, Position X relativa=1)
-	-- assim ela aparece colada na divisória direita, não no canto esquerdo.
-	local bar = new("Frame",{Size=UDim2.fromOffset(3,0),AnchorPoint=Vector2.new(1,.5),
-		Position=UDim2.new(1,0,0,100),BackgroundColor3=accentOrWhite(self),BorderSizePixel=0,ZIndex=9,Visible=false},sidebar)
+	-- Barra na borda ESQUERDA do sidebar
+	local bar = new("Frame",{Size=UDim2.fromOffset(3,0),AnchorPoint=Vector2.new(0,.5),
+		Position=UDim2.new(0,0,0,100),BackgroundColor3=accentOrWhite(self),BorderSizePixel=0,ZIndex=9,Visible=false},sidebar)
 	corner(bar,2)
 	self._bar = bar
-	self._barAnimGen = 0  -- geração para cancelar animações antigas
+	self._barAnimGen = 0
 
 	local pageIndex = 0
 	local function addNavBtn(page, parent, indented)
@@ -1367,7 +1368,7 @@ function Lib:_animBar(target)
 
 	if bar.Size.Y.Offset < 2 then
 		-- Primeira vez: apenas expande direto no destino, sem colapsar
-		bar.Position = UDim2.new(1, 0, 0, destY)
+		bar.Position = UDim2.new(0, 0, 0, destY)
 		bar.Size     = UDim2.fromOffset(BAR_W, 0)
 		-- Expande do centro para fora (ambas as pontas simultaneamente via Size + AnchorPoint Y=.5)
 		tw(bar, SPEED * 1.1, {Size = UDim2.fromOffset(BAR_W, BAR_H)},
@@ -1387,7 +1388,7 @@ function Lib:_animBar(target)
 		if not bar or not bar.Parent then return end
 
 		-- Teleporta para o novo Y enquanto está colapsada (tamanho 0, invisível)
-		bar.Position = UDim2.new(1, 0, 0, destY)
+		bar.Position = UDim2.new(0, 0, 0, destY)
 
 		-- Expande das duas pontas para fora com Back easing (efeito elástico profissional)
 		tw(bar, SPEED * 1.15, {Size = UDim2.fromOffset(BAR_W, BAR_H)},
@@ -1690,7 +1691,7 @@ function Lib:Hide()
 	if self._minimised then
 		self._minimised = false
 		if self._minFb then self._minFb.Text = "-" end
-		if self._body then self._body.Visible = true end   -- restore body before fading
+		if self._body then self._body.Visible = true end
 		win.BackgroundColor3 = C.Bg
 		if self._tbFiller then self._tbFiller.Visible = true end
 		if self._tbBorderLine then self._tbBorderLine.Visible = true end
@@ -1699,13 +1700,18 @@ function Lib:Hide()
 		else tw2, th2 = self.cfg.WindowWidth, self.cfg.WindowHeight end
 		win.Size = UDim2.fromOffset(tw2, th2)
 	end
+	-- FIX: usar geração para que Show() cancele o task.delay pendente
+	self._hideGen = (self._hideGen or 0) + 1
+	local gen = self._hideGen
 	local ws = win.AbsoluteSize
 	tw(win, .25, {
 		BackgroundTransparency = 1,
 		Size = UDim2.fromOffset(ws.X * 0.93, ws.Y * 0.93),
 	}, Enum.EasingStyle.Quint, Enum.EasingDirection.In)
 	task.delay(.28, function()
-		if win and win.Parent then win.Visible = false end
+		-- FIX: só esconde se ainda for a mesma operação de Hide (Show() não foi chamado)
+		if gen ~= self._hideGen then return end
+		if self._hidden and win and win.Parent then win.Visible = false end
 	end)
 	if self._dragHandle then self._dragHandle.Visible = false end
 
@@ -1733,6 +1739,8 @@ function Lib:Show()
 	local win = self.Window
 	if not win then return end
 	local wasHidden = self._hidden
+	-- FIX: incrementar _hideGen cancela qualquer task.delay pendente do Hide()
+	self._hideGen = (self._hideGen or 0) + 1
 	self._hidden = false
 	if self._mobilePill then
 		tw(self._mobilePill,.2,{Position=UDim2.new(.5,0,0,-60),BackgroundTransparency=1},Enum.EasingStyle.Quint,Enum.EasingDirection.In)

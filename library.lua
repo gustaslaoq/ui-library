@@ -2220,7 +2220,7 @@ function Lib:_buildSettingsPanel()
 		corner(track,12)
 		local knob=new("Frame",{AnchorPoint=Vector2.new(0,.5),
 			Position=UDim2.new(0,rmVal and 22 or 2,.5,0),
-			Size=UDim2.fromOffset(20,20),BackgroundColor3=rmVal and C.White or C.Bg,BorderSizePixel=0},track)
+			Size=UDim2.fromOffset(20,20),BackgroundColor3=rmVal and C.Bg or C.White,BorderSizePixel=0},track)
 		corner(knob,10)
 		local rmClick=new("TextButton",{Text="",BackgroundTransparency=1,Size=UDim2.fromScale(1,1),ZIndex=5,AutoButtonColor=false,ClipsDescendants=false},rmRow)
 		rmClick.Activated:Connect(function()
@@ -2228,7 +2228,7 @@ function Lib:_buildSettingsPanel()
 			self._reduceMotion=rmVal
 			_rm=rmVal
 			tw(track,.2,{BackgroundColor3=rmVal and C.Green or C.Card3})
-			tw(knob,.22,{Position=UDim2.new(0,rmVal and 22 or 2,.5,0),BackgroundColor3=rmVal and C.White or C.Bg})
+			tw(knob,.22,{Position=UDim2.new(0,rmVal and 22 or 2,.5,0),BackgroundColor3=rmVal and C.Bg or C.White})
 			self:ShowNotification(rmVal and "Reduce Motion enabled" or "Reduce Motion disabled","info",2)
 		end)
 		rmRow.MouseEnter:Connect(function() tw(rmRow,.15,{BackgroundColor3=C.Card2}) end)
@@ -2250,14 +2250,14 @@ function Lib:_buildSettingsPanel()
 			corner(smTrack,12)
 			local smKnob=new("Frame",{AnchorPoint=Vector2.new(0,.5),
 				Position=UDim2.new(0,smVal and 22 or 2,.5,0),
-				Size=UDim2.fromOffset(20,20),BackgroundColor3=smVal and C.White or C.Bg,BorderSizePixel=0},smTrack)
+				Size=UDim2.fromOffset(20,20),BackgroundColor3=smVal and C.Bg or C.White,BorderSizePixel=0},smTrack)
 			corner(smKnob,10)
 			local smClick=new("TextButton",{Text="",BackgroundTransparency=1,Size=UDim2.fromScale(1,1),ZIndex=5,AutoButtonColor=false},smRow)
 			smClick.Activated:Connect(function()
 				smVal=not smVal
 				self._simulateMobile=smVal
 				tw(smTrack,.2,{BackgroundColor3=smVal and C.Yellow or C.Card3})
-				tw(smKnob,.22,{Position=UDim2.new(0,smVal and 22 or 2,.5,0),BackgroundColor3=smVal and C.White or C.Bg})
+				tw(smKnob,.22,{Position=UDim2.new(0,smVal and 22 or 2,.5,0),BackgroundColor3=smVal and C.Bg or C.White})
 				if smVal then
 					if self._mobilePill then
 						pcall(function() self._mobilePill:Destroy() end)
@@ -2871,22 +2871,22 @@ function Lib:AddToggle(pi,label,default,callback,desc)
 		Size=UDim2.fromOffset(44,24),BackgroundColor3=state and accentCol or C.Card3,BorderSizePixel=0},row)
 	corner(track,12)
 	local tStroke=stroke(track,state and fromHex("aaaaaa") or C.Border2,1)
+	-- OFF = knob claro (sobre track escuro), ON = knob escuro (sobre track colorido claro)
 	local knob=new("Frame",{AnchorPoint=Vector2.new(0,.5),
 		Position=UDim2.new(0,state and 22 or 2,.5,0),
-		Size=UDim2.fromOffset(20,20),BackgroundColor3=state and C.White or C.Bg,BorderSizePixel=0},track)
+		Size=UDim2.fromOffset(20,20),BackgroundColor3=state and C.Bg or C.White,BorderSizePixel=0},track)
 	corner(knob,10)
-
-	local _knobPressed = false
 
 	local function apply(v, silent)
 		state = v
 		local ac = accentOrWhite(self)
 		tw(track, .22, {BackgroundColor3 = v and ac or C.Card3}, Enum.EasingStyle.Quint)
 		tw(tStroke, .22, {Color = v and fromHex("aaaaaa") or C.Border2})
-		-- ON = C.White (visível sobre track colorido), OFF = C.Bg (escuro sobre track cinza)
+		-- ON = knob escuro sobre accent claro, OFF = knob claro sobre track cinza escuro
 		tw(knob, .24, {
-			BackgroundColor3 = v and C.White or C.Bg,
+			BackgroundColor3 = v and C.Bg or C.White,
 			Position = UDim2.new(0, v and 22 or 2, .5, 0),
+			Size = UDim2.fromOffset(20, 20),
 		}, Enum.EasingStyle.Back, Enum.EasingDirection.Out)
 		if not silent and callback then self:_safeCall(callback, v) end
 	end
@@ -2894,18 +2894,11 @@ function Lib:AddToggle(pi,label,default,callback,desc)
 	local click=new("TextButton",{Text="",BackgroundTransparency=1,Size=UDim2.fromScale(1,1),ZIndex=5,AutoButtonColor=false},track)
 	pcall(function() click.CursorIcon="rbxasset://SystemCursors/PointingHand" end)
 
+	-- Squeeze no press, apply restaura Size junto com a animação principal (sem conflito)
 	click.MouseButton1Down:Connect(function()
-		if _knobPressed then return end
-		_knobPressed = true
-		-- Squeeze leve no knob (só Size, não conflita com apply que usa o mesmo tw)
 		knob.Size = UDim2.fromOffset(22, 18)
 	end)
-	click.MouseButton1Up:Connect(function()
-		_knobPressed = false
-		tw(knob, .15, {Size = UDim2.fromOffset(20, 20)}, Enum.EasingStyle.Back, Enum.EasingDirection.Out)
-	end)
 	click.Activated:Connect(function()
-		_knobPressed = false
 		apply(not state)
 	end)
 	row.MouseEnter:Connect(function() tw(row,.12,{BackgroundColor3=C.Card2}) end)

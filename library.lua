@@ -930,10 +930,13 @@ function Lib:_buildBody(win)
 	new("Frame",{AnchorPoint=Vector2.new(.5,.5),Position=UDim2.fromScale(.5,.5),
 		Size=UDim2.new(.8,0,0,1),BackgroundColor3=C.Border,BorderSizePixel=0},divArea)
 
-	local bar = new("Frame",{Size=UDim2.fromOffset(3,0),AnchorPoint=Vector2.new(0,.5),
-		Position=UDim2.fromOffset(0,100),BackgroundColor3=accentOrWhite(self),BorderSizePixel=0,ZIndex=9,Visible=false},sidebar)
+	-- FIX: barra na borda DIREITA do sidebar (AnchorPoint X=1, Position X relativa=1)
+	-- assim ela aparece colada na divisória direita, não no canto esquerdo.
+	local bar = new("Frame",{Size=UDim2.fromOffset(3,0),AnchorPoint=Vector2.new(1,.5),
+		Position=UDim2.new(1,0,0,100),BackgroundColor3=accentOrWhite(self),BorderSizePixel=0,ZIndex=9,Visible=false},sidebar)
 	corner(bar,2)
 	self._bar = bar
+	self._barAnimGen = 0  -- geração para cancelar animações antigas
 
 	local pageIndex = 0
 	local function addNavBtn(page, parent, indented)
@@ -1334,12 +1337,13 @@ function Lib:_animBar(target)
 	if not self:_isAlive() then return end
 	local bar = self._bar
 	if not bar or not target then return end
-	local ok,relY = pcall(function()
+
+	local ok, relY = pcall(function()
 		local ap = target.AbsolutePosition
 		local as = target.AbsoluteSize
 		local sp = self._sidebar.AbsolutePosition
 		if as.Y == 0 then error("Unrendered") end
-		return ap.Y - sp.Y + as.Y*.5
+		return ap.Y - sp.Y + as.Y * .5
 	end)
 	if not ok then
 		task.defer(function()
@@ -1347,12 +1351,48 @@ function Lib:_animBar(target)
 		end)
 		return
 	end
+
+	-- Incrementa geração para cancelar qualquer animação anterior em andamento
+	self._barAnimGen = (self._barAnimGen or 0) + 1
+	local gen = self._barAnimGen
+
+	local BAR_H    = 32   -- altura total da barra expandida
+	local BAR_W    = 3    -- largura da barra
+	local SPEED    = self.cfg.BarTweenSpeed or 0.22
+
+	-- Destino final: centro Y do item selecionado, borda direita do sidebar
+	local destY = relY  -- posição Y central (AnchorPoint Y=.5 cuida do offset)
+
 	bar.Visible = true
-	local cfg = self.cfg
-	tw(bar, cfg.BarTweenSpeed, {
-		Position = UDim2.new(0, 0, 0, relY - 16),
-		Size = UDim2.fromOffset(3, 32)
-	}, Enum.EasingStyle.Back, Enum.EasingDirection.Out)
+
+	if bar.Size.Y.Offset < 2 then
+		-- Primeira vez: apenas expande direto no destino, sem colapsar
+		bar.Position = UDim2.new(1, 0, 0, destY)
+		bar.Size     = UDim2.fromOffset(BAR_W, 0)
+		-- Expande do centro para fora (ambas as pontas simultaneamente via Size + AnchorPoint Y=.5)
+		tw(bar, SPEED * 1.1, {Size = UDim2.fromOffset(BAR_W, BAR_H)},
+			Enum.EasingStyle.Back, Enum.EasingDirection.Out)
+		return
+	end
+
+	-- === Fase 1: colapsar a barra atual das duas pontas até sumir ===
+	-- AnchorPoint Y=.5 → reduzir Height colapsa para o centro da barra
+	local collapseTime = SPEED * 0.7
+	tw(bar, collapseTime, {Size = UDim2.fromOffset(BAR_W, 0)},
+		Enum.EasingStyle.Quint, Enum.EasingDirection.In)
+
+	-- === Fase 2: mover (invisível) e expandir no novo destino ===
+	task.delay(collapseTime, function()
+		if gen ~= self._barAnimGen then return end
+		if not bar or not bar.Parent then return end
+
+		-- Teleporta para o novo Y enquanto está colapsada (tamanho 0, invisível)
+		bar.Position = UDim2.new(1, 0, 0, destY)
+
+		-- Expande das duas pontas para fora com Back easing (efeito elástico profissional)
+		tw(bar, SPEED * 1.15, {Size = UDim2.fromOffset(BAR_W, BAR_H)},
+			Enum.EasingStyle.Back, Enum.EasingDirection.Out)
+	end)
 end
 
 function Lib:_setCollapsed(collapsed)

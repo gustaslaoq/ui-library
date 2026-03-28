@@ -741,7 +741,7 @@ function Lib:_buildTitleBar(win)
 	self._tbBorderLine = new("Frame",{Position=UDim2.new(0,0,1,-1),Size=UDim2.new(1,0,0,1),BackgroundColor3=C.Border,BorderSizePixel=0,ZIndex=10},tb)
 	self.TitleBar = tb
 
-	local left = new("Frame",{Size=UDim2.new(1,-188,1,0),BackgroundTransparency=1,ZIndex=11},tb)
+	local left = new("Frame",{Size=UDim2.new(1,-188,1,0),BackgroundTransparency=1,ZIndex=11,ClipsDescendants=true},tb)
 	pad(left,0,0,16,0)
 	hlist(left,8)
 
@@ -754,9 +754,10 @@ function Lib:_buildTitleBar(win)
 			Font=Enum.Font.GothamBold,TextSize=12,TextColor3=C.White,ZIndex=12},logoMini)
 	end
 
+	-- Nome com tamanho máximo para não ultrapassar o espaço disponível
 	new("TextLabel",{Text=cfg.AppName,Font=Enum.Font.GothamBold,TextSize=13,TextColor3=C.White,
-		BackgroundTransparency=1,Size=UDim2.fromOffset(0,26),AutomaticSize=Enum.AutomaticSize.X,
-		TextXAlignment=Enum.TextXAlignment.Left,ZIndex=11,LayoutOrder=1},left)
+		BackgroundTransparency=1,Size=UDim2.new(1,-80,0,26),AutomaticSize=Enum.AutomaticSize.None,
+		TextXAlignment=Enum.TextXAlignment.Left,TextTruncate=Enum.TextTruncate.AtEnd,ZIndex=11,LayoutOrder=1},left)
 
 	local ver = new("Frame",{Size=UDim2.fromOffset(0,22),AutomaticSize=Enum.AutomaticSize.X,
 		BackgroundColor3=C.Card3,BorderSizePixel=0,ZIndex=11,LayoutOrder=2},left)
@@ -764,6 +765,7 @@ function Lib:_buildTitleBar(win)
 	pad(ver,0,0,8,8)
 	new("TextLabel",{Text="v"..cfg.AppVersion,Font=Enum.Font.Gotham,TextSize=10,TextColor3=C.TextDim,
 		BackgroundTransparency=1,Size=UDim2.fromOffset(0,22),AutomaticSize=Enum.AutomaticSize.X,ZIndex=12},ver)
+	self._verBadge = ver
 
 	local right = new("Frame",{AnchorPoint=Vector2.new(1,0),Position=UDim2.new(1,0,0,0),
 		Size=UDim2.fromOffset(188,44),BackgroundTransparency=1,ZIndex=11},tb)
@@ -1613,6 +1615,7 @@ function Lib:Minimise()
 		self._preMinSize = {W=win.AbsoluteSize.X, H=win.AbsoluteSize.Y}
 		if self._tbFiller then self._tbFiller.Visible = false end
 		if self._tbBorderLine then self._tbBorderLine.Visible = false end
+		if self._verBadge then self._verBadge.Visible = false end
 		win.BackgroundColor3 = C.Bg2
 		local minBarW = math.min(self._preMinSize.W, 340)
 		tw(win,.35,{Size=UDim2.fromOffset(minBarW, 44)},Enum.EasingStyle.Quint)
@@ -1656,6 +1659,7 @@ function Lib:Maximise()
 		win.BackgroundColor3 = C.Bg
 		if self._tbFiller then self._tbFiller.Visible = true end
 		if self._tbBorderLine then self._tbBorderLine.Visible = true end
+		if self._verBadge then self._verBadge.Visible = true end
 		win.Position = UDim2.fromScale(.5,.5)
 		self._dragTargetOX = 0
 		self._dragTargetOY = 0

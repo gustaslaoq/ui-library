@@ -183,7 +183,7 @@ function Lib.new(userCfg)
 	local isDemo = (userCfg == nil)
 
 	if isDemo then
-		self.cfg.AppName     = "SlaoqUILib"
+		self.cfg.AppName     = "SlaoqUILibaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
 		self.cfg.AppSubtitle = "Component Showcase"
 		self.cfg.AppVersion  = "1.0"
 		self.cfg.Pages = {

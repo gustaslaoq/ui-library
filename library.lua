@@ -2220,7 +2220,7 @@ function Lib:_buildSettingsPanel()
 		corner(track,12)
 		local knob=new("Frame",{AnchorPoint=Vector2.new(0,.5),
 			Position=UDim2.new(0,rmVal and 22 or 2,.5,0),
-			Size=UDim2.fromOffset(20,20),BackgroundColor3=rmVal and C.White or C.TextDim,BorderSizePixel=0},track)
+			Size=UDim2.fromOffset(20,20),BackgroundColor3=rmVal and C.White or C.Bg,BorderSizePixel=0},track)
 		corner(knob,10)
 		local rmClick=new("TextButton",{Text="",BackgroundTransparency=1,Size=UDim2.fromScale(1,1),ZIndex=5,AutoButtonColor=false,ClipsDescendants=false},rmRow)
 		rmClick.Activated:Connect(function()
@@ -2228,7 +2228,7 @@ function Lib:_buildSettingsPanel()
 			self._reduceMotion=rmVal
 			_rm=rmVal
 			tw(track,.2,{BackgroundColor3=rmVal and C.Green or C.Card3})
-			tw(knob,.22,{Position=UDim2.new(0,rmVal and 22 or 2,.5,0),BackgroundColor3=rmVal and C.White or C.TextDim})
+			tw(knob,.22,{Position=UDim2.new(0,rmVal and 22 or 2,.5,0),BackgroundColor3=rmVal and C.White or C.Bg})
 			self:ShowNotification(rmVal and "Reduce Motion enabled" or "Reduce Motion disabled","info",2)
 		end)
 		rmRow.MouseEnter:Connect(function() tw(rmRow,.15,{BackgroundColor3=C.Card2}) end)
@@ -2250,14 +2250,14 @@ function Lib:_buildSettingsPanel()
 			corner(smTrack,12)
 			local smKnob=new("Frame",{AnchorPoint=Vector2.new(0,.5),
 				Position=UDim2.new(0,smVal and 22 or 2,.5,0),
-				Size=UDim2.fromOffset(20,20),BackgroundColor3=smVal and C.White or C.TextDim,BorderSizePixel=0},smTrack)
+				Size=UDim2.fromOffset(20,20),BackgroundColor3=smVal and C.White or C.Bg,BorderSizePixel=0},smTrack)
 			corner(smKnob,10)
 			local smClick=new("TextButton",{Text="",BackgroundTransparency=1,Size=UDim2.fromScale(1,1),ZIndex=5,AutoButtonColor=false},smRow)
 			smClick.Activated:Connect(function()
 				smVal=not smVal
 				self._simulateMobile=smVal
 				tw(smTrack,.2,{BackgroundColor3=smVal and C.Yellow or C.Card3})
-				tw(smKnob,.22,{Position=UDim2.new(0,smVal and 22 or 2,.5,0),BackgroundColor3=smVal and C.White or C.TextDim})
+				tw(smKnob,.22,{Position=UDim2.new(0,smVal and 22 or 2,.5,0),BackgroundColor3=smVal and C.White or C.Bg})
 				if smVal then
 					if self._mobilePill then
 						pcall(function() self._mobilePill:Destroy() end)
@@ -2871,31 +2871,21 @@ function Lib:AddToggle(pi,label,default,callback,desc)
 		Size=UDim2.fromOffset(44,24),BackgroundColor3=state and accentCol or C.Card3,BorderSizePixel=0},row)
 	corner(track,12)
 	local tStroke=stroke(track,state and fromHex("aaaaaa") or C.Border2,1)
-	-- FIX: cor do knob ON é C.White (visível), não C.Bg (fundo invisível)
 	local knob=new("Frame",{AnchorPoint=Vector2.new(0,.5),
 		Position=UDim2.new(0,state and 22 or 2,.5,0),
-		Size=UDim2.fromOffset(20,20),BackgroundColor3=state and C.White or C.TextDim,BorderSizePixel=0},track)
+		Size=UDim2.fromOffset(20,20),BackgroundColor3=state and C.White or C.Bg,BorderSizePixel=0},track)
 	corner(knob,10)
-
-	-- FIX: usar um Frame intermediário como proxy para animar Position separadamente do Size,
-	-- evitando que tw() cancele o tween anterior do mesmo objeto (knob).
-	-- A posição é animada via um objeto separado (knobPos) e copiada para o knob via heartbeat.
-	-- Solução mais simples e robusta: usar dois tweens em sub-objetos distintos.
-	-- Para não refatorar tw(), simplesmente separamos os tweens em objetos diferentes:
-	-- track para cor do track, tStroke para borda, knobColor (UIStroke dummy) não existe,
-	-- então usamos a abordagem de animar BackgroundColor3 e Position/Size em sequência controlada.
 
 	local _knobPressed = false
 
 	local function apply(v, silent)
 		state = v
 		local ac = accentOrWhite(self)
-		-- Track background e stroke
 		tw(track, .22, {BackgroundColor3 = v and ac or C.Card3}, Enum.EasingStyle.Quint)
 		tw(tStroke, .22, {Color = v and fromHex("aaaaaa") or C.Border2})
-		-- Anima cor E posição do knob num único tw() para evitar que o segundo cancele o primeiro
+		-- ON = C.White (visível sobre track colorido), OFF = C.Bg (escuro sobre track cinza)
 		tw(knob, .24, {
-			BackgroundColor3 = v and C.White or C.TextDim,
+			BackgroundColor3 = v and C.White or C.Bg,
 			Position = UDim2.new(0, v and 22 or 2, .5, 0),
 		}, Enum.EasingStyle.Back, Enum.EasingDirection.Out)
 		if not silent and callback then self:_safeCall(callback, v) end
@@ -3766,7 +3756,7 @@ function Lib:AddRadioGroup(pi,label,options,default,callback)
 
 		local dot=new("Frame",{AnchorPoint=Vector2.new(.5,.5),Position=UDim2.fromScale(.5,.5),
 			Size=UDim2.fromOffset(isActive and 8 or 0,isActive and 8 or 0),
-			BackgroundColor3=C.White,BorderSizePixel=0},radio)
+			BackgroundColor3=C.Bg,BorderSizePixel=0},radio)
 		corner(dot,4)
 
 		local lbl=new("TextLabel",{Text=opt,Font=Enum.Font.Gotham,TextSize=13,

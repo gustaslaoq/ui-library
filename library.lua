@@ -1441,8 +1441,8 @@ function Lib:_ensurePill()
 	if self._mobilePill then return end
 	local cfg = self.cfg
 	local pill = new("Frame",{
-		AnchorPoint=Vector2.new(.5,0),
-		Position=UDim2.new(.5,0,0,24),
+		AnchorPoint=Vector2.new(0,0),
+		Position=UDim2.new(0,0,0,24),
 		Size=UDim2.fromOffset(0,38),
 		AutomaticSize=Enum.AutomaticSize.X,
 		BackgroundColor3=fromHex("111111"),
@@ -1496,8 +1496,9 @@ function Lib:_ensurePill()
 		local ph=pill.AbsoluteSize.Y
 		local cx=pill.Position.X.Offset
 		local cy=pill.Position.Y.Offset
-		local ncx=math.clamp(cx, pw*0.5, vp.X-pw*0.5)
-		local ncy=math.clamp(cy, 10, vp.Y-ph-10)
+		-- AnchorPoint is (0,0): position is top-left corner of pill
+		local ncx=math.clamp(cx, 8, vp.X - pw - 8)
+		local ncy=math.clamp(cy, 10, vp.Y - ph - 10)
 		if ncx~=cx or ncy~=cy then
 			pill.Position=UDim2.new(0,ncx,0,ncy)
 		end
@@ -1523,7 +1524,7 @@ function Lib:_ensurePill()
 	pillBtn.InputBegan:Connect(function(i)
 		if i.UserInputType==Enum.UserInputType.MouseButton1 or i.UserInputType==Enum.UserInputType.Touch then
 			dragging=true
-			ds=i.Position
+			ds=Vector2.new(i.Position.X, i.Position.Y)
 			px0=pill.Position.X.Offset
 			py0=pill.Position.Y.Offset
 		end
@@ -1533,12 +1534,14 @@ function Lib:_ensurePill()
 			local moved=dragging and ds and (math.abs(i.Position.X-ds.X)>6 or math.abs(i.Position.Y-ds.Y)>6)
 			dragging=false
 			if moved then
-				-- snap pill to nearest horizontal edge
+				-- snap pill to nearest horizontal edge (AnchorPoint is (0,0))
 				local cam2=workspace.CurrentCamera
 				local vp2=cam2 and cam2.ViewportSize or Vector2.new(1920,1080)
 				local pw2=pill.AbsoluteSize.X
 				local cx=pill.Position.X.Offset
-				local nx2 = cx < vp2.X/2 and 20 or (vp2.X - pw2 - 20)
+				-- center of pill vs center of screen
+				local pillCenterX = cx + pw2 * 0.5
+				local nx2 = pillCenterX < vp2.X/2 and 8 or (vp2.X - pw2 - 8)
 				tw(pill,.18,{Position=UDim2.new(0,nx2,0,pill.Position.Y.Offset)},Enum.EasingStyle.Quint)
 			end
 			if not moved then
@@ -1551,12 +1554,13 @@ function Lib:_ensurePill()
 		if i.UserInputType~=Enum.UserInputType.MouseMovement and i.UserInputType~=Enum.UserInputType.Touch then return end
 		local cam=workspace.CurrentCamera
 		local vp=cam and cam.ViewportSize or Vector2.new(1920,1080)
-		local d=i.Position-ds
+		-- delta from the original touch/click position
+		local d = Vector2.new(i.Position.X - ds.X, i.Position.Y - ds.Y)
 		local pw=pill.AbsoluteSize.X
 		local ph=pill.AbsoluteSize.Y
-		local nx=math.clamp(px0+d.X, pw*0.5, vp.X-pw*0.5)
-		local ny=math.clamp(py0+d.Y, 20, vp.Y-ph-20)
-		-- snap lateral when drag ends (handled in InputEnded)
+		-- AnchorPoint is (0,0): clamp so pill stays within screen bounds
+		local nx=math.clamp(px0+d.X, 8, vp.X-pw-8)
+		local ny=math.clamp(py0+d.Y, 10, vp.Y-ph-10)
 		pill.Position=UDim2.new(0,nx,0,ny)
 	end))
 
@@ -1608,10 +1612,13 @@ function Lib:Minimise()
 		if pill then
 			local cam=workspace.CurrentCamera
 			local vp=cam and cam.ViewportSize or Vector2.new(1920,1080)
+			local pw=pill.AbsoluteSize.X
+			-- AnchorPoint is (0,0): center horizontally by offsetting by half pill width
+			local centerX = math.floor(vp.X * 0.5 - pw * 0.5)
 			pill.Visible=true
-			pill.Position=UDim2.new(0,math.floor(vp.X*0.5),0,-60)
+			pill.Position=UDim2.new(0,centerX,0,-60)
 			pill.BackgroundTransparency=1
-			tw(pill,.38,{Position=UDim2.new(0,math.floor(vp.X*0.5),0,24),BackgroundTransparency=0.18},Enum.EasingStyle.Back,Enum.EasingDirection.Out)
+			tw(pill,.38,{Position=UDim2.new(0,centerX,0,24),BackgroundTransparency=0.18},Enum.EasingStyle.Back,Enum.EasingDirection.Out)
 		end
 	else
 		self._preMinSize = {W=win.AbsoluteSize.X, H=win.AbsoluteSize.Y}
@@ -1641,7 +1648,11 @@ function Lib:Maximise()
 	if mini then
 		local pill = self._mobilePill
 		if pill then
-			tw(pill,.2,{Position=UDim2.new(.5,0,0,-60),BackgroundTransparency=1},Enum.EasingStyle.Quint,Enum.EasingDirection.In)
+			local cam=workspace.CurrentCamera
+			local vp=cam and cam.ViewportSize or Vector2.new(1920,1080)
+			local pw=pill.AbsoluteSize.X
+			local centerX = math.floor(vp.X * 0.5 - pw * 0.5)
+			tw(pill,.2,{Position=UDim2.new(0,centerX,0,-60),BackgroundTransparency=1},Enum.EasingStyle.Quint,Enum.EasingDirection.In)
 			task.delay(.22,function()
 				if pill and pill.Parent then pill.Visible=false end
 			end)
@@ -1727,10 +1738,12 @@ function Lib:Hide()
 		if pill then
 			local cam2=workspace.CurrentCamera
 			local vp2=cam2 and cam2.ViewportSize or Vector2.new(1920,1080)
+			local pw2=pill.AbsoluteSize.X
+			local centerX2 = math.floor(vp2.X * 0.5 - pw2 * 0.5)
 			pill.Visible = true
-			pill.Position = UDim2.new(0,math.floor(vp2.X*0.5),0,-60)
+			pill.Position = UDim2.new(0,centerX2,0,-60)
 			pill.BackgroundTransparency = 1
-			tw(pill,.38,{Position=UDim2.new(0,math.floor(vp2.X*0.5),0,24),BackgroundTransparency=0.18},Enum.EasingStyle.Back,Enum.EasingDirection.Out)
+			tw(pill,.38,{Position=UDim2.new(0,centerX2,0,24),BackgroundTransparency=0.18},Enum.EasingStyle.Back,Enum.EasingDirection.Out)
 		end
 	else
 		self:ShowNotification(
@@ -1748,7 +1761,12 @@ function Lib:Show()
 	self._hideGen = (self._hideGen or 0) + 1
 	self._hidden = false
 	if self._mobilePill then
-		tw(self._mobilePill,.2,{Position=UDim2.new(.5,0,0,-60),BackgroundTransparency=1},Enum.EasingStyle.Quint,Enum.EasingDirection.In)
+		local pill2 = self._mobilePill
+		local cam3=workspace.CurrentCamera
+		local vp3=cam3 and cam3.ViewportSize or Vector2.new(1920,1080)
+		local pw3=pill2.AbsoluteSize.X
+		local centerX3 = math.floor(vp3.X * 0.5 - pw3 * 0.5)
+		tw(pill2,.2,{Position=UDim2.new(0,centerX3,0,-60),BackgroundTransparency=1},Enum.EasingStyle.Quint,Enum.EasingDirection.In)
 		task.delay(.22,function()
 			if self._mobilePill and self._mobilePill.Parent then self._mobilePill.Visible=false end
 		end)
@@ -4685,7 +4703,6 @@ function Lib:HideElement(obj)
 end
 
 function Lib:_runDemo()
-	-- PAGE 1: DASHBOARD ─────────────────────────────────────────
 	self:AddSectionHeader(1, "Dashboard", "Live component showcase")
 
 	self:AddMetricRow(1, {
@@ -4740,7 +4757,6 @@ function Lib:_runDemo()
 	})
 	self:AddAlert(1, "Tip", "Press Ctrl+F to search any page. Use the gear icon for settings.", "info")
 
-	-- PAGE 2: INPUTS ─────────────────────────────────────────────
 	self:AddSectionHeader(2, "Inputs", "Text, numbers and selections")
 
 	self:AddDivider(2, "Text")
@@ -4788,7 +4804,6 @@ function Lib:_runDemo()
 		self:Notify(v and "Checked" or "Unchecked", "info", 1.5)
 	end)
 
-	-- PAGE 3: COMPONENTS ─────────────────────────────────────────
 	self:AddSectionHeader(3, "Components", "Visual elements and displays")
 
 	self:AddDivider(3, "Labels")
@@ -4854,7 +4869,6 @@ function Lib:_runDemo()
 		end},
 	})
 
-	-- PAGE 4: BUTTONS ─────────────────────────────────────────────
 	self:AddSectionHeader(4, "Buttons", "All button styles and states")
 
 	self:AddDivider(4, "All Styles")
@@ -4901,7 +4915,6 @@ function Lib:_runDemo()
 		{Text="Error",   Style="danger",  Width=90, Callback=function() self:Notify("Error toast",   "error",   2.5) end},
 	})
 
-	-- PAGE 5: LOGS ────────────────────────────────────────────────
 	self:AddSectionHeader(5, "Logs", "Real-time output console")
 	local console = self:AddLogConsole(5, 260)
 	console:Log("SlaoqUILib v1 initialized", "SUCCESS")

@@ -1487,7 +1487,8 @@ function Lib:_ensurePill()
 	},pill)
 
 	local dragging = false
-	local ds, px0, py0
+	local activeInput = nil
+	local ds, touchOrigin, px0, py0
 
 	local function clampPill()
 		if not pill or not pill.Parent then return end
@@ -1525,38 +1526,44 @@ function Lib:_ensurePill()
 	pillBtn.InputBegan:Connect(function(i)
 		if i.UserInputType==Enum.UserInputType.MouseButton1 or i.UserInputType==Enum.UserInputType.Touch then
 			dragging = true
+			activeInput = i
 			ds = i.Position
+			touchOrigin = i.Position
 			px0 = pill.Position.X.Offset
 			py0 = pill.Position.Y.Offset
 		end
 	end)
 	pillBtn.InputEnded:Connect(function(i)
-		if i.UserInputType==Enum.UserInputType.MouseButton1 or i.UserInputType==Enum.UserInputType.Touch then
-			local moved = dragging and ds and (math.abs(i.Position.X-ds.X)>6 or math.abs(i.Position.Y-ds.Y)>6)
-			dragging = false
-			if moved then
-				local cam2=workspace.CurrentCamera
-				local vp2=cam2 and cam2.ViewportSize or Vector2.new(1920,1080)
-				local pw2=pill.AbsoluteSize.X
-				local cx=pill.Position.X.Offset
-				local pillCenterX = cx + pw2*0.5
-				local nx2 = pillCenterX < vp2.X/2 and 8 or (vp2.X-pw2-8)
-				tw(pill,.18,{Position=UDim2.new(0,nx2,0,pill.Position.Y.Offset)},Enum.EasingStyle.Quint)
-			else
-				self:Show()
-			end
+		if i ~= activeInput then return end
+		local moved = touchOrigin and (math.abs(i.Position.X-touchOrigin.X)>6 or math.abs(i.Position.Y-touchOrigin.Y)>6)
+		dragging = false
+		activeInput = nil
+		if moved then
+			local cam2=workspace.CurrentCamera
+			local vp2=cam2 and cam2.ViewportSize or Vector2.new(1920,1080)
+			local pw2=pill.AbsoluteSize.X
+			local cx=pill.Position.X.Offset
+			local pillCenterX = cx + pw2*0.5
+			local nx2 = pillCenterX < vp2.X/2 and 8 or (vp2.X-pw2-8)
+			tw(pill,.18,{Position=UDim2.new(0,nx2,0,pill.Position.Y.Offset)},Enum.EasingStyle.Quint)
+		else
+			self:Show()
 		end
 	end)
 	table.insert(self._conns, UserInputService.InputChanged:Connect(function(i)
 		if not dragging then return end
+		if i ~= activeInput then return end
 		if i.UserInputType~=Enum.UserInputType.MouseMovement and i.UserInputType~=Enum.UserInputType.Touch then return end
 		local d = i.Position - ds
+		ds = i.Position -- delta incremental: evita acúmulo de erro entre frames
+		px0 = px0 + d.X
+		py0 = py0 + d.Y
 		local cam=workspace.CurrentCamera
 		local vp=cam and cam.ViewportSize or Vector2.new(1920,1080)
 		local pw=pill.AbsoluteSize.X
 		local ph=pill.AbsoluteSize.Y
-		local nx=math.clamp(px0+d.X, 8, vp.X-pw-8)
-		local ny=math.clamp(py0+d.Y, 10, vp.Y-ph-10)
+		local nx=math.clamp(px0, 8, vp.X-pw-8)
+		local ny=math.clamp(py0, 10, vp.Y-ph-10)
 		pill.Position=UDim2.new(0,nx,0,ny)
 	end))
 

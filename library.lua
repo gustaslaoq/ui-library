@@ -1486,9 +1486,8 @@ function Lib:_ensurePill()
 		Size=UDim2.fromScale(1,1),ZIndex=802,AutoButtonColor=false,
 	},pill)
 
-	-- activeInput: guarda o InputObject exato do toque ativo, evitando capturar outros dedos
-	local activeInput = nil
-	local px0, py0, touchStart
+	local dragging = false
+	local ds, px0, py0
 
 	local function clampPill()
 		if not pill or not pill.Parent then return end
@@ -1525,49 +1524,39 @@ function Lib:_ensurePill()
 
 	pillBtn.InputBegan:Connect(function(i)
 		if i.UserInputType==Enum.UserInputType.MouseButton1 or i.UserInputType==Enum.UserInputType.Touch then
-			if activeInput then return end -- ignora segundo dedo
-			activeInput = i
-			-- Cancela qualquer tween de posição pendente para o drag partir do lugar certo
-			local prev = _tweenMap[pill]
-			if prev then pcall(function() prev:Cancel() end) end
+			dragging = true
+			ds = i.Position
 			px0 = pill.Position.X.Offset
 			py0 = pill.Position.Y.Offset
-			-- Salva posição inicial do toque separadamente (InputObject.Position muda in-place)
-			touchStart = Vector2.new(i.Position.X, i.Position.Y)
 		end
 	end)
-
 	pillBtn.InputEnded:Connect(function(i)
-		if i ~= activeInput then return end
-		local moved = touchStart and (math.abs(i.Position.X - touchStart.X) > 6 or math.abs(i.Position.Y - touchStart.Y) > 6)
-		activeInput = nil
-		touchStart = nil
-		if moved then
-			-- snap pill para a borda horizontal mais próxima
-			local cam2=workspace.CurrentCamera
-			local vp2=cam2 and cam2.ViewportSize or Vector2.new(1920,1080)
-			local pw2=pill.AbsoluteSize.X
-			local cx=pill.Position.X.Offset
-			local pillCenterX = cx + pw2 * 0.5
-			local nx2 = pillCenterX < vp2.X/2 and 8 or (vp2.X - pw2 - 8)
-			tw(pill,.18,{Position=UDim2.new(0,nx2,0,pill.Position.Y.Offset)},Enum.EasingStyle.Quint)
-		else
-			self:Show()
+		if i.UserInputType==Enum.UserInputType.MouseButton1 or i.UserInputType==Enum.UserInputType.Touch then
+			local moved = dragging and ds and (math.abs(i.Position.X-ds.X)>6 or math.abs(i.Position.Y-ds.Y)>6)
+			dragging = false
+			if moved then
+				local cam2=workspace.CurrentCamera
+				local vp2=cam2 and cam2.ViewportSize or Vector2.new(1920,1080)
+				local pw2=pill.AbsoluteSize.X
+				local cx=pill.Position.X.Offset
+				local pillCenterX = cx + pw2*0.5
+				local nx2 = pillCenterX < vp2.X/2 and 8 or (vp2.X-pw2-8)
+				tw(pill,.18,{Position=UDim2.new(0,nx2,0,pill.Position.Y.Offset)},Enum.EasingStyle.Quint)
+			else
+				self:Show()
+			end
 		end
 	end)
-
 	table.insert(self._conns, UserInputService.InputChanged:Connect(function(i)
-		if i ~= activeInput then return end
+		if not dragging then return end
 		if i.UserInputType~=Enum.UserInputType.MouseMovement and i.UserInputType~=Enum.UserInputType.Touch then return end
-		if not touchStart then return end
+		local d = i.Position - ds
 		local cam=workspace.CurrentCamera
 		local vp=cam and cam.ViewportSize or Vector2.new(1920,1080)
-		-- Delta entre posição atual do dedo e onde ele começou
-		local d = Vector2.new(i.Position.X - touchStart.X, i.Position.Y - touchStart.Y)
 		local pw=pill.AbsoluteSize.X
 		local ph=pill.AbsoluteSize.Y
-		local nx=math.clamp(px0 + d.X, 8, vp.X - pw - 8)
-		local ny=math.clamp(py0 + d.Y, 10, vp.Y - ph - 10)
+		local nx=math.clamp(px0+d.X, 8, vp.X-pw-8)
+		local ny=math.clamp(py0+d.Y, 10, vp.Y-ph-10)
 		pill.Position=UDim2.new(0,nx,0,ny)
 	end))
 

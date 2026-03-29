@@ -1486,7 +1486,9 @@ function Lib:_ensurePill()
 		Size=UDim2.fromScale(1,1),ZIndex=802,AutoButtonColor=false,
 	},pill)
 
-	local dragging=false; local ds, px0, py0
+	-- activeInput: guarda o InputObject exato do toque ativo, evitando capturar outros dedos
+	local activeInput = nil
+	local px0, py0, touchStart
 
 	local function clampPill()
 		if not pill or not pill.Parent then return end
@@ -1523,44 +1525,49 @@ function Lib:_ensurePill()
 
 	pillBtn.InputBegan:Connect(function(i)
 		if i.UserInputType==Enum.UserInputType.MouseButton1 or i.UserInputType==Enum.UserInputType.Touch then
-			dragging=true
-			ds=Vector2.new(i.Position.X, i.Position.Y)
-			px0=pill.Position.X.Offset
-			py0=pill.Position.Y.Offset
+			if activeInput then return end -- ignora segundo dedo
+			activeInput = i
+			-- Cancela qualquer tween de posição pendente para o drag partir do lugar certo
+			local prev = _tweenMap[pill]
+			if prev then pcall(function() prev:Cancel() end) end
+			px0 = pill.Position.X.Offset
+			py0 = pill.Position.Y.Offset
+			-- Salva posição inicial do toque separadamente (InputObject.Position muda in-place)
+			touchStart = Vector2.new(i.Position.X, i.Position.Y)
 		end
 	end)
+
 	pillBtn.InputEnded:Connect(function(i)
-		if i.UserInputType==Enum.UserInputType.MouseButton1 or i.UserInputType==Enum.UserInputType.Touch then
-			local moved=dragging and ds and (math.abs(i.Position.X-ds.X)>6 or math.abs(i.Position.Y-ds.Y)>6)
-			dragging=false
-			if moved then
-				-- snap pill to nearest horizontal edge (AnchorPoint is (0,0))
-				local cam2=workspace.CurrentCamera
-				local vp2=cam2 and cam2.ViewportSize or Vector2.new(1920,1080)
-				local pw2=pill.AbsoluteSize.X
-				local cx=pill.Position.X.Offset
-				-- center of pill vs center of screen
-				local pillCenterX = cx + pw2 * 0.5
-				local nx2 = pillCenterX < vp2.X/2 and 8 or (vp2.X - pw2 - 8)
-				tw(pill,.18,{Position=UDim2.new(0,nx2,0,pill.Position.Y.Offset)},Enum.EasingStyle.Quint)
-			end
-			if not moved then
-				self:Show()
-			end
+		if i ~= activeInput then return end
+		local moved = touchStart and (math.abs(i.Position.X - touchStart.X) > 6 or math.abs(i.Position.Y - touchStart.Y) > 6)
+		activeInput = nil
+		touchStart = nil
+		if moved then
+			-- snap pill para a borda horizontal mais próxima
+			local cam2=workspace.CurrentCamera
+			local vp2=cam2 and cam2.ViewportSize or Vector2.new(1920,1080)
+			local pw2=pill.AbsoluteSize.X
+			local cx=pill.Position.X.Offset
+			local pillCenterX = cx + pw2 * 0.5
+			local nx2 = pillCenterX < vp2.X/2 and 8 or (vp2.X - pw2 - 8)
+			tw(pill,.18,{Position=UDim2.new(0,nx2,0,pill.Position.Y.Offset)},Enum.EasingStyle.Quint)
+		else
+			self:Show()
 		end
 	end)
-	table.insert(self._conns,UserInputService.InputChanged:Connect(function(i)
-		if not dragging then return end
+
+	table.insert(self._conns, UserInputService.InputChanged:Connect(function(i)
+		if i ~= activeInput then return end
 		if i.UserInputType~=Enum.UserInputType.MouseMovement and i.UserInputType~=Enum.UserInputType.Touch then return end
+		if not touchStart then return end
 		local cam=workspace.CurrentCamera
 		local vp=cam and cam.ViewportSize or Vector2.new(1920,1080)
-		-- delta from the original touch/click position
-		local d = Vector2.new(i.Position.X - ds.X, i.Position.Y - ds.Y)
+		-- Delta entre posição atual do dedo e onde ele começou
+		local d = Vector2.new(i.Position.X - touchStart.X, i.Position.Y - touchStart.Y)
 		local pw=pill.AbsoluteSize.X
 		local ph=pill.AbsoluteSize.Y
-		-- AnchorPoint is (0,0): clamp so pill stays within screen bounds
-		local nx=math.clamp(px0+d.X, 8, vp.X-pw-8)
-		local ny=math.clamp(py0+d.Y, 10, vp.Y-ph-10)
+		local nx=math.clamp(px0 + d.X, 8, vp.X - pw - 8)
+		local ny=math.clamp(py0 + d.Y, 10, vp.Y - ph - 10)
 		pill.Position=UDim2.new(0,nx,0,ny)
 	end))
 
@@ -4703,6 +4710,7 @@ function Lib:HideElement(obj)
 end
 
 function Lib:_runDemo()
+	-- PAGE 1: DASHBOARD ─────────────────────────────────────────
 	self:AddSectionHeader(1, "Dashboard", "Live component showcase")
 
 	self:AddMetricRow(1, {
@@ -4757,6 +4765,7 @@ function Lib:_runDemo()
 	})
 	self:AddAlert(1, "Tip", "Press Ctrl+F to search any page. Use the gear icon for settings.", "info")
 
+	-- PAGE 2: INPUTS ─────────────────────────────────────────────
 	self:AddSectionHeader(2, "Inputs", "Text, numbers and selections")
 
 	self:AddDivider(2, "Text")
@@ -4804,6 +4813,7 @@ function Lib:_runDemo()
 		self:Notify(v and "Checked" or "Unchecked", "info", 1.5)
 	end)
 
+	-- PAGE 3: COMPONENTS ─────────────────────────────────────────
 	self:AddSectionHeader(3, "Components", "Visual elements and displays")
 
 	self:AddDivider(3, "Labels")
@@ -4869,6 +4879,7 @@ function Lib:_runDemo()
 		end},
 	})
 
+	-- PAGE 4: BUTTONS ─────────────────────────────────────────────
 	self:AddSectionHeader(4, "Buttons", "All button styles and states")
 
 	self:AddDivider(4, "All Styles")
@@ -4915,6 +4926,7 @@ function Lib:_runDemo()
 		{Text="Error",   Style="danger",  Width=90, Callback=function() self:Notify("Error toast",   "error",   2.5) end},
 	})
 
+	-- PAGE 5: LOGS ────────────────────────────────────────────────
 	self:AddSectionHeader(5, "Logs", "Real-time output console")
 	local console = self:AddLogConsole(5, 260)
 	console:Log("SlaoqUILib v1 initialized", "SUCCESS")

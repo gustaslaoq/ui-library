@@ -719,7 +719,6 @@ function Lib:_buildWindow()
 		end)
 		table.insert(self._conns, UserInputService.InputChanged:Connect(function(i)
 			if not active then return end
-			if i.UserInputType~=Enum.UserInputType.MouseMovement and i.UserInputType~=Enum.UserInputType.Touch then return end
 			local d = i.Position - ds
 			local cam3 = workspace.CurrentCamera
 			local vp3 = cam3 and cam3.ViewportSize or Vector2.new(1920,1080)
@@ -880,7 +879,6 @@ function Lib:_buildTitleBar(win)
 		end)
 		table.insert(self._conns, UserInputService.InputChanged:Connect(function(i)
 			if not drag then return end
-			if i.UserInputType~=Enum.UserInputType.MouseMovement and i.UserInputType~=Enum.UserInputType.Touch then return end
 			local d = i.Position - ds
 			if not dragged then
 				if math.abs(d.X) < DRAG_DEADZONE and math.abs(d.Y) < DRAG_DEADZONE then return end
@@ -1544,8 +1542,6 @@ function Lib:_ensurePill()
 			local pw2=pill.AbsoluteSize.X
 			local cx=pill.Position.X.Offset
 			local pillCenterX = cx + pw2*0.5
-			local nx2 = pillCenterX < vp2.X/2 and 8 or (vp2.X-pw2-8)
-			tw(pill,.18,{Position=UDim2.new(0,nx2,0,pill.Position.Y.Offset)},Enum.EasingStyle.Quint)
 		else
 			self:Show()
 		end
@@ -1553,7 +1549,6 @@ function Lib:_ensurePill()
 	table.insert(self._conns, UserInputService.InputChanged:Connect(function(i)
 		if not dragging then return end
 		if i ~= activeInput then return end
-		if i.UserInputType~=Enum.UserInputType.MouseMovement and i.UserInputType~=Enum.UserInputType.Touch then return end
 		local d = i.Position - ds
 		ds = i.Position -- delta incremental: evita acúmulo de erro entre frames
 		px0 = px0 + d.X

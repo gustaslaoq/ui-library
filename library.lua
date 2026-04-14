@@ -3250,10 +3250,12 @@ function Lib:AddMultiSelect(pi, labelTxt, options, callback)
 		for opt,v in pairs(selected) do if v then r[#r+1]=opt end end
 		return r
 	end
-	function obj:SetSelected(tbl)
+	function obj:SetSelected(tbl, fireCallback)
 		for opt in pairs(selected) do selected[opt]=false end
 		if type(tbl)=="table" then
 			for _,opt in ipairs(tbl) do selected[opt]=true end
+		elseif tbl ~= nil and selected[tbl] ~= nil then
+			selected[tbl] = true
 		end
 		for _,entry in ipairs(optionRows) do
 			local v=selected[entry.Key]
@@ -3261,8 +3263,11 @@ function Lib:AddMultiSelect(pi, labelTxt, options, callback)
 			if entry.Check then entry.Check.BackgroundTransparency = v and 0 or 1 end
 		end
 		refreshCount()
+		if fireCallback == true and callback then self:_safeCall(callback, selected) end
 	end
 	function obj:IsSelected(opt) return selected[opt]==true end
+	function obj:Set(v, fireCallback) obj:SetSelected(v, fireCallback) end
+	function obj:Get() return obj:GetSelected() end
 	return obj
 end
 
@@ -3717,7 +3722,28 @@ function Lib:AddDropdown(pi,labelTxt,options,callback)
 	end)
 
 	self:_gap(s,pi,10)
-	return {Button=btn,List=optList,GetSelected=function() return selected end}
+	local obj={Button=btn,List=optList,Frame=wrapper}
+	function obj:GetSelected()
+		return selected
+	end
+	function obj:SetSelected(v, fireCallback)
+		if v == nil or v == "" then return end
+		local exists = false
+		for _,opt in ipairs(options) do
+			if opt == v then
+				exists = true
+				break
+			end
+		end
+		if not exists then return end
+		selected = v
+		selLbl.Text = tostring(v)
+		updateSelectedVisual()
+		if fireCallback == true and callback then self:_safeCall(callback, v) end
+	end
+	function obj:Set(v, fireCallback) obj:SetSelected(v, fireCallback) end
+	function obj:Get() return selected end
+	return obj
 end
 
 function Lib:AddRadioGroup(pi,label,options,default,callback)

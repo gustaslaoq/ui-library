@@ -59,7 +59,7 @@ A lightweight, modular, dark-themed UI library for Roblox scripts. Drop it in, c
 Load the library at the top of your script:
 
 ```lua
-local Lib = loadstring(game:HttpGet("YOUR_RAW_URL_HERE"))()
+local Lib = loadstring(game:HttpGet("https://raw.githubusercontent.com/gustaslaoq/ui-library/refs/heads/main/library.lua"))()
 ```
 
 Or, if you have the file locally:
@@ -73,7 +73,7 @@ local Lib = require(path.to.library)
 ## Quick Start
 
 ```lua
-local Lib = loadstring(game:HttpGet("YOUR_RAW_URL_HERE"))()
+local Lib = loadstring(game:HttpGet("https://raw.githubusercontent.com/gustaslaoq/ui-library/refs/heads/main/library.lua"))()
 
 local ui = Lib.new({
     AppName     = "My Script",
